@@ -3,50 +3,269 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Digital Twin - Network Congestion</title>
-    <style>
-        html, body { margin: 0; height: 100%; width: 100%; overflow: hidden; }
-        #map { position: absolute; top: 0; bottom: 0; width: 100%; }
-
-        /* Legend Styles */
-        .legend {
-            position: absolute;
-            bottom: 20px;
-            left: 20px;
-            background: rgba(255, 255, 255, 0.9);
-            padding: 15px;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            z-index: 1000;
-            backdrop-filter: blur(5px);
-        }
-        .legend h3 { margin: 0 0 10px 0; font-size: 16px; }
-        .legend-item { display: flex; align-items: center; margin-bottom: 8px; font-size: 14px; }
-        .legend-color { width: 16px; height: 16px; margin-right: 8px; border-radius: 3px; opacity: 0.8; }
-    </style>
+    <title>NetVision Digital Twin | Orange Network Operations</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📡</text></svg>">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet">
 </head>
 <body>
-    <div id="map"></div>
+    <div id="app">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-left">
+                <div class="logo">
+                    <span class="material-symbols-outlined">cell_tower</span>
+                    <span class="logo-text">NetVision</span>
+                </div>
+                <span class="header-subtitle">Digital Twin • Network Operations Center</span>
+            </div>
+            <div class="header-center">
+                <div class="live-indicator">
+                    <span class="live-dot"></span>
+                    <span>LIVE</span>
+                </div>
+                <div class="timestamp" id="timestamp"></div>
+            </div>
+            <div class="header-right">
+                <button class="btn-icon" id="btn-refresh" title="Refresh Data (Ctrl+R)">
+                    <span class="material-symbols-outlined">refresh</span>
+                </button>
+                <button class="btn-icon" id="btn-fullscreen" title="Toggle Fullscreen (F11)">
+                    <span class="material-symbols-outlined">fullscreen</span>
+                </button>
+            </div>
+        </header>
 
-    <!-- Legend for Network Congestion -->
-    <div class="legend">
-        <h3>Network Load (PRB %)</h3>
-        <div class="legend-item">
-            <div class="legend-color" style="background: linear-gradient(to right, #4CAF50, #FFEB3B, #F44336);"></div>
-            <span>0% (Low) &rarr; 100% (High)</span>
-        </div>
-        <div class="legend-item">
-            <div class="legend-color" style="background: #C8DCFF; border: 1px solid #6495ED;"></div>
-            <span>No Traffic / Idle</span>
-        </div>
-        <div class="legend-item">
-            <div class="legend-color" style="background: #9E9E9E; border: 1px solid #666;"></div>
-            <span>No Data Available</span>
-        </div>
-        <div style="margin-top: 10px; font-size: 12px; color: #666;">
-            <i>Sector length based on Timing Advance (TA)</i><br>
-            <i>Opacity based on Signal Power</i>
+        <!-- Main Content -->
+        <div class="main-container">
+            <!-- Left Sidebar - Stats -->
+            <aside class="sidebar sidebar-left">
+                <div class="panel stats-panel">
+                    <h3 class="panel-title">
+                        <span class="material-symbols-outlined">analytics</span>
+                        Network Overview
+                    </h3>
+                    <div class="stats-grid">
+                        <div class="stat-card" id="stat-total">
+                            <div class="stat-value">--</div>
+                            <div class="stat-label">Total Cells</div>
+                        </div>
+                        <div class="stat-card stat-danger" id="stat-congested">
+                            <div class="stat-value">--</div>
+                            <div class="stat-label">Congested</div>
+                        </div>
+                        <div class="stat-card stat-warning" id="stat-high-load">
+                            <div class="stat-value">--</div>
+                            <div class="stat-label">High Load</div>
+                        </div>
+                        <div class="stat-card stat-success" id="stat-healthy">
+                            <div class="stat-value">--</div>
+                            <div class="stat-label">Healthy</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <h3 class="panel-title">
+                        <span class="material-symbols-outlined">speed</span>
+                        Performance Metrics
+                    </h3>
+                    <div class="metric-row">
+                        <span class="metric-label">Avg Network Load</span>
+                        <span class="metric-value" id="metric-avg-load">--%</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progress-load"></div>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Avg Throughput</span>
+                        <span class="metric-value" id="metric-avg-throughput">-- Mbps</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Avg CQI</span>
+                        <span class="metric-value" id="metric-avg-cqi">--</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Data Coverage</span>
+                        <span class="metric-value" id="metric-coverage">--%</span>
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <h3 class="panel-title">
+                        <span class="material-symbols-outlined">warning</span>
+                        Active Alerts
+                    </h3>
+                    <div class="alerts-list" id="alerts-list">
+                        <div class="alert-placeholder">Loading...</div>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Map Container -->
+            <main class="map-wrapper">
+                <div id="map"></div>
+                
+                <!-- Map Controls Overlay -->
+                <div class="map-controls">
+                    <div class="control-group">
+                        <label class="control-label">Base Map</label>
+                        <select id="basemap-select" class="control-select">
+                            <option value="satellite">Satellite</option>
+                            <option value="dark">Dark</option>
+                            <option value="streets">Streets</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label class="control-label">View</label>
+                        <div class="toggle-group">
+                            <button class="toggle-btn active" data-view="3d">3D</button>
+                            <button class="toggle-btn" data-view="2d">2D</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Legend -->
+                <div class="legend">
+                    <h4 class="legend-title">Network Load (PRB %)</h4>
+                    <div class="legend-gradient">
+                        <div class="gradient-bar"></div>
+                        <div class="gradient-labels">
+                            <span>0%</span>
+                            <span>50%</span>
+                            <span>100%</span>
+                        </div>
+                    </div>
+                    <div class="legend-items">
+                        <div class="legend-item">
+                            <div class="legend-color" style="background: #90CAF9;"></div>
+                            <span>Idle / No Traffic</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background: #9E9E9E;"></div>
+                            <span>No Data</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color congested-pulse"></div>
+                            <span>Congested</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Cell Info Panel (shown on hover/click) -->
+                <div class="cell-info-panel hidden" id="cell-info-panel">
+                    <div class="cell-info-header">
+                        <h4 id="cell-info-name">Cell Name</h4>
+                        <span class="cell-status" id="cell-status">Normal</span>
+                    </div>
+                    <div class="cell-info-body" id="cell-info-body"></div>
+                </div>
+            </main>
+
+            <!-- Right Sidebar - Filters -->
+            <aside class="sidebar sidebar-right">
+                <div class="panel">
+                    <h3 class="panel-title">
+                        <span class="material-symbols-outlined">filter_alt</span>
+                        Filters
+                    </h3>
+                    
+                    <div class="filter-group">
+                        <label class="filter-label">Cell Status</label>
+                        <div class="checkbox-group">
+                            <label class="checkbox-item">
+                                <input type="checkbox" data-filter="congested" checked>
+                                <span class="checkmark danger"></span>
+                                <span>Congested</span>
+                            </label>
+                            <label class="checkbox-item">
+                                <input type="checkbox" data-filter="high-load" checked>
+                                <span class="checkmark warning"></span>
+                                <span>High Load</span>
+                            </label>
+                            <label class="checkbox-item">
+                                <input type="checkbox" data-filter="normal" checked>
+                                <span class="checkmark success"></span>
+                                <span>Normal</span>
+                            </label>
+                            <label class="checkbox-item">
+                                <input type="checkbox" data-filter="idle" checked>
+                                <span class="checkmark idle"></span>
+                                <span>Idle</span>
+                            </label>
+                            <label class="checkbox-item">
+                                <input type="checkbox" data-filter="no-data" checked>
+                                <span class="checkmark nodata"></span>
+                                <span>No Data</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="filter-group">
+                        <label class="filter-label">Frequency Band</label>
+                        <div class="checkbox-group" id="frequency-filters"></div>
+                    </div>
+
+                    <div class="filter-group">
+                        <label class="filter-label">Load Range: <span id="load-range-display">0% - 100%</span></label>
+                        <div class="range-slider">
+                            <input type="range" id="load-min" min="0" max="100" value="0" class="range-input">
+                            <input type="range" id="load-max" min="0" max="100" value="100" class="range-input">
+                        </div>
+                    </div>
+
+                    <div class="filter-actions">
+                        <button class="btn-primary" id="btn-apply-filters">Apply Filters</button>
+                        <button class="btn-secondary" id="btn-reset-filters">Reset</button>
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <h3 class="panel-title">
+                        <span class="material-symbols-outlined">search</span>
+                        Search
+                    </h3>
+                    <div class="search-container">
+                        <span class="material-symbols-outlined search-icon">search</span>
+                        <input type="text" id="cell-search" class="search-input" placeholder="Search cells or sites... (F)">
+                    </div>
+                    <div class="search-results" id="search-results"></div>
+                </div>
+
+                <div class="panel">
+                    <h3 class="panel-title">
+                        <span class="material-symbols-outlined">layers</span>
+                        Layers
+                    </h3>
+                    <label class="checkbox-item">
+                        <input type="checkbox" id="layer-sectors" checked>
+                        <span class="checkmark"></span>
+                        <span>Cell Sectors</span>
+                    </label>
+                    <label class="checkbox-item">
+                        <input type="checkbox" id="layer-sites" checked>
+                        <span class="checkmark"></span>
+                        <span>Site Markers</span>
+                    </label>
+                    <label class="checkbox-item">
+                        <input type="checkbox" id="layer-labels">
+                        <span class="checkmark"></span>
+                        <span>Cell Labels</span>
+                    </label>
+                </div>
+
+                <div class="panel" style="padding: 14px;">
+                    <div style="font-size: 11px; color: var(--text-muted); line-height: 1.8;">
+                        <strong style="color: var(--text-secondary);">Keyboard Shortcuts</strong><br>
+                        <span class="kbd">F</span> Search &nbsp;
+                        <span class="kbd">R</span> Reset View &nbsp;
+                        <span class="kbd">2</span> 2D &nbsp;
+                        <span class="kbd">3</span> 3D
+                    </div>
+                </div>
+            </aside>
         </div>
     </div>
 
