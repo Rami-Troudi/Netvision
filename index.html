@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Digital Twin - Network Congestion</title>
+    <style>
+        html, body { margin: 0; height: 100%; width: 100%; overflow: hidden; }
+        #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+
+        /* Legend Styles */
+        .legend {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            z-index: 1000;
+            backdrop-filter: blur(5px);
+        }
+        .legend h3 { margin: 0 0 10px 0; font-size: 16px; }
+        .legend-item { display: flex; align-items: center; margin-bottom: 8px; font-size: 14px; }
+        .legend-color { width: 16px; height: 16px; margin-right: 8px; border-radius: 3px; opacity: 0.8; }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+
+    <!-- Legend for Network Congestion -->
+    <div class="legend">
+        <h3>Network Load (PRB %)</h3>
+        <div class="legend-item">
+            <div class="legend-color" style="background: linear-gradient(to right, #4CAF50, #FFEB3B, #F44336);"></div>
+            <span>0% (Low) &rarr; 100% (High)</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #C8DCFF; border: 1px solid #6495ED;"></div>
+            <span>No Traffic / Idle</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #9E9E9E; border: 1px solid #666;"></div>
+            <span>No Data Available</span>
+        </div>
+        <div style="margin-top: 10px; font-size: 12px; color: #666;">
+            <i>Sector length based on Timing Advance (TA)</i><br>
+            <i>Opacity based on Signal Power</i>
+        </div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+</body>
+</html>

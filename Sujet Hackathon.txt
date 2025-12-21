@@ -1,0 +1,17 @@
+Amélioration de la Qualité du Réseau (Sites Radio)
+
+Porté par : Sedki Ben Romdhane & Habib Cherif – DRS
+
+Créer un système d’aide à la décision capable de :
+
+Détecter automatiquement les secteurs radio anormaux (congestion, …, throughput, …)
+
+Prioriser les secteurs critiques dans un cluster
+
+Recommander la meilleure action de remédiation (paramétrage, …, densification, nouveau site, …)
+
+Estimer la perte de trafic/capacité et le gain potentiel après action
+
+Visualiser les anomalies et actions sur une interface géographique
+
+Impact attendu : Amélioration significative de la QoS, optimisation des investissements radio, automatisation du reporting opérationnel

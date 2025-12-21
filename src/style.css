@@ -1,0 +1,22 @@
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.ol-popup-closer {
+  text-decoration: none;
+  position: absolute;
+  top: 2px;
+  right: 8px;
+  color: #999;
+}
+.ol-popup-closer:after {
+  content: "✖";
+}
+
+.legend-color {
+    width: 100px !important; /* Make gradient bar wider */
+    height: 16px;
+    margin-right: 8px;
+    border-radius: 3px;
+    opacity: 0.9;
+}
