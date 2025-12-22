@@ -496,8 +496,13 @@ function addMapLayers(map, sites) {
         layout: { 'visibility': 'none' },
         paint: {
             'heatmap-weight': ['interpolate', ['linear'], ['coalesce', ['get', 'load'], 50], 0, 0, 50, 0.5, 100, 1],
-            'heatmap-intensity': 1,
-            'heatmap-radius': 25,
+            'heatmap-intensity': [
+    'interpolate',
+    ['linear'],
+    ['zoom'],
+    10, 3,  // Higher intensity when zoomed OUT
+    15, 1   // Lower intensity when zoomed IN
+],
             'heatmap-opacity': 0.8,
             'heatmap-color': [
                 'interpolate', ['linear'], ['heatmap-density'],
