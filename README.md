@@ -1,203 +1,59 @@
-# NetVision Digital Twin v1.0.0
+# NetVision Digital Twin (Next.js)
 
-**Orange Network Operations Center - Real-time Radio Network Monitoring & Analysis**
+Real-time radio network monitoring, analytics, and action simulation for Orange NOC teams.
 
-![Version](https://img.shields.io/badge/version-1.0.0-orange)
-![License](https://img.shields.io/badge/license-MIT-blue)
+## Stack
+- **Next.js (pages router)** with MapLibre GL + Chart.js UI
+- **Python** data processors (time-series + legacy batch)
+- **Simulation**: fast estimator only (ns-3/precise mode removed)
 
-## 🚀 Features
-
-### Core Capabilities
-- **Real-time Network Monitoring**: Live dashboard for radio network status
-- **Advanced Congestion Detection**: Multi-KPI vectorized analysis algorithm
-- **GPU-Accelerated Rendering**: WebGL-based MapLibre GL for smooth 60fps performance
-- **Interactive Visualization**: 2D/3D map views with heatmap and sector overlays
-- **Smart Analytics**: Comprehensive network health metrics and insights
-
-### UI/UX
-- **Modern Responsive Design**: Dark/light theme support
-- **Fullscreen Map Mode**: Enhanced navigation with collapsible panels
-- **Advanced Filtering**: By status, frequency band, issue type, load, and severity
-- **Live Search**: Instant results with keyboard shortcuts
-- **Export Capabilities**: JSON, CSV, and custom reports
-
-### Performance Optimizations
-- **Code-Splitting**: Optimized bundle size with lazy-loading
-- **Large Dataset Support**: Handles 700k+ rows with LOD rendering
-- **Dynamic Clustering**: Intelligent point aggregation for performance
-- **Dual-Layer Heatmap**: Points visible alongside heat density for context
-
-## 📋 Prerequisites
-
-- **Node.js**: v16 or higher
-- **Python**: 3.8+ (for data processing)
-- **Git**: For version control
-
-## 🛠️ Installation
-
-### 1. Clone the Repository
+## Quickstart
 ```bash
-git clone https://github.com/yassinekolsi/odc-tsyp.git
-cd odc-tsyp
-```
-
-### 2. Install Dependencies
-```bash
-# Frontend
 npm install
-
-# Backend (Python)
-python -m venv .venv
-.venv\Scripts\activate  # Windows
-# source .venv/bin/activate  # Linux/Mac
-pip install pandas numpy
+npm run dev        # http://localhost:3000
+# Data (recommended, time-series pipeline)
+python scripts/process_time_series.py \
+  --input cleaned_data.csv data_set_radio_1.csv \
+  --output public
 ```
 
-### 3. Process Data
-```bash
-python detect_congestion.py
+## Data Pipelines
+- **Time-series (recommended)**: `scripts/process_time_series.py`
+  - Outputs: `public/baseline.json`, `public/time_index.json`, `public/time_data/*.json`
+  - Powers the time slider, alerts, and analytics in `src/main.js`
+- **Legacy single-snapshot**: `scripts/detect_congestion.py`
+  - Outputs: `data.json`, `stats.json`
+  - Keep only if you need the legacy static view; thresholds differ from the time-series pipeline.
+
+## Running
+- Dev: `npm run dev` → http://localhost:3000
+- Prod build: `npm run build` then `npm start`
+
+## API
+- `POST /api/simulate` supports actions: `tilt`, `add_carrier`, `redistribute` (fast mode only)
+- `time_entry.filename` must exist in `public/time_index.json` (whitelisted at the API layer)
+
+## Project Structure (key paths)
 ```
-This generates `data.json` and `stats.json` files.
-
-### 4. Run Development Server
-```bash
-npm run dev
-```
-Open [http://localhost:5173](http://localhost:5173)
-
-## 🏗️ Building for Production
-
-### Build the Project
-```bash
-npm run build
-```
-
-This creates optimized files in the `dist/` directory:
-- Minified HTML, CSS, and JavaScript
-- Code-split chunks for faster loading
-- Compressed assets
-
-### Deploy to Web
-1. Upload the `dist/` folder contents to your web server
-2. Ensure `data.json` and `stats.json` are accessible
-3. Configure your server to serve `index.html` for all routes
-
-### Recommended Hosting Platforms
-- **GitHub Pages**: Free static hosting
-- **Netlify**: Auto-deploy from Git with CI/CD
-- **Vercel**: Zero-config deployments
-- **AWS S3 + CloudFront**: Scalable enterprise hosting
-
-## 📁 Project Structure
-
-```
-odc-tsyp/
-├── src/
-│   ├── main.js              # Main application logic
-│   └── style.css            # Styles and themes
-├── index.html               # HTML template
-├── vite.config.js           # Vite build configuration
-├── detect_congestion.py     # Data processing engine
-├── data.json                # Processed network data (generated)
-├── stats.json               # Network statistics (generated)
-├── package.json             # Node dependencies
-└── README.md                # This file
+pages/           # Next.js pages (index, api/simulate, site-planning)
+public/          # baseline.json, time_index.json, time_data/
+scripts/         # process_time_series.py (primary), detect_congestion.py (legacy)
+simulation/      # simulator.py (fast estimator)
+src/             # main.js (UI logic), style.css
 ```
 
-## 🔧 Configuration
+## Notes & Hygiene
+- Large generated data files should live outside git; see .gitignore updates.
+- `ENGINEERING_RECOMMENDATIONS.md` holds architecture notes—link here instead of leaving it orphaned.
+- Zero-byte placeholders in the repo root (`Add`, `InstallEnbDevice`, etc.) are legacy artifacts; safe to remove if unused.
+- No ns-3 bridge files are shipped; precise mode is intentionally removed.
 
-### Map Settings
-Edit `CONFIG` in `src/main.js`:
-```javascript
-const CONFIG = {
-    MAP_CENTER: [10.58, 35.82],  // Default center [lng, lat]
-    MAP_ZOOM: 12,                // Initial zoom level
-    LARGE_DATASET_THRESHOLD: 80000,
-    MAX_SECTOR_RENDER: 20000,
-    // ... more options
-};
-```
+## Performance Tips
+- Prefer time-series pipeline outputs; they are pre-shaped for the UI.
+- For large datasets, consider moving feature-building to a Web Worker (see comments in `src/main.js`).
 
-### Congestion Detection
-Modify thresholds in `detect_congestion.py`:
-```python
-THRESHOLDS = {
-    'prb_load_high': 70,
-    'throughput_low': 10000,
-    'cqi_low': 7,
-    # ...
-}
-```
-
-## ⌨️ Keyboard Shortcuts
-
-| Key | Action |
-|-----|--------|
-| `F` | Focus search |
-| `M` | Toggle map fullscreen |
-| `T` | Switch theme |
-| `2` | 2D view |
-| `3` | 3D view |
-| `A` | Open analytics |
-| `E` | Export data |
-| `R` | Reset view |
-
-## 🔌 API Integration
-
-To connect to a live database instead of static JSON:
-
-1. Update `init()` function in `src/main.js`:
-```javascript
-// Replace this:
-const [dataRes, statsRes] = await Promise.all([
-    fetch('/data.json'),
-    fetch('/stats.json')
-]);
-
-// With your API endpoint:
-const [dataRes, statsRes] = await Promise.all([
-    fetch('https://your-api.com/network/cells'),
-    fetch('https://your-api.com/network/stats')
-]);
-```
-
-2. Ensure the API returns the same data structure as `data.json`
-
-## 📊 Data Format
-
-### Network Cells (`data.json`)
-```json
-[
-  {
-    "Cell_Ci": "12345",
-    "Site_Name": "SITE_001",
-    "Latitude": 35.82,
-    "Longitude": 10.58,
-    "Azimuth": 120,
-    "Band": 20,
-    "PRB_load": 65.5,
-    "Throughput_Total": 25000,
-    "CQI_avg": 9.5,
-    "status": "normal",
-    "severity": 15,
-    "issue_type": "Normal",
-    "health_score": 95
-  }
-]
-```
-
-### Statistics (`stats.json`)
-```json
-{
-  "total_cells": 1000,
-  "congested_cells": 25,
-  "congestion_rate": 2.5,
-  "avg_load": 62.5,
-  "avg_health_score": 94.2,
-  "issue_distribution": {},
-  "band_statistics": {}
-}
-```
+## Links
+- Architecture notes: [ENGINEERING_RECOMMENDATIONS.md](ENGINEERING_RECOMMENDATIONS.md)
 
 ## 🤝 Contributing
 

@@ -17,7 +17,7 @@ export default function SitePlanning() {
         <ul style={{ paddingLeft: '20px', color: '#444', lineHeight: 1.6 }}>
           <li>Step 1: Define coordinates and planned bands.</li>
           <li>Step 2: Configure antenna params (tilt, azimuth, power).</li>
-          <li>Step 3: Run coverage/capacity simulation (ns-3 or fast estimator).</li>
+          <li>Step 3: Run coverage/capacity simulation (fast estimator).</li>
         </ul>
         <p style={{ marginTop: '16px', color: '#666' }}>
           This is a placeholder. Provide the site data to proceed, or ask to wire this into the simulator API.

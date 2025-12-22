@@ -78,6 +78,7 @@ const state = {
     siteHierarchy: {},
     selectedSite: null,
     selectedCellName: null,
+    currentRecommendations: [],
 
     features: [],
     pointFeatures: [],
@@ -446,7 +447,7 @@ function showSiteInfoPanel(siteName, focusCell = null) {
                     <span class="material-symbols-outlined">cell_tower</span>
                     <div class="antenna-title">
                         <div>${antennaId.toUpperCase()} • Band ${ant.band}</div>
-                        <div class="antenna-sub">Azimuth ${ant.azimuth}° • ${ant.type}</div>
+                        <div class="antenna-sub">Azimuth ${ant.azimuth} deg - ${ant.type}</div>
                     </div>
                     <span class="material-symbols-outlined expand-icon" id="expand-icon-${siteName}-${antennaId}">expand_more</span>
                 </div>
@@ -488,6 +489,513 @@ function hideSiteInfoPanel() {
     applyFilters();
 }
 
+// --- Smart Recommendation Engine (Dynamic) ---
+
+/**
+ * Calculate optimal tilt adjustment based on cell metrics
+ * Returns { degrees, expectedLoadReduction, expectedCqiGain, expectedThroughputGain, efficiency }
+ */
+function calculateOptimalTilt(obs, baseline) {
+    const load = obs.load || 0;
+    const cqi = obs.cqi || 10;
+    const ta = obs.ta_avg || 5;
+    
+    // Physics-based tilt calculation
+    // Higher load + low CQI = more aggressive downtilt needed
+    // High TA (distant users) = consider uptilt or less downtilt
+    
+    let optimalDegrees = 0;
+    let direction = 'downtilt';
+    
+    if (cqi < CONFIG.CQI_THRESHOLD) {
+        // Low CQI - interference likely, downtilt to reduce overlap
+        // More aggressive for very low CQI
+        optimalDegrees = Math.min(5, Math.max(1, (CONFIG.CQI_THRESHOLD - cqi) * 0.8));
+        direction = 'downtilt';
+    } else if (load > 80) {
+        // High load - shed edge users
+        const excessLoad = load - 70;
+        optimalDegrees = Math.min(4, Math.max(1, excessLoad * 0.1));
+        direction = 'downtilt';
+    } else if (ta > 20) {
+        // High TA - users are far, consider uptilt for better reach
+        optimalDegrees = Math.min(2, (ta - 15) * 0.1);
+        direction = 'uptilt';
+    }
+    
+    // Round to 0.5 degree precision
+    optimalDegrees = Math.round(optimalDegrees * 2) / 2;
+    if (optimalDegrees < 0.5) optimalDegrees = 1;
+    
+    // Calculate expected gains based on degree change
+    const signedDegrees = direction === 'uptilt' ? -optimalDegrees : optimalDegrees;
+    
+    // Load reduction: ~3-5% per degree of downtilt
+    const loadReduction = direction === 'downtilt' ? Math.round(optimalDegrees * 4) : Math.round(optimalDegrees * -2);
+    
+    // CQI improvement: ~0.3-0.5 per degree downtilt (reduces interference)
+    const cqiGain = direction === 'downtilt' ? Math.round(optimalDegrees * 0.4 * 10) / 10 : 0;
+    
+    // Throughput: derived from load and CQI improvements
+    const throughputGain = Math.round((loadReduction * 0.5 + cqiGain * 3) * 100) / 100;
+    
+    // Efficiency based on how well-suited tilt is for this problem
+    let efficiency = 50;
+    if (cqi < CONFIG.CQI_THRESHOLD && direction === 'downtilt') efficiency = 85;
+    else if (load > 85 && direction === 'downtilt') efficiency = 70;
+    else if (ta > 20 && direction === 'uptilt') efficiency = 60;
+    
+    return {
+        degrees: signedDegrees,
+        direction,
+        optimalDegrees,
+        expectedLoadReduction: loadReduction,
+        expectedCqiGain: cqiGain,
+        expectedThroughputGain: throughputGain,
+        efficiency
+    };
+}
+
+/**
+ * Calculate optimal redistribution ratio based on load imbalance
+ */
+function calculateOptimalRedistribution(obs, baseline) {
+    const load = obs.load || 0;
+    
+    // Target load after redistribution: 65%
+    const targetLoad = 65;
+    const excessLoad = Math.max(0, load - targetLoad);
+    
+    // Ratio = how much to offload (max 0.4 = 40%)
+    // Conservative: don't offload more than 40% of excess
+    let optimalRatio = Math.min(0.4, excessLoad / 100 * 0.8);
+    optimalRatio = Math.round(optimalRatio * 100) / 100;
+    if (optimalRatio < 0.1) optimalRatio = 0.15;
+    
+    // Expected load reduction
+    const expectedLoadReduction = Math.round(excessLoad * optimalRatio * 1.5);
+    
+    // Throughput gain from reduced congestion
+    const throughputGain = Math.round(expectedLoadReduction * 0.8);
+    
+    // Efficiency depends on how overloaded the cell is
+    let efficiency = 60;
+    if (load > 90) efficiency = 80;
+    else if (load > 80) efficiency = 70;
+    else if (load > 70) efficiency = 60;
+    
+    return {
+        ratio: optimalRatio,
+        expectedLoadReduction,
+        expectedThroughputGain: throughputGain,
+        efficiency
+    };
+}
+
+/**
+ * Calculate best carrier band to add
+ */
+function calculateOptimalCarrier(obs, baseline) {
+    const currentBand = parseInt(obs.frequency_band) || 3;
+    const load = obs.load || 0;
+    
+    // Band characteristics
+    const bandInfo = {
+        7:  { name: 'L2600', capacity: 200, coverage: 'small', priority: 1 },
+        3:  { name: 'L1800', capacity: 150, coverage: 'medium', priority: 2 },
+        1:  { name: 'L2100', capacity: 150, coverage: 'medium', priority: 3 },
+        20: { name: 'L800',  capacity: 75,  coverage: 'large', priority: 4 },
+    };
+    
+    // Find best complementary band
+    let bestBand = null;
+    let bestScore = 0;
+    
+    for (const [band, info] of Object.entries(bandInfo)) {
+        if (parseInt(band) === currentBand) continue;
+        
+        // Score based on capacity gain and complementarity
+        let score = info.capacity;
+        
+        // If current is low-band, prefer high-band for capacity
+        if (currentBand === 20 && (band === '7' || band === '3')) score += 50;
+        // If current is high-band, adding another high-band still helps
+        if (currentBand === 7 && band === '3') score += 30;
+        
+        if (score > bestScore) {
+            bestScore = score;
+            bestBand = { band, ...info };
+        }
+    }
+    
+    if (!bestBand) bestBand = { band: '7', name: 'L2600', capacity: 200 };
+    
+    // Expected gains from carrier addition
+    const expectedLoadReduction = Math.round(Math.min(35, load * 0.35));
+    const expectedThroughputGain = Math.round(bestBand.capacity * 0.4);
+    
+    // High efficiency for carrier addition on congested cells
+    const efficiency = load > 85 ? 90 : (load > 75 ? 80 : 70);
+    
+    return {
+        band: bestBand.band,
+        bandName: bestBand.name,
+        expectedLoadReduction,
+        expectedThroughputGain,
+        efficiency
+    };
+}
+
+/**
+ * Generate dynamic recommendations with calculated parameters
+ */
+function generateSmartRecommendations(cellName) {
+    const obs = state.currentObservations[cellName];
+    const baseline = state.baseline[cellName] || {};
+    
+    if (!obs) return [];
+    
+    const recommendations = [];
+    const load = obs.load || 0;
+    const cqi = obs.cqi ?? 10;
+    const congested = obs.congested;
+    const ta = obs.ta_avg || 5;
+    
+    // --- CONGESTION SCENARIOS ---
+    if (congested && load > 85) {
+        // Critical congestion - recommend all options ranked
+        const carrier = calculateOptimalCarrier(obs, baseline);
+        recommendations.push({
+            action: 'add_carrier',
+            title: `Add ${carrier.bandName} Carrier`,
+            icon: 'carrier',
+            priority: 'critical',
+            efficiency: carrier.efficiency,
+            description: `Add Band ${carrier.band} (${carrier.bandName}) to double capacity. Current load: ${load.toFixed(1)}%`,
+            expectedGain: { 
+                load: -carrier.expectedLoadReduction, 
+                throughput: carrier.expectedThroughputGain 
+            },
+            computedParams: { band: carrier.band },
+            cellName,
+            currentMetrics: { load, cqi, congested }
+        });
+        
+        const redist = calculateOptimalRedistribution(obs, baseline);
+        recommendations.push({
+            action: 'redistribute',
+            title: 'Load Balancing (MLB)',
+            icon: 'redistribute',
+            priority: 'high',
+            efficiency: redist.efficiency,
+            description: `Offload ${Math.round(redist.ratio * 100)}% traffic to neighbors. Expected load: ${(load - redist.expectedLoadReduction).toFixed(1)}%`,
+            expectedGain: { 
+                load: -redist.expectedLoadReduction, 
+                throughput: redist.expectedThroughputGain 
+            },
+            computedParams: { ratio: redist.ratio },
+            cellName,
+            currentMetrics: { load, cqi, congested }
+        });
+        
+        const tilt = calculateOptimalTilt(obs, baseline);
+        recommendations.push({
+            action: 'tilt',
+            title: `${tilt.direction === 'downtilt' ? 'Downtilt' : 'Uptilt'} ${tilt.optimalDegrees}°`,
+            icon: 'tilt',
+            priority: 'medium',
+            efficiency: tilt.efficiency,
+            description: `${tilt.direction === 'downtilt' ? 'Reduce footprint' : 'Extend coverage'} by ${tilt.optimalDegrees}° to ${tilt.direction === 'downtilt' ? 'shed edge users' : 'improve distant user signal'}.`,
+            expectedGain: { 
+                load: -tilt.expectedLoadReduction, 
+                throughput: tilt.expectedThroughputGain,
+                cqi: tilt.expectedCqiGain
+            },
+            computedParams: { degrees: tilt.degrees },
+            cellName,
+            currentMetrics: { load, cqi, congested }
+        });
+    }
+    // Moderate congestion
+    else if (congested) {
+        const redist = calculateOptimalRedistribution(obs, baseline);
+        recommendations.push({
+            action: 'redistribute',
+            title: 'Load Balancing (MLB)',
+            icon: 'redistribute',
+            priority: 'high',
+            efficiency: redist.efficiency,
+            description: `Redistribute ${Math.round(redist.ratio * 100)}% to neighbors. Target: ${(load - redist.expectedLoadReduction).toFixed(1)}% load.`,
+            expectedGain: { 
+                load: -redist.expectedLoadReduction, 
+                throughput: redist.expectedThroughputGain 
+            },
+            computedParams: { ratio: redist.ratio },
+            cellName,
+            currentMetrics: { load, cqi, congested }
+        });
+        
+        const tilt = calculateOptimalTilt(obs, baseline);
+        recommendations.push({
+            action: 'tilt',
+            title: `Antenna ${tilt.direction === 'downtilt' ? 'Downtilt' : 'Uptilt'} ${tilt.optimalDegrees}°`,
+            icon: 'tilt',
+            priority: 'medium',
+            efficiency: tilt.efficiency,
+            description: `Optimize coverage with ${tilt.optimalDegrees}° ${tilt.direction}. Reduces cell overlap.`,
+            expectedGain: { 
+                load: -tilt.expectedLoadReduction, 
+                cqi: tilt.expectedCqiGain 
+            },
+            computedParams: { degrees: tilt.degrees },
+            cellName,
+            currentMetrics: { load, cqi, congested }
+        });
+    }
+    // --- POOR CQI (interference) ---
+    else if (cqi < CONFIG.CQI_THRESHOLD) {
+        const tilt = calculateOptimalTilt(obs, baseline);
+        // Force downtilt for interference
+        const interferenceAngle = Math.max(2, tilt.optimalDegrees);
+        const expectedCqiGain = Math.round((15 - cqi) * 0.25 * 10) / 10; // Up to ~2 CQI improvement
+        
+        recommendations.push({
+            action: 'tilt',
+            title: `Downtilt ${interferenceAngle}° (Anti-Interference)`,
+            icon: 'tilt',
+            priority: 'high',
+            efficiency: 85,
+            description: `CQI is ${cqi.toFixed(1)} (poor). Downtilt by ${interferenceAngle}° to reduce overlap with neighbors. Expected CQI: ${(cqi + expectedCqiGain).toFixed(1)}`,
+            expectedGain: { 
+                cqi: expectedCqiGain, 
+                throughput: Math.round(expectedCqiGain * 8) 
+            },
+            computedParams: { degrees: interferenceAngle },
+            cellName,
+            currentMetrics: { load, cqi, congested }
+        });
+        
+        const carrier = calculateOptimalCarrier(obs, baseline);
+        recommendations.push({
+            action: 'add_carrier',
+            title: `Add ${carrier.bandName} (Less Interference)`,
+            icon: 'carrier',
+            priority: 'medium',
+            efficiency: 65,
+            description: `Higher frequency bands have smaller footprint and less inter-cell interference.`,
+            expectedGain: { cqi: 1.5, throughput: 25 },
+            computedParams: { band: '7' },
+            cellName,
+            currentMetrics: { load, cqi, congested }
+        });
+    }
+    // --- HIGH LOAD (preventive) ---
+    else if (load > 70) {
+        const redist = calculateOptimalRedistribution(obs, baseline);
+        recommendations.push({
+            action: 'redistribute',
+            title: 'Preventive Load Balancing',
+            icon: 'redistribute',
+            priority: 'medium',
+            efficiency: redist.efficiency - 10,
+            description: `Load at ${load.toFixed(1)}% - approaching threshold. Preemptively offload ${Math.round(redist.ratio * 100)}%.`,
+            expectedGain: { 
+                load: -redist.expectedLoadReduction, 
+                throughput: Math.round(redist.expectedThroughputGain * 0.7)
+            },
+            computedParams: { ratio: Math.max(0.1, redist.ratio - 0.05) },
+            cellName,
+            currentMetrics: { load, cqi, congested }
+        });
+    }
+    // --- COVERAGE ISSUE (high TA) ---
+    if (ta > 20) {
+        const uptiltDegrees = Math.min(2, Math.round((ta - 15) * 0.15 * 2) / 2);
+        recommendations.push({
+            action: 'tilt',
+            title: `Uptilt ${uptiltDegrees}° (Coverage Extension)`,
+            icon: 'tilt',
+            priority: 'medium',
+            efficiency: 55,
+            description: `High TA (${ta.toFixed(1)}) indicates distant users with weak signal. Uptilt extends range.`,
+            expectedGain: { coverage: 15, throughput: 5 },
+            computedParams: { degrees: -uptiltDegrees },
+            cellName,
+            currentMetrics: { load, cqi, ta }
+        });
+        
+        recommendations.push({
+            action: 'densify',
+            title: 'Site Densification',
+            icon: 'densify',
+            priority: 'high',
+            efficiency: 90,
+            description: `TA of ${ta.toFixed(1)} suggests coverage gap. New site would improve edge throughput by ~50%.`,
+            expectedGain: { coverage: 35, throughput: 50 },
+            computedParams: {},
+            cellName,
+            currentMetrics: { load, cqi, ta }
+        });
+    }
+    
+    // Sort by priority then efficiency
+    const priorityOrder = { critical: 0, high: 1, medium: 2, low: 3 };
+    recommendations.sort((a, b) => {
+        const pDiff = priorityOrder[a.priority] - priorityOrder[b.priority];
+        if (pDiff !== 0) return pDiff;
+        return b.efficiency - a.efficiency;
+    });
+    
+    return recommendations;
+}
+
+function renderRecommendationsPanel(cellName) {
+    const container = document.getElementById('reco-list');
+    const badge = document.getElementById('reco-count');
+    if (!container) return;
+    
+    if (!cellName) {
+        container.innerHTML = '<div class="reco-placeholder">Select a cell to get recommendations</div>';
+        if (badge) badge.textContent = '0';
+        return;
+    }
+    
+    const recommendations = generateSmartRecommendations(cellName);
+    
+    if (badge) badge.textContent = recommendations.length;
+    
+    if (recommendations.length === 0) {
+        const obs = state.currentObservations[cellName];
+        container.innerHTML = `
+            <div class="reco-placeholder" style="color: var(--success);">
+                <span class="material-symbols-outlined" style="font-size: 24px; margin-bottom: 8px;">check_circle</span><br>
+                Cell is healthy. No action required.
+            </div>
+        `;
+        return;
+    }
+    
+    container.innerHTML = recommendations.map((reco, idx) => {
+        const gains = reco.expectedGain || {};
+        const metrics = reco.currentMetrics || {};
+        
+        // Build dynamic metrics display
+        let metricsHtml = '';
+        if (gains.load) {
+            const newLoad = (metrics.load || 0) + gains.load;
+            metricsHtml += `<div class="reco-metric"><span class="reco-metric-label">Load:</span><span class="reco-metric-value">${metrics.load?.toFixed(0) || '--'}% → ${newLoad.toFixed(0)}%</span></div>`;
+        }
+        if (gains.cqi) {
+            const newCqi = (metrics.cqi || 0) + gains.cqi;
+            metricsHtml += `<div class="reco-metric"><span class="reco-metric-label">CQI:</span><span class="reco-metric-value">${metrics.cqi?.toFixed(1) || '--'} → ${newCqi.toFixed(1)}</span></div>`;
+        }
+        if (gains.throughput) {
+            metricsHtml += `<div class="reco-metric"><span class="reco-metric-label">Throughput:</span><span class="reco-metric-value">+${gains.throughput}%</span></div>`;
+        }
+        if (gains.coverage) {
+            metricsHtml += `<div class="reco-metric"><span class="reco-metric-label">Coverage:</span><span class="reco-metric-value">+${gains.coverage}%</span></div>`;
+        }
+        
+        // Show optimal parameter in title for tilt actions
+        let paramHint = '';
+        if (reco.action === 'tilt' && reco.computedParams.degrees !== undefined) {
+            const deg = reco.computedParams.degrees;
+            paramHint = `<span class="reco-param-hint">${deg > 0 ? '↓' : '↑'} ${Math.abs(deg)}°</span>`;
+        } else if (reco.action === 'redistribute' && reco.computedParams.ratio) {
+            paramHint = `<span class="reco-param-hint">${Math.round(reco.computedParams.ratio * 100)}% offload</span>`;
+        } else if (reco.action === 'add_carrier' && reco.computedParams.band) {
+            paramHint = `<span class="reco-param-hint">Band ${reco.computedParams.band}</span>`;
+        }
+        
+        return `
+        <div class="reco-item priority-${reco.priority}" data-reco-idx="${idx}">
+            <div class="reco-header">
+                <div class="reco-icon ${reco.icon}">
+                    <span class="material-symbols-outlined">${getRecoIcon(reco.icon)}</span>
+                </div>
+                <div>
+                    <div class="reco-title">${reco.title} ${paramHint}</div>
+                    <div class="reco-subtitle">${reco.priority.toUpperCase()} priority</div>
+                </div>
+            </div>
+            <div class="reco-body">${reco.description}</div>
+            <div class="reco-metrics">${metricsHtml}</div>
+            <div class="reco-efficiency">
+                <span class="efficiency-label">Efficiency:</span>
+                <div class="efficiency-bar"><div class="efficiency-fill" style="width: ${reco.efficiency}%"></div></div>
+                <span class="efficiency-value">${reco.efficiency}%</span>
+            </div>
+            <button class="reco-apply-btn" onclick="applyRecommendation(${idx})">
+                <span class="material-symbols-outlined">bolt</span>
+                Simulate This Action
+            </button>
+        </div>
+    `}).join('');
+    
+    // Store recommendations in state for apply function
+    state.currentRecommendations = recommendations;
+}
+
+function getRecoIcon(type) {
+    const icons = {
+        tilt: 'cell_tower',
+        carrier: 'add_circle',
+        redistribute: 'sync_alt',
+        densify: 'add_location'
+    };
+    return icons[type] || 'lightbulb';
+}
+
+window.applyRecommendation = function(idx) {
+    const reco = state.currentRecommendations?.[idx];
+    if (!reco) return;
+    
+    // Set the action selector
+    const actionSelect = document.getElementById('action-select');
+    if (actionSelect && reco.action !== 'densify') {
+        actionSelect.value = reco.action;
+        buildActionParamsUI(reco.action);
+        
+        // Fill in the recommended parameters
+        setTimeout(() => {
+            if (reco.action === 'tilt' && reco.computedParams.degrees !== undefined) {
+                const input = document.getElementById('param-tilt-deg');
+                if (input) input.value = reco.computedParams.degrees;
+            }
+            if (reco.action === 'redistribute' && reco.computedParams.ratio !== undefined) {
+                const input = document.getElementById('param-redistribute-ratio');
+                if (input) input.value = reco.computedParams.ratio;
+            }
+            if (reco.action === 'add_carrier' && reco.computedParams.band) {
+                const input = document.getElementById('param-carrier-band');
+                if (input) input.value = reco.computedParams.band;
+            }
+            
+            // Auto-run the simulation
+            runSimulation(reco.cellName, reco.action);
+        }, 100);
+    } else if (reco.action === 'densify') {
+        // Densification is a special case - show recommendation only
+        const resultEl = document.getElementById('action-result');
+        if (resultEl) {
+            resultEl.innerHTML = `
+                <div class="action-mode-badge" style="background: var(--orange-primary); color: white;">📍 Site Densification Recommended</div>
+                <div style="margin-top: 10px; font-size: 13px; color: var(--text-secondary);">
+                    <p><strong>Analysis:</strong> High Timing Advance values indicate users at the cell edge experiencing poor signal quality.</p>
+                    <p style="margin-top: 8px;"><strong>Recommendation:</strong></p>
+                    <ul style="margin: 8px 0; padding-left: 20px;">
+                        <li>Deploy a new macro site in the coverage gap</li>
+                        <li>Or install small cells for targeted capacity</li>
+                        <li>Estimated capacity gain: +50% throughput</li>
+                        <li>Estimated coverage improvement: +30%</li>
+                    </ul>
+                    <p style="margin-top: 8px; color: var(--warning);">⚠️ This requires CAPEX investment and site acquisition.</p>
+                </div>
+            `;
+        }
+    }
+};
+
 // --- Action Simulator ---
 function renderActionPanel(cellName) {
     const panel = document.getElementById('action-panel');
@@ -495,6 +1003,9 @@ function renderActionPanel(cellName) {
     const runBtn = document.getElementById('action-run');
     const result = document.getElementById('action-result');
     if (!panel || !select || !runBtn || !result) return;
+
+    // Also render recommendations
+    renderRecommendationsPanel(cellName);
 
     if (!cellName) {
         panel.classList.add('disabled');
@@ -589,10 +1100,10 @@ function displaySimulationResults(result) {
     const impact = result.impact || {};
     const simMode = result.simulation_mode || 'fast';
     const action = result.action || '';
-    const defaultConfidence = action === 'redistribute' && simMode.includes('ns-3') ? 0.5 : (simMode.includes('ns-3') ? 0.9 : 0.6);
+    const defaultConfidence = action === 'redistribute' ? 0.55 : 0.65;
     const confidence = result.confidence ?? defaultConfidence;
     const confidencePct = Math.round(confidence * 100);
-    const modeLabel = simMode.includes('ns-3') ? '🎯 ns-3' : '⚡ Fast';
+    const modeLabel = '⚡ Fast';
 
     const neighbors = (impact.affected_cells || []).map(n => {
         const delta = n.load_change ?? n.change ?? 0;
@@ -640,7 +1151,7 @@ async function runSimulation(cellName, action) {
 
     const params = collectActionParams(action);
     const timeEntry = state.timeIndex[state.currentTimeIndex] || {};
-    const mode = 'fast'; // ns-3 removed; always use fast estimator
+    const mode = 'fast'; // fast estimator only
 
     if (action === 'add_carrier') {
         if (!params.band) {
@@ -835,6 +1346,289 @@ function simpleReport() {
     downloadBlob('netvision-report.txt', summary, 'text/plain');
 }
 
+// --- Data Exploration ---
+const exploreCharts = { main: null, timeline: null };
+
+function computeExploreData(duration, metric) {
+    const data = state.timeIndex;
+    if (!data || data.length === 0) return { labels: [], values: [], insights: {} };
+
+    if (duration === 'hour') {
+        // Aggregate by hour of day (0-23)
+        const hourBuckets = Array(24).fill(null).map(() => []);
+        data.forEach(entry => {
+            const ts = entry.timestamp || '';
+            const match = ts.match(/(\d{2}):(\d{2})$/);
+            if (match) {
+                const hour = parseInt(match[1], 10);
+                const val = entry.stats?.[metric] ?? 0;
+                hourBuckets[hour].push(val);
+            }
+        });
+        const labels = Array.from({ length: 24 }, (_, i) => `${String(i).padStart(2, '0')}:00`);
+        const values = hourBuckets.map(arr => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0);
+        
+        // Find peak hours
+        const sorted = values.map((v, i) => ({ hour: i, value: v })).sort((a, b) => b.value - a.value);
+        const peakHours = sorted.slice(0, 3).map(p => `${String(p.hour).padStart(2, '0')}:00`);
+        const offPeakHours = sorted.slice(-3).map(p => `${String(p.hour).padStart(2, '0')}:00`);
+        
+        return {
+            labels,
+            values,
+            insights: {
+                peakHours,
+                offPeakHours,
+                maxValue: Math.max(...values),
+                avgValue: values.reduce((a, b) => a + b, 0) / 24
+            }
+        };
+    }
+
+    if (duration === 'day') {
+        // Aggregate by day
+        const dayBuckets = {};
+        data.forEach(entry => {
+            const ts = entry.timestamp || '';
+            const match = ts.match(/^(\d{2}-\d{2}-\d{4})/);
+            if (match) {
+                const day = match[1];
+                if (!dayBuckets[day]) dayBuckets[day] = [];
+                dayBuckets[day].push(entry.stats?.[metric] ?? 0);
+            }
+        });
+        const days = Object.keys(dayBuckets).sort((a, b) => {
+            const [da, ma, ya] = a.split('-').map(Number);
+            const [db, mb, yb] = b.split('-').map(Number);
+            return new Date(ya, ma - 1, da) - new Date(yb, mb - 1, db);
+        });
+        const labels = days;
+        const values = days.map(d => {
+            const arr = dayBuckets[d];
+            return arr.reduce((a, b) => a + b, 0) / arr.length;
+        });
+        
+        const maxIdx = values.indexOf(Math.max(...values));
+        const minIdx = values.indexOf(Math.min(...values));
+        
+        return {
+            labels,
+            values,
+            insights: {
+                worstDay: labels[maxIdx],
+                bestDay: labels[minIdx],
+                maxValue: values[maxIdx],
+                minValue: values[minIdx],
+                avgValue: values.reduce((a, b) => a + b, 0) / values.length
+            }
+        };
+    }
+
+    if (duration === 'week') {
+        // Aggregate by week (day of week)
+        const weekDays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        const weekBuckets = Array(7).fill(null).map(() => []);
+        data.forEach(entry => {
+            const ts = entry.timestamp || '';
+            const match = ts.match(/^(\d{2})-(\d{2})-(\d{4})/);
+            if (match) {
+                const [, d, m, y] = match;
+                const date = new Date(Number(y), Number(m) - 1, Number(d));
+                const dow = date.getDay();
+                weekBuckets[dow].push(entry.stats?.[metric] ?? 0);
+            }
+        });
+        const labels = weekDays;
+        const values = weekBuckets.map(arr => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0);
+        
+        const maxIdx = values.indexOf(Math.max(...values));
+        const minIdx = values.indexOf(Math.min(...values));
+        
+        return {
+            labels,
+            values,
+            insights: {
+                worstDay: weekDays[maxIdx],
+                bestDay: weekDays[minIdx],
+                maxValue: values[maxIdx],
+                minValue: values[minIdx]
+            }
+        };
+    }
+
+    return { labels: [], values: [], insights: {} };
+}
+
+function computeTimelineData(metric) {
+    // Show congestion over time (all data points)
+    const data = state.timeIndex;
+    const labels = data.map(e => e.timestamp || '');
+    const values = data.map(e => e.stats?.[metric] ?? 0);
+    return { labels, values };
+}
+
+function renderExploreCharts() {
+    const duration = document.getElementById('explore-duration')?.value || 'hour';
+    const metric = document.getElementById('explore-metric')?.value || 'congested';
+    
+    const metricLabels = {
+        congested: 'Congested Cells',
+        avg_load: 'Average Load (%)',
+        avg_cqi: 'Average CQI',
+        congestion_rate: 'Congestion Rate (%)'
+    };
+    
+    const durationLabels = {
+        hour: 'Peak Hours Analysis',
+        day: 'Daily Trends',
+        week: 'Weekly Pattern'
+    };
+    
+    const titleEl = document.getElementById('explore-chart-title');
+    if (titleEl) titleEl.textContent = durationLabels[duration] || 'Analysis';
+    
+    const mainCtx = document.getElementById('chart-explore-main');
+    const timelineCtx = document.getElementById('chart-explore-timeline');
+    if (!mainCtx || !timelineCtx) return;
+    
+    // Destroy old charts
+    if (exploreCharts.main) { exploreCharts.main.destroy(); exploreCharts.main = null; }
+    if (exploreCharts.timeline) { exploreCharts.timeline.destroy(); exploreCharts.timeline = null; }
+    
+    const { labels, values, insights } = computeExploreData(duration, metric);
+    const timeline = computeTimelineData(metric);
+    
+    // Main chart
+    exploreCharts.main = new Chart(mainCtx, {
+        type: duration === 'hour' ? 'bar' : 'line',
+        data: {
+            labels,
+            datasets: [{
+                label: metricLabels[metric],
+                data: values,
+                backgroundColor: duration === 'hour' 
+                    ? values.map((v, i) => {
+                        const max = Math.max(...values);
+                        return v >= max * 0.9 ? '#FF7900' : v >= max * 0.7 ? '#FFB74D' : '#42A5F5';
+                    })
+                    : 'rgba(255, 121, 0, 0.3)',
+                borderColor: '#FF7900',
+                borderWidth: 2,
+                fill: duration !== 'hour',
+                tension: 0.3
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: { 
+                    callbacks: {
+                        label: (ctx) => `${metricLabels[metric]}: ${ctx.raw.toFixed(2)}`
+                    }
+                }
+            },
+            scales: {
+                y: { beginAtZero: true, grid: { color: '#333' }, ticks: { color: '#ccc' } },
+                x: { grid: { display: false }, ticks: { color: '#ccc', maxRotation: 45 } }
+            }
+        }
+    });
+    
+    // Timeline chart (sampled for performance)
+    const step = Math.max(1, Math.floor(timeline.labels.length / 100));
+    const sampledLabels = timeline.labels.filter((_, i) => i % step === 0);
+    const sampledValues = timeline.values.filter((_, i) => i % step === 0);
+    
+    exploreCharts.timeline = new Chart(timelineCtx, {
+        type: 'line',
+        data: {
+            labels: sampledLabels,
+            datasets: [{
+                label: metricLabels[metric],
+                data: sampledValues,
+                borderColor: '#42A5F5',
+                backgroundColor: 'rgba(66, 165, 245, 0.2)',
+                borderWidth: 1.5,
+                fill: true,
+                tension: 0.2,
+                pointRadius: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: true, grid: { color: '#333' }, ticks: { color: '#ccc' } },
+                x: { display: false }
+            }
+        }
+    });
+    
+    // Insights
+    const insightsEl = document.getElementById('explore-insights');
+    if (insightsEl) {
+        let html = '<div class="insights-grid">';
+        if (duration === 'hour' && insights.peakHours) {
+            html += `
+                <div class="insight-card insight-warning">
+                    <span class="material-symbols-outlined">trending_up</span>
+                    <div>
+                        <div class="insight-label">Peak Hours (Heures de Pointe)</div>
+                        <div class="insight-value">${insights.peakHours.join(', ')}</div>
+                    </div>
+                </div>
+                <div class="insight-card insight-success">
+                    <span class="material-symbols-outlined">trending_down</span>
+                    <div>
+                        <div class="insight-label">Off-Peak Hours</div>
+                        <div class="insight-value">${insights.offPeakHours.join(', ')}</div>
+                    </div>
+                </div>
+                <div class="insight-card">
+                    <span class="material-symbols-outlined">analytics</span>
+                    <div>
+                        <div class="insight-label">Average</div>
+                        <div class="insight-value">${insights.avgValue.toFixed(2)}</div>
+                    </div>
+                </div>
+            `;
+        } else if (duration === 'day' || duration === 'week') {
+            html += `
+                <div class="insight-card insight-warning">
+                    <span class="material-symbols-outlined">warning</span>
+                    <div>
+                        <div class="insight-label">Worst ${duration === 'week' ? 'Day' : 'Date'}</div>
+                        <div class="insight-value">${insights.worstDay || '-'} (${(insights.maxValue || 0).toFixed(2)})</div>
+                    </div>
+                </div>
+                <div class="insight-card insight-success">
+                    <span class="material-symbols-outlined">check_circle</span>
+                    <div>
+                        <div class="insight-label">Best ${duration === 'week' ? 'Day' : 'Date'}</div>
+                        <div class="insight-value">${insights.bestDay || '-'} (${(insights.minValue || 0).toFixed(2)})</div>
+                    </div>
+                </div>
+            `;
+        }
+        html += '</div>';
+        insightsEl.innerHTML = html;
+    }
+}
+
+function setupExploreModal() {
+    document.getElementById('btn-explore')?.addEventListener('click', () => {
+        toggleModal('explore-modal', true);
+        renderExploreCharts();
+    });
+    document.getElementById('explore-close')?.addEventListener('click', () => toggleModal('explore-modal', false));
+    document.getElementById('explore-refresh')?.addEventListener('click', renderExploreCharts);
+    document.getElementById('explore-duration')?.addEventListener('change', renderExploreCharts);
+    document.getElementById('explore-metric')?.addEventListener('change', renderExploreCharts);
+}
+
 // --- Time Navigation ---
 async function loadTimeSlice(index) {
     if (index < 0 || index >= state.timeIndex.length) return;
@@ -1004,7 +1798,7 @@ function updateAlertsUI(features) {
     }
     
     alertsList.innerHTML = congested.slice(0, CONFIG.MAX_ALERTS_RENDER).map(f => `
-        <div class="alert-item" data-cell-id="${f.properties.id}">
+        <div class="alert-item" data-cell-id="${f.properties.id}" data-cell-name="${f.properties.cell_name}">
             <span class="material-symbols-outlined">error</span>
             <div class="alert-item-content">
                 <div class="alert-item-title">${f.properties.cell_name}</div>
@@ -1012,6 +1806,14 @@ function updateAlertsUI(features) {
             </div>
         </div>
     `).join('');
+
+    // Make alerts clickable to navigate to the cell
+    alertsList.querySelectorAll('.alert-item').forEach(item => {
+        const cellName = item.dataset.cellName;
+        if (cellName) {
+            item.addEventListener('click', () => selectCell(cellName, true));
+        }
+    });
 }
 
 function destroyCharts() {
@@ -1534,9 +2336,13 @@ function setupEventHandlers() {
             case '2': e.preventDefault(); setViewMode('2d'); break;
             case '3': e.preventDefault(); setViewMode('3d'); break;
             case 'a': e.preventDefault(); toggleModal('analytics-modal', true); break;
+            case 'd': e.preventDefault(); toggleModal('explore-modal', true); renderExploreCharts(); break;
             case 'e': e.preventDefault(); toggleModal('export-modal', true); break;
         }
     });
+
+    // Data Exploration Modal
+    setupExploreModal();
 }
 
 function setLoading(isLoading, progress = '') {

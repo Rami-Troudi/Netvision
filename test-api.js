@@ -11,16 +11,6 @@ const testCases = [
       time_entry: { filename: '01-12-2025_12-00.json' },
       mode: 'fast'
     }
-  },
-  {
-    name: 'Precise Mode - Tilt',
-    body: {
-      cell_name: 'site_0001_f3',
-      action: 'tilt',
-      params: { degrees: 2 },
-      time_entry: { filename: '01-12-2025_12-00.json' },
-      mode: 'precise'
-    }
   }
 ];
 

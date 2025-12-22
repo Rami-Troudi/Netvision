@@ -1,8 +1,26 @@
 import { spawn } from 'child_process'
 import path from 'path'
+import fs from 'fs'
 
-const ALLOWED_ACTIONS = new Set(['tilt', 'power', 'add_carrier', 'redistribute'])
-const ALLOWED_MODES = new Set(['fast']) // ns-3 removed; fast is the only mode
+const ALLOWED_ACTIONS = new Set(['tilt', 'add_carrier', 'redistribute'])
+const ALLOWED_MODES = new Set(['fast']) // fast is the only supported mode
+
+let allowedTimeFiles = null
+
+function loadAllowedTimeFiles() {
+  if (allowedTimeFiles) return allowedTimeFiles
+  try {
+    const projectRoot = process.cwd()
+    const timeIndexPath = path.join(projectRoot, 'public', 'time_index.json')
+    const raw = fs.readFileSync(timeIndexPath, 'utf8')
+    const parsed = JSON.parse(raw)
+    allowedTimeFiles = new Set((parsed || []).map(String))
+  } catch (err) {
+    console.warn('time_index.json not found or unreadable; skipping filename whitelist')
+    allowedTimeFiles = null
+  }
+  return allowedTimeFiles
+}
 
 function isPlainObject(val) {
   return val !== null && typeof val === 'object' && !Array.isArray(val)
@@ -29,6 +47,12 @@ function validateRequest(body) {
   if (time_entry && time_entry.filename && typeof time_entry.filename !== 'string') {
     return 'time_entry.filename must be a string when provided'
   }
+  if (time_entry && time_entry.filename) {
+    const allowList = loadAllowedTimeFiles()
+    if (allowList && !allowList.has(time_entry.filename)) {
+      return 'time_entry.filename is not in allowed time_index.json'
+    }
+  }
   return null
 }
 
@@ -41,7 +65,7 @@ export const config = {
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
-    res.setHeader('Allow', ['POST'])
+  const mode = 'fast'
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
@@ -68,8 +92,6 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Deploy new site is handled in the site planning tool, not inline actions' })
   }
 
-  // ns-3 removed: only fast mode is available
-
   const projectRoot = process.cwd()
   const scriptPath = path.join(projectRoot, 'simulation', 'simulator.py')
   const timeFile = timeEntry.filename || null
@@ -86,8 +108,7 @@ export default async function handler(req, res) {
     args.push('--time-file', timeFile)
   }
 
-  // Longer timeout for precise mode (ns-3)
-  const timeout = mode === 'precise' ? 120000 : 30000
+  const timeout = 30000
 
   try {
     await new Promise((resolve, reject) => {

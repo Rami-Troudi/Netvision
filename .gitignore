@@ -32,6 +32,18 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+# Generated data (keep out of git history)
+public/baseline.json
+public/stats.json
+public/time_index.json
+public/time_data/
+data.json
+stats.json
+cleaned_data.csv
+data_set_radio_*.csv
+data_set_radio_all_hour.csv
+*.parquet
+
 # Data files (keep structure but not actual data)
 # data.json - Uncomment to ignore generated data
 # stats.json - Uncomment to ignore generated stats
@@ -44,3 +56,4 @@ yarn-error.log*
 venv/
 env/
 ENV/
+.next-dev/

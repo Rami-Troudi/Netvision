@@ -9,7 +9,7 @@ const pageMarkup = `
                     <span class="material-symbols-outlined">cell_tower</span>
                     <span class="logo-text">NetVision</span>
                 </div>
-                <span class="header-subtitle">Digital Twin • Network Operations Center</span>
+                <span class="header-subtitle">Digital Twin - Network Operations Center</span>
             </div>
             <div class="header-center">
                 <div class="time-mode-indicator">
@@ -24,6 +24,9 @@ const pageMarkup = `
                 </button>
                 <button class="btn-icon" id="btn-analytics" title="Analytics Panel (A)">
                     <span class="material-symbols-outlined">analytics</span>
+                </button>
+                <button class="btn-icon" id="btn-explore" title="Data Exploration (D)">
+                    <span class="material-symbols-outlined">query_stats</span>
                 </button>
                 <button class="btn-icon" id="btn-export" title="Export Data (E)">
                     <span class="material-symbols-outlined">download</span>
@@ -282,6 +285,17 @@ const pageMarkup = `
                     <span class="material-symbols-outlined">chevron_right</span>
                 </div>
 
+                <div class="panel recommendation-panel" id="recommendation-panel">
+                    <h3 class="panel-title">
+                        <span class="material-symbols-outlined">lightbulb</span>
+                        Smart Recommendations
+                        <span class="reco-badge" id="reco-count">0</span>
+                    </h3>
+                    <div class="reco-list" id="reco-list">
+                        <div class="reco-placeholder">Select a cell to get recommendations</div>
+                    </div>
+                </div>
+
                 <div class="panel action-panel" id="action-panel">
                     <h3 class="panel-title">
                         <span class="material-symbols-outlined">engineering</span>
@@ -436,6 +450,7 @@ const pageMarkup = `
                         <div><span class="kbd">2</span> 2D View</div>
                         <div><span class="kbd">3</span> 3D View</div>
                         <div><span class="kbd">A</span> Analytics</div>
+                        <div><span class="kbd">D</span> Data Explore</div>
                         <div><span class="kbd">E</span> Export</div>
                     </div>
                 </div>
@@ -480,6 +495,59 @@ const pageMarkup = `
             </div>
         </div>
         
+        <!-- Data Exploration Modal -->
+        <div class="modal-overlay hidden" id="explore-modal">
+            <div class="modal explore-modal">
+                <div class="modal-header">
+                    <h2>
+                        <span class="material-symbols-outlined">query_stats</span>
+                        Data Exploration
+                    </h2>
+                    <button class="modal-close" id="explore-close">
+                        <span class="material-symbols-outlined">close</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="explore-controls">
+                        <div class="explore-control-group">
+                            <label for="explore-duration">Time Aggregation</label>
+                            <select id="explore-duration">
+                                <option value="hour">By Hour of Day</option>
+                                <option value="day">By Day</option>
+                                <option value="week">By Week</option>
+                            </select>
+                        </div>
+                        <div class="explore-control-group">
+                            <label for="explore-metric">Metric</label>
+                            <select id="explore-metric">
+                                <option value="congested">Congested Cells</option>
+                                <option value="avg_load">Average Load (%)</option>
+                                <option value="avg_cqi">Average CQI</option>
+                                <option value="congestion_rate">Congestion Rate (%)</option>
+                            </select>
+                        </div>
+                        <button class="btn-primary" id="explore-refresh">
+                            <span class="material-symbols-outlined">refresh</span>
+                            Update
+                        </button>
+                    </div>
+                    <div class="explore-charts">
+                        <div class="explore-chart-card">
+                            <h4 id="explore-chart-title">Peak Hours Analysis</h4>
+                            <canvas id="chart-explore-main"></canvas>
+                        </div>
+                        <div class="explore-chart-card">
+                            <h4>Congestion Timeline</h4>
+                            <canvas id="chart-explore-timeline"></canvas>
+                        </div>
+                    </div>
+                    <div class="explore-insights" id="explore-insights">
+                        <!-- Populated dynamically -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Export Modal -->
         <div class="modal-overlay hidden" id="export-modal">
             <div class="modal export-modal">

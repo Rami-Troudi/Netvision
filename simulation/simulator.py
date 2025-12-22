@@ -574,26 +574,6 @@ def simulate_action(base_dir: Path, cell_name: str, action: str, params: Dict[st
     return result
 
 
-# --- NS-3 Mode ---
-
-def simulate_action_ns3(base_dir: Path, cell_name: str, action: str, params: Dict[str, Any], time_file: Optional[str] = None, use_mock: bool = True) -> Dict[str, Any]:
-    """Run simulation using ns-3 bridge for higher precision"""
-    from ns3_bridge import NS3Bridge, MockNS3Bridge
-    
-    baseline_path = base_dir / "public" / "baseline.json"
-    baseline = load_file(baseline_path)
-    
-    timestamp, observations = load_time_entry(base_dir, time_file)
-    
-    # Use mock by default (no ns-3 installation required)
-    bridge = MockNS3Bridge() if use_mock else NS3Bridge()
-    
-    result = bridge.simulate_action(baseline, observations, cell_name, action, params)
-    result["timestamp"] = timestamp
-    
-    return result
-
-
 # --- CLI Entry ---
 
 def main() -> None:
@@ -602,8 +582,7 @@ def main() -> None:
     parser.add_argument("--action", required=True, help="Action type: tilt|add_carrier|redistribute|new_site")
     parser.add_argument("--params", default="{}", help="JSON string of parameters")
     parser.add_argument("--time-file", default=None, help="Time-slice filename (from time_data)")
-    parser.add_argument("--mode", default="fast", choices=["fast", "precise"], help="Simulation mode")
-    parser.add_argument("--ns3-real", action="store_true", help="Use real ns-3 instead of mock")
+    parser.add_argument("--mode", default="fast", choices=["fast"], help="Simulation mode (fast only; ns-3 removed)")
     args = parser.parse_args()
 
     try:
@@ -614,10 +593,7 @@ def main() -> None:
     base_dir = Path(__file__).resolve().parent.parent
 
     try:
-        if args.mode == "precise":
-            result = simulate_action_ns3(base_dir, args.cell, args.action, params, args.time_file, use_mock=not args.ns3_real)
-        else:
-            result = simulate_action(base_dir, args.cell, args.action, params, args.time_file)
+        result = simulate_action(base_dir, args.cell, args.action, params, args.time_file)
         print(json.dumps(result))
     except Exception as exc:
         error_resp = {"error": str(exc)}
