@@ -1,4 +1,5 @@
 import maplibregl from 'maplibre-gl';
+import { destination } from '@turf/turf';
 import Chart from 'chart.js/auto';
 
 // ============================================
@@ -131,21 +132,16 @@ function parseTimestamp(ts) {
 }
 
 function createSectorPolygon(center, radiusMeters, azimuth, beamwidth) {
+    // Use geodesic destination for each point on the sector arc for higher accuracy
     const steps = 24;
-    const earthRadius = 6378137;
-    const latRad = (center[1] * Math.PI) / 180;
     const startAzimuth = azimuth - beamwidth / 2;
     const endAzimuth = azimuth + beamwidth / 2;
     const coordinates = [center];
-    
+
     for (let i = 0; i <= steps; i++) {
         const currentAzimuth = startAzimuth + (i / steps) * (endAzimuth - startAzimuth);
-        const angleRad = ((90 - currentAzimuth) * Math.PI) / 180;
-        const dx = radiusMeters * Math.cos(angleRad);
-        const dy = radiusMeters * Math.sin(angleRad);
-        const dLon = dx / (earthRadius * Math.cos(latRad) * (Math.PI / 180));
-        const dLat = dy / (earthRadius * (Math.PI / 180));
-        coordinates.push([center[0] + dLon, center[1] + dLat]);
+        const dest = destination(center, radiusMeters / 1000, currentAzimuth, { units: 'kilometers' });
+        coordinates.push(dest.geometry.coordinates);
     }
     coordinates.push(center);
     return [coordinates];
