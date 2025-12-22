@@ -15,6 +15,14 @@ const CONFIG = {
     MAX_RADIUS: 2000,
     MAP_CENTER: [10.58, 35.82],
     MAP_ZOOM: 12,
+
+    // Large dataset handling
+    LARGE_DATASET_THRESHOLD: 80000,
+    MAX_SECTOR_RENDER: 20000,
+    MAX_SECTOR_SAMPLE_LARGE: 5000,
+    SECTOR_MIN_ZOOM: 5,
+    MAX_ALERTS_RENDER: 200,
+    SEARCH_MAX_RESULTS: 30,
     
     // Color scheme - Orange Brand Palette
     COLORS: {
@@ -41,6 +49,10 @@ const CONFIG = {
         streets: {
             tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
             attribution: '&copy; OpenStreetMap'
+        },
+        light: {
+            tiles: ['https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png'],
+            attribution: '&copy; Stadia Maps'
         }
     }
 };
@@ -50,7 +62,14 @@ const state = {
     data: [],
     filteredData: [],
     features: [],
+    pointFeatures: [],
+    sectorFeatures: [],
+    sectorSampleFeatures: [],
     siteMarkers: [],
+    stats: null,
+    isLargeDataset: false,
+    selectedCellId: null,
+    charts: {},
     map: null,
     popup: null,
     filters: {
@@ -61,13 +80,17 @@ const state = {
             idle: true,
             'no-data': true
         },
+        issueTypes: {},
         bands: {},
-        loadRange: [0, 100]
+        loadRange: [0, 100],
+        severityRange: [0, 100]
     },
     layers: {
         sectors: true,
         sites: true,
-        labels: false
+        labels: false,
+        clusters: true,
+        heatmap: false
     }
 };
 
@@ -99,6 +122,18 @@ function createSectorPolygon(center, radiusMeters, azimuth, beamwidth) {
     return [coordinates];
 }
 
+function clampNumber(value, min, max) {
+    if (value === null || value === undefined) return null;
+    const num = Number(value);
+    if (!Number.isFinite(num)) return null;
+    return Math.min(max, Math.max(min, num));
+}
+
+function safeString(value, fallback = '') {
+    if (value === null || value === undefined) return fallback;
+    return String(value);
+}
+
 function getLoadColor(load, isCongested) {
     if (isCongested) return CONFIG.COLORS.CONGESTED;
     if (load === null || load === undefined) return CONFIG.COLORS.NO_DATA;
@@ -118,6 +153,10 @@ function getCellStatus(item) {
     return 'normal';
 }
 
+function getIssueType(item) {
+    return item.issue_type || 'Normal';
+}
+
 function formatNumber(num, decimals = 1) {
     if (num === null || num === undefined) return 'N/A';
     return Number(num).toFixed(decimals);
@@ -131,71 +170,149 @@ function formatThroughput(kbps) {
 
 // --- Data Processing ---
 function processData(rawData) {
-    const features = [];
+    const sectorFeatures = [];
+    const sectorSampleFeatures = [];
+    const pointFeatures = [];
     const sites = new Map();
     const bands = new Set();
-    
-    rawData.forEach((item, index) => {
-        if (!item.longitude_sector || !item.latitude_sector) return;
-        
-        const center = [parseFloat(item.longitude_sector), parseFloat(item.latitude_sector)];
-        const azimuth = parseFloat(item.azimuth) || 0;
+    const issueTypes = new Set();
+
+    state.isLargeDataset = rawData.length >= CONFIG.LARGE_DATASET_THRESHOLD;
+    const stride = state.isLargeDataset ? Math.max(1, Math.floor(rawData.length / CONFIG.MAX_SECTOR_SAMPLE_LARGE)) : 1;
+
+    for (let index = 0; index < rawData.length; index++) {
+        const item = rawData[index];
+        if (!item || item.longitude_sector == null || item.latitude_sector == null) continue;
+
+        const lon = Number(item.longitude_sector);
+        const lat = Number(item.latitude_sector);
+        if (!Number.isFinite(lon) || !Number.isFinite(lat)) continue;
+
+        const center = [lon, lat];
+        const azimuth = Number(item.azimuth) || 0;
         const load = item.ft_physical_resource_blocks_load_dl;
         const band = item.frequency_band;
-        
-        // Track frequency bands
-        if (band) bands.add(band);
-        
-        // Calculate radius from TA
-        let radius = CONFIG.DEFAULT_RADIUS_METERS;
-        if (item.ot_average_ta != null && item.ot_average_ta > 0) {
-            radius = Math.max(CONFIG.MIN_RADIUS, Math.min(CONFIG.MAX_RADIUS, item.ot_average_ta * CONFIG.TA_TO_METERS));
-        }
-        
-        // Create sector geometry
-        const geometry = createSectorPolygon(center, radius, azimuth, CONFIG.DEFAULT_BEAMWIDTH);
-        
-        // Determine color and status
+        const issueType = getIssueType(item);
+
+        if (band != null && band !== '') bands.add(band);
+        if (issueType) issueTypes.add(issueType);
+
         const status = getCellStatus(item);
         const color = getLoadColor(load, item.congested);
-        
-        // Calculate opacity based on signal power
+
         let opacity = 0.7;
-        if (item.referencesignalpwr) {
-            const norm = Math.max(0, Math.min(1, (item.referencesignalpwr - 140) / 50));
+        if (item.referencesignalpwr != null) {
+            const norm = Math.max(0, Math.min(1, (Number(item.referencesignalpwr) - 140) / 50));
             opacity = 0.5 + (norm * 0.35);
         }
         if (status === 'no-data') opacity = 0.4;
-        
-        // Create feature
-        features.push({
+
+        // Lightweight point feature always (fast rendering + clustering + heatmap)
+        pointFeatures.push({
             type: 'Feature',
             id: index,
             properties: {
                 id: index,
                 cell_name: item.cell_name || `Cell_${index}`,
                 enodeb_name: item.enodeb_name,
-                status: status,
-                color: color,
-                opacity: opacity,
-                load: load,
-                congested: item.congested,
+                status,
+                color,
+                opacity,
+                load,
+                congested: !!item.congested,
                 root_cause: item.root_cause || '-',
+                issue_type: issueType,
+                severity: item.severity ?? null,
+                health_score: item.health_score ?? null,
                 traffic: item.l_traffic_activeuser_dl_avg,
                 throughput: item.ft_ave_4g_lte_dl_user_thrput_without_last_tti_all___kbps__kbit_,
                 cqi: item.ft_4g_lte_average_reported_cqi,
                 ta: item.ot_average_ta,
-                band: band,
-                signal_power: item.referencesignalpwr
+                band,
+                signal_power: item.referencesignalpwr,
+                azimuth
             },
             geometry: {
-                type: 'Polygon',
-                coordinates: geometry
+                type: 'Point',
+                coordinates: center
             }
         });
-        
-        // Track unique sites
-        const siteKey = `${center[0]}_${center[1]}`;
+
+        // Radius from TA (bounded) for sector shape
+        let radius = CONFIG.DEFAULT_RADIUS_METERS;
+        if (item.ot_average_ta != null && Number(item.ot_average_ta) > 0) {
+            radius = Math.max(CONFIG.MIN_RADIUS, Math.min(CONFIG.MAX_RADIUS, Number(item.ot_average_ta) * CONFIG.TA_TO_METERS));
+        }
+        const geometry = createSectorPolygon(center, radius, azimuth, CONFIG.DEFAULT_BEAMWIDTH);
+
+        // Full set for smaller datasets (guarded by cap)
+        if (!state.isLargeDataset && sectorFeatures.length < CONFIG.MAX_SECTOR_RENDER) {
+            sectorFeatures.push({
+                type: 'Feature',
+                id: index,
+                properties: {
+                    id: index,
+                    cell_name: item.cell_name || `Cell_${index}`,
+                    enodeb_name: item.enodeb_name,
+                    status,
+                    color,
+                    opacity,
+                    load,
+                    congested: !!item.congested,
+                    root_cause: item.root_cause || '-',
+                    issue_type: issueType,
+                    severity: item.severity ?? null,
+                    health_score: item.health_score ?? null,
+                    traffic: item.l_traffic_activeuser_dl_avg,
+                    throughput: item.ft_ave_4g_lte_dl_user_thrput_without_last_tti_all___kbps__kbit_,
+                    cqi: item.ft_4g_lte_average_reported_cqi,
+                    ta: item.ot_average_ta,
+                    band,
+                    signal_power: item.referencesignalpwr,
+                    azimuth
+                },
+                geometry: {
+                    type: 'Polygon',
+                    coordinates: geometry
+                }
+            });
+        }
+
+        // LOD sampled sectors for large datasets (keep triangles visible without killing perf)
+        if (state.isLargeDataset && sectorSampleFeatures.length < CONFIG.MAX_SECTOR_SAMPLE_LARGE && (index % stride === 0)) {
+            sectorSampleFeatures.push({
+                type: 'Feature',
+                id: index,
+                properties: {
+                    id: index,
+                    cell_name: item.cell_name || `Cell_${index}`,
+                    enodeb_name: item.enodeb_name,
+                    status,
+                    color,
+                    opacity,
+                    load,
+                    congested: !!item.congested,
+                    root_cause: item.root_cause || '-',
+                    issue_type: issueType,
+                    severity: item.severity ?? null,
+                    health_score: item.health_score ?? null,
+                    traffic: item.l_traffic_activeuser_dl_avg,
+                    throughput: item.ft_ave_4g_lte_dl_user_thrput_without_last_tti_all___kbps__kbit_,
+                    cqi: item.ft_4g_lte_average_reported_cqi,
+                    ta: item.ot_average_ta,
+                    band,
+                    signal_power: item.referencesignalpwr,
+                    azimuth
+                },
+                geometry: {
+                    type: 'Polygon',
+                    coordinates: geometry
+                }
+            });
+        }
+
+        // Track unique sites (use coordinate key)
+        const siteKey = `${center[0].toFixed(5)}_${center[1].toFixed(5)}`;
         if (!sites.has(siteKey)) {
             sites.set(siteKey, {
                 name: item.enodeb_name,
@@ -204,9 +321,16 @@ function processData(rawData) {
             });
         }
         sites.get(siteKey).cells.push(item.cell_name);
-    });
-    
-    return { features, sites: Array.from(sites.values()), bands: Array.from(bands).sort((a, b) => a - b) };
+    }
+
+    return {
+        sectorFeatures,
+        sectorSampleFeatures,
+        pointFeatures,
+        sites: Array.from(sites.values()),
+        bands: Array.from(bands).sort((a, b) => a - b),
+        issueTypes: Array.from(issueTypes).sort()
+    };
 }
 
 // --- Statistics Calculation ---
@@ -253,7 +377,10 @@ function calculateStats(features) {
         avgLoad: loadCount > 0 ? totalLoad / loadCount : 0,
         avgThroughput: throughputCount > 0 ? totalThroughput / throughputCount : 0,
         avgCqi: cqiCount > 0 ? totalCqi / cqiCount : 0,
-        dataCoverage: ((total - noData) / total) * 100
+        dataCoverage: total > 0 ? ((total - noData) / total) * 100 : 0,
+        avgHealthScore: features.length > 0
+            ? features.reduce((acc, f) => acc + (Number(f.properties.health_score) || 0), 0) / features.length
+            : 0
     };
 }
 
@@ -269,23 +396,38 @@ function updateStatsUI(stats) {
     document.getElementById('metric-avg-throughput').textContent = formatThroughput(stats.avgThroughput);
     document.getElementById('metric-avg-cqi').textContent = stats.avgCqi.toFixed(1);
     document.getElementById('metric-coverage').textContent = stats.dataCoverage.toFixed(0) + '%';
+
+    // Health gauge (0-100)
+    const gaugeValue = document.getElementById('gauge-value');
+    const gaugeFill = document.getElementById('gauge-fill');
+    if (gaugeValue && gaugeFill) {
+        const hs = clampNumber(stats.avgHealthScore, 0, 100) ?? 0;
+        gaugeValue.textContent = hs.toFixed(0);
+        // Stroke-dasharray trick for partial arc
+        const length = 157; // approx arc length for the path in CSS
+        const dash = (hs / 100) * length;
+        gaugeFill.style.strokeDasharray = `${dash} ${length}`;
+    }
 }
 
 function updateAlertsUI(features) {
     const alertsList = document.getElementById('alerts-list');
     const congested = features.filter(f => f.properties.congested);
+
+    const badge = document.getElementById('alert-count');
+    if (badge) badge.textContent = String(congested.length);
     
     if (congested.length === 0) {
         alertsList.innerHTML = '<div class="alert-placeholder">✓ No active alerts</div>';
         return;
     }
     
-    alertsList.innerHTML = congested.slice(0, 5).map(f => `
+    alertsList.innerHTML = congested.slice(0, state.isLargeDataset ? 10 : 25).map(f => `
         <div class="alert-item" data-cell-id="${f.properties.id}">
             <span class="material-symbols-outlined">error</span>
             <div class="alert-item-content">
                 <div class="alert-item-title">${f.properties.cell_name}</div>
-                <div class="alert-item-desc">${f.properties.root_cause} • Load: ${formatNumber(f.properties.load)}%</div>
+                <div class="alert-item-desc">${f.properties.issue_type || ''} • ${f.properties.root_cause} • Sev: ${formatNumber(f.properties.severity, 0)}</div>
             </div>
         </div>
     `).join('');
@@ -318,6 +460,12 @@ function updateCellInfoPanel(props) {
     // Status badge
     statusEl.textContent = props.congested ? 'Congested' : (props.status === 'high-load' ? 'High Load' : 'Normal');
     statusEl.className = 'cell-status ' + (props.congested ? 'congested' : (props.status === 'high-load' ? 'warning' : 'normal'));
+
+    const healthEl = document.getElementById('cell-health');
+    if (healthEl) {
+        const hs = props.health_score != null ? Number(props.health_score) : null;
+        healthEl.textContent = hs != null && Number.isFinite(hs) ? `Health: ${hs.toFixed(0)}` : 'Health: --';
+    }
     
     // Info rows
     const loadClass = props.load >= 80 ? 'danger' : (props.load >= 60 ? 'warning' : 'success');
@@ -330,6 +478,14 @@ function updateCellInfoPanel(props) {
         <div class="info-row">
             <span class="info-label">Frequency Band</span>
             <span class="info-value">${props.band ? 'B' + props.band : 'N/A'}</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">Issue Type</span>
+            <span class="info-value">${props.issue_type || 'Normal'}</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">Severity</span>
+            <span class="info-value ${props.severity >= 80 ? 'danger' : (props.severity >= 60 ? 'warning' : 'success')}">${props.severity != null ? formatNumber(props.severity, 0) : 'N/A'}</span>
         </div>
         <div class="info-row">
             <span class="info-label">PRB Load</span>
@@ -368,6 +524,20 @@ function hideCellInfoPanel() {
     document.getElementById('cell-info-panel').classList.add('hidden');
 }
 
+function setLoading(isLoading, progressText = '') {
+    const overlay = document.getElementById('loading-overlay');
+    if (!overlay) return;
+    if (isLoading) {
+        overlay.classList.remove('hidden');
+        if (progressText) {
+            const p = document.getElementById('loading-progress');
+            if (p) p.textContent = progressText;
+        }
+    } else {
+        overlay.classList.add('hidden');
+    }
+}
+
 function updateTimestamp() {
     const now = new Date();
     document.getElementById('timestamp').textContent = now.toLocaleString('en-US', {
@@ -382,7 +552,7 @@ function updateTimestamp() {
 
 // --- Filtering ---
 function applyFilters() {
-    const filtered = state.features.filter(f => {
+    const filtered = (state.isLargeDataset ? state.pointFeatures : state.features).filter(f => {
         const p = f.properties;
         
         // Status filter
@@ -392,11 +562,27 @@ function applyFilters() {
         if (Object.keys(state.filters.bands).length > 0 && p.band) {
             if (!state.filters.bands[p.band]) return false;
         }
+
+        // Issue type filter
+        if (Object.keys(state.filters.issueTypes).length > 0) {
+            const t = p.issue_type || 'Normal';
+            if (state.filters.issueTypes[t] === false) return false;
+        }
         
         // Load range filter
         if (p.load !== null && p.load !== undefined) {
             if (p.load < state.filters.loadRange[0] || p.load > state.filters.loadRange[1]) {
                 return false;
+            }
+        }
+
+        // Severity range
+        if (p.severity !== null && p.severity !== undefined) {
+            const s = Number(p.severity);
+            if (Number.isFinite(s)) {
+                if (s < state.filters.severityRange[0] || s > state.filters.severityRange[1]) {
+                    return false;
+                }
             }
         }
         
@@ -405,11 +591,13 @@ function applyFilters() {
     
     state.filteredData = filtered;
     
-    if (state.map && state.map.getSource('sectors')) {
-        state.map.getSource('sectors').setData({
-            type: 'FeatureCollection',
-            features: filtered
-        });
+    if (state.map) {
+        if (!state.isLargeDataset && state.map.getSource('sectors')) {
+            state.map.getSource('sectors').setData({ type: 'FeatureCollection', features: filtered });
+        }
+        if (state.map.getSource('cells')) {
+            state.map.getSource('cells').setData({ type: 'FeatureCollection', features: filtered });
+        }
     }
     
     // Update stats with filtered data
@@ -460,52 +648,295 @@ function initMap() {
     return map;
 }
 
-function addMapLayers(map, geojson, sites) {
-    // Sectors source
-    map.addSource('sectors', {
+function addMapLayers(map, sectorsGeojson, sectorsLodGeojson, pointsGeojson, sites) {
+    // Points source with clustering
+    map.addSource('cells', {
         type: 'geojson',
-        data: geojson
+        data: pointsGeojson,
+        cluster: true,
+        clusterRadius: 40,
+        clusterMaxZoom: 14
     });
-    
-    // Sectors fill layer
+
+    // Heatmap (GPU-accelerated WebGL layer with improved contrast)
     map.addLayer({
-        id: 'sectors-fill',
-        type: 'fill',
-        source: 'sectors',
+        id: 'cells-heatmap',
+        type: 'heatmap',
+        source: 'cells',
+        maxzoom: 18,
+        layout: { 'visibility': 'none' },
         paint: {
-            'fill-color': ['get', 'color'],
-            'fill-opacity': ['get', 'opacity']
-        }
-    });
-    
-    // Sectors outline
-    map.addLayer({
-        id: 'sectors-outline',
-        type: 'line',
-        source: 'sectors',
-        paint: {
-            'line-color': '#ffffff',
-            'line-width': [
-                'interpolate', ['linear'], ['zoom'],
-                10, 0.5,
-                14, 1.5
+            'heatmap-weight': [
+                'interpolate', ['exponential', 1.5],
+                ['coalesce', ['get', 'severity'], ['get', 'load'], 0],
+                0, 0,
+                30, 0.3,
+                60, 0.6,
+                100, 1
             ],
-            'line-opacity': 0.6
+            'heatmap-intensity': [
+                'interpolate', ['exponential', 1.2], ['zoom'],
+                6, 0.4,
+                10, 1.2,
+                14, 2.5,
+                16, 3.5
+            ],
+            'heatmap-radius': [
+                'interpolate', ['exponential', 1.3], ['zoom'],
+                6, 6,
+                10, 18,
+                14, 38,
+                16, 55
+            ],
+            'heatmap-opacity': [
+                'interpolate', ['linear'], ['zoom'],
+                6, 0.85,
+                14, 0.75,
+                16, 0.6
+            ],
+            'heatmap-color': [
+                'interpolate', ['linear'], ['heatmap-density'],
+                0, 'rgba(0,0,0,0)',
+                0.1, 'rgba(65,182,196,0.5)',
+                0.25, 'rgba(127,205,187,0.65)',
+                0.4, 'rgba(199,233,180,0.7)',
+                0.55, 'rgba(255,237,160,0.78)',
+                0.7, 'rgba(254,178,76,0.85)',
+                0.85, 'rgba(253,141,60,0.9)',
+                1, 'rgba(240,59,32,0.95)'
+            ]
         }
     });
-    
-    // Congestion highlight layer (pulsing effect for congested cells)
+
+    // Cluster circles
     map.addLayer({
-        id: 'sectors-congested',
-        type: 'line',
-        source: 'sectors',
-        filter: ['==', ['get', 'congested'], true],
+        id: 'cells-clusters',
+        type: 'circle',
+        source: 'cells',
+        filter: ['has', 'point_count'],
         paint: {
-            'line-color': '#FF7900',
-            'line-width': 3,
-            'line-opacity': 0.9
+            'circle-color': [
+                'step',
+                ['get', 'point_count'],
+                CONFIG.COLORS.LOW_LOAD,
+                50, CONFIG.COLORS.MEDIUM_LOAD,
+                200, CONFIG.COLORS.HIGH_LOAD,
+                800, CONFIG.COLORS.CONGESTED
+            ],
+            'circle-radius': [
+                'step',
+                ['get', 'point_count'],
+                14,
+                50, 18,
+                200, 24,
+                800, 30
+            ],
+            'circle-opacity': [
+                'interpolate', ['linear'], ['zoom'],
+                6, 0.95,
+                10, 0.8,
+                13, 0.4,
+                14.5, 0.15
+            ],
+            'circle-stroke-color': '#ffffff',
+            'circle-stroke-width': 2
         }
     });
+
+    // Cluster count labels
+    map.addLayer({
+        id: 'cells-cluster-count',
+        type: 'symbol',
+        source: 'cells',
+        filter: ['has', 'point_count'],
+        layout: {
+            'text-field': ['get', 'point_count_abbreviated'],
+            'text-font': ['Open Sans Bold'],
+            'text-size': 12
+        },
+        paint: {
+            'text-color': '#ffffff'
+        }
+    });
+
+    // Individual points
+    map.addLayer({
+        id: 'cells-points',
+        type: 'circle',
+        source: 'cells',
+        filter: ['!', ['has', 'point_count']],
+        paint: {
+            'circle-radius': [
+                'interpolate', ['linear'], ['zoom'],
+                7, 3.2,
+                12, 5.2,
+                15, 7.5
+            ],
+            'circle-color': ['get', 'color'],
+            'circle-opacity': ['get', 'opacity'],
+            'circle-stroke-color': '#ffffff',
+            'circle-stroke-width': 1
+        }
+    });
+
+    // Congested ring overlay
+    map.addLayer({
+        id: 'cells-congested-ring',
+        type: 'circle',
+        source: 'cells',
+        filter: ['all', ['!', ['has', 'point_count']], ['==', ['get', 'congested'], true]],
+        paint: {
+            'circle-radius': [
+                'interpolate', ['linear'], ['zoom'],
+                9, 5,
+                14, 9
+            ],
+            'circle-color': 'rgba(0,0,0,0)',
+            'circle-stroke-color': CONFIG.COLORS.CONGESTED,
+            'circle-stroke-width': 2,
+            'circle-opacity': 0.9
+        }
+    });
+
+    // Sector polygons: full for small datasets, LOD sample for large
+    if (!state.isLargeDataset) {
+        map.addSource('sectors', { type: 'geojson', data: sectorsGeojson });
+
+        map.addLayer({
+            id: 'sectors-fill',
+            type: 'fill',
+            source: 'sectors',
+            minzoom: CONFIG.SECTOR_MIN_ZOOM,
+            paint: {
+                'fill-color': ['get', 'color'],
+                'fill-opacity': [
+                    'interpolate', ['linear'], ['zoom'],
+                    CONFIG.SECTOR_MIN_ZOOM, 0.55,
+                    10, ['get', 'opacity'],
+                    14, 0.7
+                ]
+            }
+        });
+
+        map.addLayer({
+            id: 'sectors-outline',
+            type: 'line',
+            source: 'sectors',
+            paint: {
+                'line-color': '#ffffff',
+                'line-width': [
+                    'interpolate', ['linear'], ['zoom'],
+                    5, 1.1,
+                    10, 1.4,
+                    14, 2.2
+                ],
+                'line-opacity': 0.6
+            }
+        });
+
+        // Halo to keep triangles visible at far zooms
+        map.addLayer({
+            id: 'sectors-halo',
+            type: 'line',
+            source: 'sectors',
+            paint: {
+                'line-color': 'rgba(255,255,255,0.2)',
+                'line-width': [
+                    'interpolate', ['linear'], ['zoom'],
+                    4, 1.6,
+                    8, 1.2,
+                    12, 0.8
+                ],
+                'line-blur': 0.5,
+                'line-opacity': [
+                    'interpolate', ['linear'], ['zoom'],
+                    4, 0.35,
+                    9, 0.2,
+                    12, 0.1
+                ]
+            }
+        });
+
+        map.addLayer({
+            id: 'sectors-congested',
+            type: 'line',
+            source: 'sectors',
+            filter: ['==', ['get', 'congested'], true],
+            paint: {
+                'line-color': CONFIG.COLORS.CONGESTED,
+                'line-width': 3,
+                'line-opacity': 0.9
+            }
+        });
+    } else if (sectorsLodGeojson && sectorsLodGeojson.features.length > 0) {
+        map.addSource('sectors-lod', { type: 'geojson', data: sectorsLodGeojson });
+
+        map.addLayer({
+            id: 'sectors-lod-fill',
+            type: 'fill',
+            source: 'sectors-lod',
+            minzoom: CONFIG.SECTOR_MIN_ZOOM,
+            paint: {
+                'fill-color': ['get', 'color'],
+                'fill-opacity': [
+                    'interpolate', ['linear'], ['zoom'],
+                    CONFIG.SECTOR_MIN_ZOOM, 0.45,
+                    10, ['get', 'opacity'],
+                    14, 0.6
+                ]
+            }
+        });
+
+        map.addLayer({
+            id: 'sectors-lod-outline',
+            type: 'line',
+            source: 'sectors-lod',
+            paint: {
+                'line-color': '#ffffff',
+                'line-width': [
+                    'interpolate', ['linear'], ['zoom'],
+                    5, 1.0,
+                    10, 1.3,
+                    14, 2.0
+                ],
+                'line-opacity': 0.55
+            }
+        });
+
+        map.addLayer({
+            id: 'sectors-lod-halo',
+            type: 'line',
+            source: 'sectors-lod',
+            paint: {
+                'line-color': 'rgba(255,255,255,0.18)',
+                'line-width': [
+                    'interpolate', ['linear'], ['zoom'],
+                    4, 1.4,
+                    8, 1.0,
+                    12, 0.7
+                ],
+                'line-blur': 0.5,
+                'line-opacity': [
+                    'interpolate', ['linear'], ['zoom'],
+                    4, 0.3,
+                    9, 0.18,
+                    12, 0.1
+                ]
+            }
+        });
+
+        map.addLayer({
+            id: 'sectors-lod-congested',
+            type: 'line',
+            source: 'sectors-lod',
+            filter: ['==', ['get', 'congested'], true],
+            paint: {
+                'line-color': CONFIG.COLORS.CONGESTED,
+                'line-width': 3,
+                'line-opacity': 0.85
+            }
+        });
+    }
     
     // Site markers source
     const sitesGeojson = {
@@ -570,7 +1001,7 @@ function addMapLayers(map, geojson, sites) {
     map.addLayer({
         id: 'cell-labels',
         type: 'symbol',
-        source: 'sectors',
+        source: state.isLargeDataset ? 'cells' : 'sectors',
         layout: {
             'text-field': ['get', 'cell_name'],
             'text-size': 10,
@@ -585,28 +1016,44 @@ function addMapLayers(map, geojson, sites) {
 }
 
 function setupMapInteractions(map) {
-    // Sector hover
-    map.on('mousemove', 'sectors-fill', (e) => {
+    // Fade clusters out at closer zooms so triangles stay meaningful
+    map.on('zoom', () => {
+        const z = map.getZoom();
+        const clusterVisibility = z >= 13 ? 'none' : 'visible';
+        if (map.getLayer('cells-clusters')) map.setLayoutProperty('cells-clusters', 'visibility', clusterVisibility);
+        if (map.getLayer('cells-cluster-count')) map.setLayoutProperty('cells-cluster-count', 'visibility', clusterVisibility);
+        const sectorVisibility = z >= CONFIG.SECTOR_MIN_ZOOM ? 'visible' : 'none';
+        const sectorIds = state.isLargeDataset
+            ? ['sectors-lod-fill', 'sectors-lod-outline', 'sectors-lod-halo', 'sectors-lod-congested']
+            : ['sectors-fill', 'sectors-outline', 'sectors-halo', 'sectors-congested'];
+        sectorIds.forEach(id => {
+            if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', sectorVisibility);
+        });
+    });
+
+    // Cluster click to zoom
+    map.on('click', 'cells-clusters', (e) => {
+        const features = map.queryRenderedFeatures(e.point, { layers: ['cells-clusters'] });
+        if (!features.length) return;
+        const clusterId = features[0].properties.cluster_id;
+        map.getSource('cells').getClusterExpansionZoom(clusterId, (err, zoom) => {
+            if (err) return;
+            map.easeTo({ center: features[0].geometry.coordinates, zoom });
+        });
+    });
+
+    // Point hover
+    map.on('mousemove', 'cells-points', (e) => {
         map.getCanvas().style.cursor = 'pointer';
-        
         if (e.features.length > 0) {
             const props = e.features[0].properties;
             updateCellInfoPanel(props);
-            
-            // Highlight effect
-            map.setPaintProperty('sectors-fill', 'fill-opacity', [
-                'case',
-                ['==', ['get', 'id'], props.id],
-                0.95,
-                ['get', 'opacity']
-            ]);
         }
     });
-    
-    map.on('mouseleave', 'sectors-fill', () => {
+
+    map.on('mouseleave', 'cells-points', () => {
         map.getCanvas().style.cursor = '';
-        hideCellInfoPanel();
-        map.setPaintProperty('sectors-fill', 'fill-opacity', ['get', 'opacity']);
+        if (state.selectedCellId == null) hideCellInfoPanel();
     });
     
     // Site hover
@@ -640,6 +1087,336 @@ function setupMapInteractions(map) {
     });
 }
 
+function setVisualizationMode(mode) {
+    if (!state.map) return;
+    state.layers.heatmap = mode === 'heatmap';
+
+    // Heatmap visibility
+    ['cells-heatmap'].forEach(id => {
+        if (state.map.getLayer(id)) state.map.setLayoutProperty(id, 'visibility', state.layers.heatmap ? 'visible' : 'none');
+    });
+
+    // In heatmap mode: show points with reduced opacity for context; hide clusters
+    // In sectors mode: show points/clusters normally
+    if (state.layers.heatmap) {
+        ['cells-clusters', 'cells-cluster-count'].forEach(id => {
+            if (state.map.getLayer(id)) state.map.setLayoutProperty(id, 'visibility', 'none');
+        });
+        // Keep points visible but dimmed for reference
+        ['cells-points', 'cells-congested-ring'].forEach(id => {
+            if (state.map.getLayer(id)) {
+                state.map.setLayoutProperty(id, 'visibility', 'visible');
+                if (id === 'cells-points') {
+                    state.map.setPaintProperty(id, 'circle-opacity', 0.35);
+                }
+            }
+        });
+    } else {
+        ['cells-points', 'cells-congested-ring', 'cells-clusters', 'cells-cluster-count'].forEach(id => {
+            if (state.map.getLayer(id)) state.map.setLayoutProperty(id, 'visibility', 'visible');
+        });
+        if (state.map.getLayer('cells-points')) {
+            state.map.setPaintProperty('cells-points', 'circle-opacity', ['get', 'opacity']);
+        }
+    }
+
+    // Sector visibility depends on dataset size and mode
+    const sectorIds = state.isLargeDataset
+        ? ['sectors-lod-fill', 'sectors-lod-outline', 'sectors-lod-halo', 'sectors-lod-congested']
+        : ['sectors-fill', 'sectors-outline', 'sectors-halo', 'sectors-congested'];
+    const sectorVis = mode === 'heatmap' ? 'none' : 'visible';
+    sectorIds.forEach(id => {
+        if (state.map.getLayer(id)) state.map.setLayoutProperty(id, 'visibility', sectorVis);
+    });
+
+    const btns = document.querySelectorAll('.toggle-btn[data-viz]');
+    btns.forEach(b => b.classList.toggle('active', b.dataset.viz === mode));
+}
+
+function toggleMapFullscreen() {
+    document.body.classList.toggle('map-fullscreen');
+    if (state.map) {
+        setTimeout(() => state.map.resize(), 200);
+    }
+}
+
+function toggleSidebar(side) {
+    const el = document.getElementById(side === 'left' ? 'sidebar-left' : 'sidebar-right');
+    if (!el) return;
+    el.classList.toggle('collapsed');
+    if (state.map) {
+        setTimeout(() => state.map.resize(), 200);
+    }
+}
+
+function setupModals() {
+    const analyticsModal = document.getElementById('analytics-modal');
+    const exportModal = document.getElementById('export-modal');
+
+    function openModal(modal) {
+        if (!modal) return;
+        modal.classList.remove('hidden');
+    }
+
+    function closeModal(modal) {
+        if (!modal) return;
+        modal.classList.add('hidden');
+    }
+
+    document.getElementById('btn-analytics')?.addEventListener('click', () => {
+        openModal(analyticsModal);
+        renderCharts();
+    });
+
+    document.getElementById('analytics-close')?.addEventListener('click', () => closeModal(analyticsModal));
+
+    document.getElementById('btn-export')?.addEventListener('click', () => openModal(exportModal));
+    document.getElementById('export-close')?.addEventListener('click', () => closeModal(exportModal));
+
+    ;[analyticsModal, exportModal].forEach(modal => {
+        modal?.addEventListener('click', (e) => {
+            if (e.target === modal) closeModal(modal);
+        });
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            closeModal(analyticsModal);
+            closeModal(exportModal);
+        }
+    });
+
+    // Export actions
+    document.getElementById('export-json')?.addEventListener('click', () => downloadBlob(JSON.stringify(state.data, null, 2), 'network-data.json', 'application/json'));
+    document.getElementById('export-congested')?.addEventListener('click', () => {
+        const congested = state.data.filter(r => r.congested);
+        downloadBlob(JSON.stringify(congested, null, 2), 'congested-cells.json', 'application/json');
+    });
+    document.getElementById('export-csv')?.addEventListener('click', () => downloadCSV(state.data, 'network-data.csv'));
+    document.getElementById('export-report')?.addEventListener('click', () => downloadBlob(generateReport(), 'network-report.txt', 'text/plain'));
+}
+
+function attachClickAnimations() {
+    const selectors = [
+        'button',
+        '.btn-primary',
+        '.btn-secondary',
+        '.export-btn',
+        '.toggle-btn',
+        '.legend-toggle',
+        '.sidebar-toggle',
+        '.map-fullscreen-btn',
+        '.checkbox-item'
+    ];
+    const elements = document.querySelectorAll(selectors.join(','));
+    elements.forEach((el) => {
+        el.addEventListener('click', () => {
+            el.classList.remove('click-animate');
+            // force reflow to restart animation
+            void el.offsetWidth;
+            el.classList.add('click-animate');
+        });
+    });
+}
+
+function downloadBlob(content, filename, mimeType) {
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+}
+
+function downloadCSV(rows, filename) {
+    if (!rows || rows.length === 0) return;
+    const columns = Object.keys(rows[0]);
+    const escape = (v) => {
+        if (v == null) return '';
+        const s = String(v);
+        if (s.includes('"') || s.includes(',') || s.includes('\n')) {
+            return `"${s.replace(/"/g, '""')}"`;
+        }
+        return s;
+    };
+    const csv = [columns.join(',')].concat(rows.map(r => columns.map(c => escape(r[c])).join(','))).join('\n');
+    downloadBlob(csv, filename, 'text/csv');
+}
+
+function generateReport() {
+    const s = state.stats;
+    const lines = [];
+    lines.push('NetVision Digital Twin - Network Report');
+    lines.push(`Generated: ${new Date().toISOString()}`);
+    lines.push('');
+    if (s) {
+        lines.push(`Total cells: ${s.total_cells}`);
+        lines.push(`Congested cells: ${s.congested_cells} (${s.congestion_rate}%)`);
+        lines.push(`Average PRB load: ${s.avg_load}%`);
+        lines.push(`Average throughput: ${(s.avg_throughput / 1000).toFixed(2)} Mbps`);
+        lines.push(`Average CQI: ${s.avg_cqi}`);
+        lines.push(`Average health score: ${s.avg_health_score}`);
+        lines.push('');
+        lines.push('Issue distribution:');
+        Object.entries(s.issue_distribution || {}).forEach(([k, v]) => lines.push(`- ${k}: ${v}`));
+        lines.push('');
+        lines.push('Severity distribution:');
+        Object.entries(s.severity_distribution || {}).forEach(([k, v]) => lines.push(`- ${k}: ${v}`));
+    } else {
+        lines.push('No stats.json available; report is limited.');
+    }
+    return lines.join('\n');
+}
+
+function applyTheme(theme) {
+    document.body.classList.toggle('theme-dark', theme === 'dark');
+    document.body.classList.toggle('theme-light', theme === 'light');
+    const icon = document.querySelector('#btn-theme .material-symbols-outlined');
+    if (icon) icon.textContent = theme === 'dark' ? 'dark_mode' : 'light_mode';
+}
+
+function toggleTheme() {
+    const current = document.body.classList.contains('theme-light') ? 'light' : 'dark';
+    const next = current === 'dark' ? 'light' : 'dark';
+    localStorage.setItem('netvision_theme', next);
+    applyTheme(next);
+}
+
+function renderIssueLegend(issueTypes) {
+    const legend = document.getElementById('issue-legend');
+    if (!legend) return;
+    legend.innerHTML = issueTypes
+        .filter(t => t && t !== 'Normal')
+        .slice(0, 8)
+        .map(t => `
+            <div class="legend-item">
+                <div class="legend-color" style="background: var(--orange-primary);"></div>
+                <span>${t}</span>
+            </div>
+        `).join('') || '<div class="legend-item"><span style="color: var(--text-muted);">No issues detected</span></div>';
+}
+
+function setupLegendToggle() {
+    const btn = document.getElementById('legend-toggle');
+    const content = document.getElementById('legend-content');
+    btn?.addEventListener('click', () => {
+        content?.classList.toggle('collapsed');
+        const icon = btn.querySelector('.material-symbols-outlined');
+        if (icon) icon.textContent = content?.classList.contains('collapsed') ? 'expand_more' : 'expand_less';
+    });
+}
+
+let ChartJS = null;
+
+async function loadChartJS() {
+    if (ChartJS) return ChartJS;
+    const module = await import('https://cdn.jsdelivr.net/npm/chart.js@4.4.1/+esm');
+    ChartJS = module.Chart;
+    return ChartJS;
+}
+
+async function renderCharts() {
+    if (!state.stats) return;
+    const Chart = await loadChartJS();
+    if (!Chart) return;
+    const issueDist = state.stats.issue_distribution || {};
+    const severityDist = state.stats.severity_distribution || {};
+    const bandStats = state.stats.band_statistics || {};
+
+    const destroy = (key) => {
+        if (state.charts[key]) {
+            state.charts[key].destroy();
+            delete state.charts[key];
+        }
+    };
+
+    // Issue pie
+    destroy('issues');
+    const issuesCtx = document.getElementById('chart-issues');
+    if (issuesCtx) {
+        state.charts.issues = new Chart(issuesCtx, {
+            type: 'doughnut',
+            data: {
+                labels: Object.keys(issueDist),
+                datasets: [{
+                    data: Object.values(issueDist),
+                    backgroundColor: [
+                        CONFIG.COLORS.CONGESTED,
+                        CONFIG.COLORS.HIGH_LOAD,
+                        CONFIG.COLORS.MEDIUM_LOAD,
+                        CONFIG.COLORS.LOW_LOAD,
+                        CONFIG.COLORS.HEALTHY,
+                        CONFIG.COLORS.NO_DATA
+                    ]
+                }]
+            },
+            options: { responsive: true, plugins: { legend: { labels: { color: '#fff' } } } }
+        });
+    }
+
+    // Severity bar
+    destroy('severity');
+    const sevCtx = document.getElementById('chart-severity');
+    if (sevCtx) {
+        state.charts.severity = new Chart(sevCtx, {
+            type: 'bar',
+            data: {
+                labels: Object.keys(severityDist),
+                datasets: [{
+                    data: Object.values(severityDist),
+                    backgroundColor: CONFIG.COLORS.HIGH_LOAD
+                }]
+            },
+            options: { responsive: true, plugins: { legend: { display: false } }, scales: { x: { ticks: { color: '#b3b3b3' } }, y: { ticks: { color: '#b3b3b3' } } } }
+        });
+    }
+
+    // Band chart
+    destroy('bands');
+    const bandCtx = document.getElementById('chart-bands');
+    if (bandCtx) {
+        const labels = Object.keys(bandStats);
+        const values = labels.map(k => bandStats[k].congested || 0);
+        state.charts.bands = new Chart(bandCtx, {
+            type: 'bar',
+            data: { labels, datasets: [{ label: 'Congested', data: values, backgroundColor: CONFIG.COLORS.CONGESTED }] },
+            options: { responsive: true, scales: { x: { ticks: { color: '#b3b3b3' } }, y: { ticks: { color: '#b3b3b3' } } } }
+        });
+    }
+
+    // Load histogram (approx)
+    destroy('load');
+    const loadCtx = document.getElementById('chart-load');
+    if (loadCtx) {
+        const buckets = new Array(10).fill(0);
+        const data = state.data;
+        const step = Math.max(1, Math.floor(data.length / 20000));
+        for (let i = 0; i < data.length; i += step) {
+            const v = Number(data[i].ft_physical_resource_blocks_load_dl);
+            if (!Number.isFinite(v)) continue;
+            const b = Math.min(9, Math.max(0, Math.floor(v / 10)));
+            buckets[b] += 1;
+        }
+        state.charts.load = new Chart(loadCtx, {
+            type: 'bar',
+            data: { labels: buckets.map((_, i) => `${i * 10}-${i * 10 + 9}%`), datasets: [{ data: buckets, backgroundColor: CONFIG.COLORS.LOW_LOAD }] },
+            options: { responsive: true, plugins: { legend: { display: false } }, scales: { x: { ticks: { color: '#b3b3b3' } }, y: { ticks: { color: '#b3b3b3' } } } }
+        });
+    }
+
+    const summary = document.getElementById('analytics-summary');
+    if (summary) {
+        summary.innerHTML = `
+            <div class="analytics-summary-row"><strong>Total Cells</strong><span>${state.stats.total_cells?.toLocaleString?.() || state.stats.total_cells}</span></div>
+            <div class="analytics-summary-row"><strong>Congestion Rate</strong><span>${state.stats.congestion_rate}%</span></div>
+            <div class="analytics-summary-row"><strong>Avg Health</strong><span>${state.stats.avg_health_score}</span></div>
+        `;
+    }
+}
+
 // --- Event Handlers ---
 function setupEventHandlers() {
     // Timestamp update
@@ -653,13 +1430,25 @@ function setupEventHandlers() {
             state.map.getSource('basemap').setTiles(basemap.tiles);
         }
     });
+
+    // Theme toggle
+    document.getElementById('btn-theme')?.addEventListener('click', toggleTheme);
+
+    // Legend collapse
+    setupLegendToggle();
+
+    // Sidebars
+    document.getElementById('toggle-left')?.addEventListener('click', () => toggleSidebar('left'));
+    document.getElementById('toggle-right')?.addEventListener('click', () => toggleSidebar('right'));
+
+    // Map fullscreen
+    document.getElementById('btn-map-fullscreen')?.addEventListener('click', toggleMapFullscreen);
     
-    // View toggle (3D/2D)
-    document.querySelectorAll('.toggle-btn').forEach(btn => {
+    // View toggle (3D/2D) — only buttons with data-view
+    document.querySelectorAll('.toggle-btn[data-view]').forEach(btn => {
         btn.addEventListener('click', () => {
-            document.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.toggle-btn[data-view]').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
-            
             if (state.map) {
                 const is3D = btn.dataset.view === '3d';
                 state.map.easeTo({
@@ -668,6 +1457,13 @@ function setupEventHandlers() {
                     duration: 1000
                 });
             }
+        });
+    });
+
+    // Visualization toggle (sectors / heatmap)
+    document.querySelectorAll('.toggle-btn[data-viz]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            setVisualizationMode(btn.dataset.viz);
         });
     });
     
@@ -692,6 +1488,20 @@ function setupEventHandlers() {
     
     loadMin.addEventListener('input', updateLoadRange);
     loadMax.addEventListener('input', updateLoadRange);
+
+    // Severity sliders
+    const severityMin = document.getElementById('severity-min');
+    const severityMax = document.getElementById('severity-max');
+    const severityDisplay = document.getElementById('severity-range-display');
+    function updateSeverityRange() {
+        if (!severityMin || !severityMax || !severityDisplay) return;
+        const min = parseInt(severityMin.value);
+        const max = parseInt(severityMax.value);
+        state.filters.severityRange = [Math.min(min, max), Math.max(min, max)];
+        severityDisplay.textContent = `${state.filters.severityRange[0]} - ${state.filters.severityRange[1]}`;
+    }
+    severityMin?.addEventListener('input', updateSeverityRange);
+    severityMax?.addEventListener('input', updateSeverityRange);
     
     // Apply filters button
     document.getElementById('btn-apply-filters').addEventListener('click', applyFilters);
@@ -705,19 +1515,30 @@ function setupEventHandlers() {
         
         state.filters.status = { congested: true, 'high-load': true, normal: true, idle: true, 'no-data': true };
         Object.keys(state.filters.bands).forEach(k => state.filters.bands[k] = true);
+        Object.keys(state.filters.issueTypes).forEach(k => state.filters.issueTypes[k] = true);
         state.filters.loadRange = [0, 100];
+        state.filters.severityRange = [0, 100];
         loadDisplay.textContent = '0% - 100%';
+        const sevDisplay = document.getElementById('severity-range-display');
+        if (sevDisplay) sevDisplay.textContent = '0 - 100';
+        const sevMin = document.getElementById('severity-min');
+        const sevMax = document.getElementById('severity-max');
+        if (sevMin) sevMin.value = 0;
+        if (sevMax) sevMax.value = 100;
         
         applyFilters();
     });
     
     // Layer toggles
     document.getElementById('layer-sectors').addEventListener('change', (e) => {
-        if (state.map) {
-            state.map.setLayoutProperty('sectors-fill', 'visibility', e.target.checked ? 'visible' : 'none');
-            state.map.setLayoutProperty('sectors-outline', 'visibility', e.target.checked ? 'visible' : 'none');
-            state.map.setLayoutProperty('sectors-congested', 'visibility', e.target.checked ? 'visible' : 'none');
-        }
+        if (!state.map) return;
+        const visible = e.target.checked ? 'visible' : 'none';
+        const ids = state.isLargeDataset
+            ? ['sectors-lod-fill', 'sectors-lod-outline', 'sectors-lod-halo', 'sectors-lod-congested']
+            : ['sectors-fill', 'sectors-outline', 'sectors-halo', 'sectors-congested'];
+        ids.forEach(id => {
+            if (state.map.getLayer(id)) state.map.setLayoutProperty(id, 'visibility', visible);
+        });
     });
     
     document.getElementById('layer-sites').addEventListener('change', (e) => {
@@ -732,6 +1553,14 @@ function setupEventHandlers() {
             state.map.setLayoutProperty('sites-labels', 'visibility', e.target.checked ? 'visible' : 'none');
             state.map.setLayoutProperty('cell-labels', 'visibility', e.target.checked ? 'visible' : 'none');
         }
+    });
+
+    // Cluster layer toggle
+    document.getElementById('layer-clusters')?.addEventListener('change', (e) => {
+        state.layers.clusters = e.target.checked;
+        if (!state.map) return;
+        state.map.setLayoutProperty('cells-clusters', 'visibility', e.target.checked ? 'visible' : 'none');
+        state.map.setLayoutProperty('cells-cluster-count', 'visibility', e.target.checked ? 'visible' : 'none');
     });
     
     // Search with debounce
@@ -749,10 +1578,11 @@ function setupEventHandlers() {
         }
         
         searchTimeout = setTimeout(() => {
-            const matches = state.features.filter(f => 
+            const dataset = state.isLargeDataset ? state.pointFeatures : state.features;
+            const matches = dataset.filter(f => 
                 f.properties.cell_name.toLowerCase().includes(query) ||
                 (f.properties.enodeb_name && f.properties.enodeb_name.toLowerCase().includes(query))
-            ).slice(0, 8);
+            ).slice(0, CONFIG.SEARCH_MAX_RESULTS);
             
             if (matches.length === 0) {
                 searchResults.innerHTML = '<div class="search-result-item" style="color: var(--text-muted);">No results found</div>';
@@ -804,13 +1634,19 @@ function setupEventHandlers() {
         }, 300);
     });
     
-    // Fullscreen button
-    document.getElementById('btn-fullscreen').addEventListener('click', () => {
+    // App fullscreen button
+    document.getElementById('btn-fullscreen-app')?.addEventListener('click', () => {
         if (!document.fullscreenElement) {
             document.documentElement.requestFullscreen();
         } else {
             document.exitFullscreen();
         }
+    });
+
+    // Close cell info
+    document.getElementById('cell-info-close')?.addEventListener('click', () => {
+        state.selectedCellId = null;
+        hideCellInfoPanel();
     });
     
     // Keyboard shortcuts
@@ -846,6 +1682,18 @@ function setupEventHandlers() {
             case 'escape':
                 hideCellInfoPanel();
                 break;
+            case 'm':
+                toggleMapFullscreen();
+                break;
+            case 't':
+                toggleTheme();
+                break;
+            case 'a':
+                document.getElementById('btn-analytics')?.click();
+                break;
+            case 'e':
+                document.getElementById('btn-export')?.click();
+                break;
         }
     });
     
@@ -864,14 +1712,33 @@ function setupEventHandlers() {
 // --- Main Initialization ---
 async function init() {
     try {
-        // Fetch data
-        const response = await fetch('/data.json');
-        const rawData = await response.json();
+        setLoading(true, '0%');
+
+        // Theme init
+        const savedTheme = localStorage.getItem('netvision_theme') || 'dark';
+        applyTheme(savedTheme);
+
+        // Fetch data + stats in parallel to reduce wait time
+        const [dataRes, statsRes] = await Promise.all([
+            fetch('/data.json'),
+            fetch('/stats.json').catch(() => null)
+        ]);
+
+        const rawData = await dataRes.json();
+        if (statsRes && statsRes.ok) {
+            state.stats = await statsRes.json();
+        }
+        state.data = rawData;
+        setLoading(true, '25%');
         
         // Process data
-        const { features, sites, bands } = processData(rawData);
-        state.features = features;
-        state.filteredData = features;
+        const { sectorFeatures, sectorSampleFeatures, pointFeatures, sites, bands, issueTypes } = processData(rawData);
+        state.sectorFeatures = sectorFeatures;
+        state.sectorSampleFeatures = sectorSampleFeatures;
+        state.pointFeatures = pointFeatures;
+        state.features = state.isLargeDataset ? pointFeatures : sectorFeatures;
+        state.filteredData = state.isLargeDataset ? pointFeatures : sectorFeatures;
+        setLoading(true, '55%');
         
         // Initialize frequency band filters
         const bandFiltersContainer = document.getElementById('frequency-filters');
@@ -885,6 +1752,30 @@ async function init() {
                 </label>
             `;
         });
+
+        // Issue type filters
+        const issueFilters = document.getElementById('issue-type-filters');
+        if (issueFilters) {
+            issueTypes.forEach(t => {
+                state.filters.issueTypes[t] = true;
+                issueFilters.innerHTML += `
+                    <label class="checkbox-item">
+                        <input type="checkbox" data-issue-type="${t}" checked>
+                        <span class="checkmark"></span>
+                        <span>${t}</span>
+                    </label>
+                `;
+            });
+        }
+        setTimeout(() => {
+            document.querySelectorAll('[data-issue-type]').forEach(cb => {
+                cb.addEventListener('change', (e) => {
+                    state.filters.issueTypes[e.target.dataset.issueType] = e.target.checked;
+                });
+            });
+        }, 0);
+
+        renderIssueLegend(issueTypes);
         
         // Band filter event listeners
         setTimeout(() => {
@@ -896,41 +1787,47 @@ async function init() {
         }, 0);
         
         // Calculate and display stats
-        const stats = calculateStats(features);
+        const baseFeatures = state.isLargeDataset ? pointFeatures : sectorFeatures;
+        const stats = calculateStats(baseFeatures);
         updateStatsUI(stats);
-        updateAlertsUI(features);
+        updateAlertsUI(baseFeatures);
+        setLoading(true, '70%');
         
         // Initialize map
         const map = initMap();
         
         map.on('load', () => {
-            const geojson = {
-                type: 'FeatureCollection',
-                features: features
-            };
+            const sectorsGeojson = { type: 'FeatureCollection', features: sectorFeatures };
+            const sectorsLodGeojson = { type: 'FeatureCollection', features: sectorSampleFeatures };
+            const pointsGeojson = { type: 'FeatureCollection', features: pointFeatures };
             
-            addMapLayers(map, geojson, sites);
+            addMapLayers(map, sectorsGeojson, sectorsLodGeojson, pointsGeojson, sites);
             setupMapInteractions(map);
             
             // Fit to data bounds
-            if (features.length > 0) {
+            if (pointFeatures.length > 0) {
                 const bounds = new maplibregl.LngLatBounds();
-                features.forEach(f => {
-                    f.geometry.coordinates[0].forEach(coord => {
-                        bounds.extend(coord);
-                    });
-                });
+                const step = state.isLargeDataset ? Math.max(1, Math.floor(pointFeatures.length / 20000)) : 1;
+                for (let i = 0; i < pointFeatures.length; i += step) {
+                    bounds.extend(pointFeatures[i].geometry.coordinates);
+                }
                 map.fitBounds(bounds, { padding: 50, maxZoom: 14 });
             }
         });
         
         // Setup UI event handlers
         setupEventHandlers();
+        setupModals();
+        attachClickAnimations();
+        setVisualizationMode('sectors');
+        setLoading(true, '100%');
+        setTimeout(() => setLoading(false), 250);
         
-        console.log(`✓ NetVision Digital Twin initialized with ${features.length} cells and ${sites.length} sites`);
+        console.log(`✓ NetVision Digital Twin initialized with ${state.data.length} cells and ${sites.length} sites`);
         
     } catch (error) {
         console.error('Failed to initialize Digital Twin:', error);
+        setLoading(false);
         document.getElementById('alerts-list').innerHTML = `
             <div class="alert-item">
                 <span class="material-symbols-outlined">error</span>

@@ -1,0 +1,50 @@
+{
+  "total_cells": 50,
+  "congested_cells": 1,
+  "congestion_rate": 2.0,
+  "avg_load": 62.58,
+  "max_load": 92.68,
+  "avg_throughput": 21862.52,
+  "avg_cqi": 9.37,
+  "avg_health_score": 95.42,
+  "data_completeness": 36.0,
+  "unique_sites": 25,
+  "frequency_bands": [
+    1,
+    3,
+    20
+  ],
+  "severity_distribution": {
+    "Normal": 43,
+    "Medium": 5,
+    "Low": 1,
+    "Critical": 1,
+    "High": 0,
+    "Severe": 0
+  },
+  "issue_distribution": {
+    "Normal": 43,
+    "Capacity Issue": 7
+  },
+  "band_statistics": {
+    "1": {
+      "count": 22,
+      "congested": 0,
+      "avg_load": 56.13398361206055,
+      "avg_cqi": 9.749457359313965
+    },
+    "3": {
+      "count": 13,
+      "congested": 1,
+      "avg_load": 79.96322631835938,
+      "avg_cqi": 8.87602424621582
+    },
+    "20": {
+      "count": 15,
+      "congested": 0,
+      "avg_load": 59.101295471191406,
+      "avg_cqi": 9.282299995422363
+    }
+  },
+  "timestamp": "2025-12-22T00:36:20.326591"
+}
