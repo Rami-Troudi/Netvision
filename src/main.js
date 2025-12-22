@@ -1,4 +1,5 @@
 import maplibregl from 'maplibre-gl';
+import Chart from 'chart.js/auto';
 
 // ============================================
 // NETVISION DIGITAL TWIN - TIME-SERIES EDITION
@@ -15,6 +16,22 @@ const CONFIG = {
     MAP_ZOOM: 11,
     SECTOR_MIN_ZOOM: 10,
     MAX_ALERTS_RENDER: 50,
+    CQI_THRESHOLD: 8,
+    HEATMAP_RADIUS: 30,
+    HEATMAP_INTENSITY: 1,
+    HEATMAP_OPACITY: 0.8,
+    PLAY_INTERVAL_MS: 500,
+
+    BAND_RADIUS: {
+        20: 1500,
+        8: 1200,
+        3: 800,
+        1: 600,
+        7: 500,
+        38: 400,
+        40: 350,
+        41: 300
+    },
     
     COLORS: {
         CONGESTED: '#FF7900',
@@ -24,7 +41,8 @@ const CONFIG = {
         HEALTHY: '#66BB6A',
         IDLE: '#90CAF9',
         NO_DATA: '#9E9E9E',
-        SITE_MARKER: '#FF7900'
+        SITE_MARKER: '#FF7900',
+        CQI_POOR: '#E53935'
     },
     
     BASEMAPS: {
@@ -49,37 +67,69 @@ const CONFIG = {
 
 // --- State Management ---
 const state = {
-    baseline: {},           // Static cell info (coordinates, azimuth, band)
-    timeIndex: [],          // List of available timestamps
-    currentTimeIndex: 0,    // Currently selected time index
-    currentObservations: {},// Current time slice observations
-    currentStats: null,     // Stats for current time slice
-    globalStats: null,      // Global stats
+    baseline: {},
+    timeIndex: [],
+    currentTimeIndex: 0,
+    currentObservations: {},
+    currentStats: null,
+    globalStats: null,
     
-    features: [],           // GeoJSON features for current time
+    siteHierarchy: {},
+    selectedSite: null,
+
+    features: [],
     pointFeatures: [],
     sectorFeatures: [],
+    filteredPointFeatures: [],
+    filteredSectorFeatures: [],
     
     map: null,
     popup: null,
     isPlaying: false,
     playInterval: null,
+    playSpeed: 1,
     
     filters: {
-        status: { congested: true, 'high-load': true, normal: true, idle: true, 'no-data': true },
+        status: { congested: true, 'high-load': true, normal: true, idle: true, 'no-data': true, 'poor-cqi': true },
         bands: {},
-        loadRange: [0, 100]
+        issueTypes: {},
+        loadRange: [0, 100],
+        severityRange: [0, 100],
+        showLowCQIOnly: false
     },
     layers: {
         sectors: true,
         sites: true,
         heatmap: false
+    },
+    charts: {
+        issues: null,
+        severity: null,
+        bands: null,
+        load: null
     }
 };
 
 let hasInitialized = false;
+const geometryCache = {};
 
 // --- Utility Functions ---
+function debounce(fn, wait) {
+    let t;
+    return (...args) => {
+        clearTimeout(t);
+        t = setTimeout(() => fn(...args), wait);
+    };
+}
+
+function parseTimestamp(ts) {
+    const [datePart, timePart] = ts.split(' ');
+    if (!datePart || !timePart) return new Date(ts);
+    const [d, m, y] = datePart.split('-').map(Number);
+    const [hh, mm] = timePart.split(':').map(Number);
+    return new Date(y, m - 1, d, hh, mm, 0, 0);
+}
+
 function createSectorPolygon(center, radiusMeters, azimuth, beamwidth) {
     const steps = 24;
     const earthRadius = 6378137;
@@ -101,8 +151,9 @@ function createSectorPolygon(center, radiusMeters, azimuth, beamwidth) {
     return [coordinates];
 }
 
-function getLoadColor(load, isCongested) {
+function getLoadColor(load, isCongested, cqi) {
     if (isCongested) return CONFIG.COLORS.CONGESTED;
+    if (cqi !== null && cqi !== undefined && cqi < CONFIG.CQI_THRESHOLD) return CONFIG.COLORS.CQI_POOR;
     if (load === null || load === undefined) return CONFIG.COLORS.NO_DATA;
     if (load === 0) return CONFIG.COLORS.IDLE;
     if (load < 30) return CONFIG.COLORS.HEALTHY;
@@ -115,6 +166,7 @@ function getLoadColor(load, isCongested) {
 function getCellStatus(obs) {
     if (!obs) return 'no-data';
     if (obs.congested) return 'congested';
+    if (obs.cqi !== null && obs.cqi !== undefined && obs.cqi < CONFIG.CQI_THRESHOLD) return 'poor-cqi';
     if (obs.load === null) return 'no-data';
     if (obs.load === 0) return 'idle';
     if (obs.load >= 70) return 'high-load';
@@ -139,6 +191,66 @@ function formatLargeNumber(num) {
     return String(num);
 }
 
+function calculateCellRadius(band, ta) {
+    let baseRadius = CONFIG.BAND_RADIUS[band] || CONFIG.DEFAULT_RADIUS_METERS;
+    if (ta && ta > 0) {
+        baseRadius = Math.max(baseRadius, ta * CONFIG.TA_TO_METERS);
+    }
+    return Math.max(CONFIG.MIN_RADIUS, Math.min(CONFIG.MAX_RADIUS, baseRadius));
+}
+
+function parseCellName(cellName) {
+    const parts = cellName.split('_');
+    if (parts.length < 3) return { siteName: parts[0] || cellName, antenna: '', cellNum: 0 };
+    const siteName = `${parts[0]}_${parts[1]}`;
+    const suffix = parts.slice(2).join('_');
+    const match = suffix.match(/^([a-zA-Z]+)(\d+)$/);
+    if (match) {
+        return { siteName, antenna: match[1].toLowerCase(), cellNum: parseInt(match[2], 10) };
+    }
+    return { siteName, antenna: suffix.toLowerCase(), cellNum: 0 };
+}
+
+function buildSiteHierarchy() {
+    const hierarchy = {};
+    for (const [cellName, info] of Object.entries(state.baseline)) {
+        const { siteName, antenna, cellNum } = parseCellName(cellName);
+        if (!hierarchy[siteName]) {
+            hierarchy[siteName] = {
+                name: siteName,
+                enodeb_name: info.enodeb_name,
+                longitude: info.longitude,
+                latitude: info.latitude,
+                antennas: {}
+            };
+        }
+        if (!hierarchy[siteName].antennas[antenna]) {
+            hierarchy[siteName].antennas[antenna] = {
+                id: antenna,
+                azimuth: info.azimuth,
+                band: info.frequency_band,
+                type: info.cell_fdd_tdd_indication || 'FDD',
+                cells: []
+            };
+        }
+        hierarchy[siteName].antennas[antenna].cells.push({
+            cellName,
+            cellNum,
+            frequency_band: info.frequency_band,
+            localcell_id: info.localcell_id,
+            azimuth: info.azimuth
+        });
+    }
+
+    Object.values(hierarchy).forEach(site => {
+        Object.values(site.antennas).forEach(ant => {
+            ant.cells.sort((a, b) => a.cellNum - b.cellNum);
+        });
+    });
+
+    state.siteHierarchy = hierarchy;
+}
+
 // --- Data Processing ---
 function buildFeaturesForTime(observations) {
     const pointFeatures = [];
@@ -151,46 +263,54 @@ function buildFeaturesForTime(observations) {
         const center = [baseInfo.longitude, baseInfo.latitude];
         const azimuth = baseInfo.azimuth || 0;
         const band = baseInfo.frequency_band;
+        const { siteName, antenna, cellNum } = parseCellName(cellName);
+        const cqi = obs?.cqi ?? null;
+        const hasLowCQI = cqi !== null && cqi < CONFIG.CQI_THRESHOLD;
         
         const status = getCellStatus(obs);
         const load = obs?.load ?? null;
-        const color = getLoadColor(load, obs?.congested);
+        const color = getLoadColor(load, obs?.congested, cqi);
         const opacity = obs ? 0.7 : 0.4;
+        const severity = obs?.severity ?? 0;
+        const issueType = obs?.issue_type || 'Normal';
         
-        // Point feature
         pointFeatures.push({
             type: 'Feature',
             id: index,
             properties: {
                 id: index,
                 cell_name: cellName,
+                site_name: siteName,
+                antenna_id: antenna,
+                cell_num: cellNum,
                 enodeb_name: baseInfo.enodeb_name,
                 status,
                 color,
                 opacity,
                 load,
                 congested: obs?.congested || false,
-                issue_type: obs?.issue_type || 'Normal',
+                issue_type: issueType,
                 root_cause: obs?.root_cause || '-',
-                severity: obs?.severity ?? 0,
+                severity,
                 health_score: obs?.health_score ?? 100,
                 throughput: obs?.throughput,
-                cqi: obs?.cqi,
+                cqi,
+                has_low_cqi: hasLowCQI,
                 traffic: obs?.traffic,
                 ta: obs?.ta,
                 signal_power: obs?.signal_power,
                 band,
-                azimuth
+                azimuth,
+                localcell_id: baseInfo.localcell_id,
+                duplex: baseInfo.cell_fdd_tdd_indication || 'FDD'
             },
             geometry: { type: 'Point', coordinates: center }
         });
         
-        // Sector feature
-        let radius = CONFIG.DEFAULT_RADIUS_METERS;
-        if (obs?.ta && obs.ta > 0) {
-            radius = Math.max(CONFIG.MIN_RADIUS, Math.min(CONFIG.MAX_RADIUS, obs.ta * CONFIG.TA_TO_METERS));
-        }
-        const geometry = createSectorPolygon(center, radius, azimuth, CONFIG.DEFAULT_BEAMWIDTH);
+        const radius = calculateCellRadius(band, obs?.ta);
+        const cacheKey = `${cellName}_${radius}`;
+        const geometry = geometryCache[cacheKey] || createSectorPolygon(center, radius, azimuth, CONFIG.DEFAULT_BEAMWIDTH);
+        geometryCache[cacheKey] = geometry;
         
         sectorFeatures.push({
             type: 'Feature',
@@ -198,20 +318,25 @@ function buildFeaturesForTime(observations) {
             properties: {
                 id: index,
                 cell_name: cellName,
+                site_name: siteName,
+                antenna_id: antenna,
                 enodeb_name: baseInfo.enodeb_name,
                 status,
                 color,
                 opacity,
                 load,
+                cqi,
+                has_low_cqi: hasLowCQI,
                 congested: obs?.congested || false,
                 band,
-                azimuth
+                azimuth,
+                radius,
+                severity,
+                issue_type: issueType
             },
             geometry: { type: 'Polygon', coordinates: geometry }
         });
         
-        // Track sites
-        const siteName = baseInfo.enodeb_name;
         if (!sites.has(siteName)) {
             sites.set(siteName, { name: siteName, coordinates: center, cells: [] });
         }
@@ -223,6 +348,278 @@ function buildFeaturesForTime(observations) {
     return { pointFeatures, sectorFeatures, sites: Array.from(sites.values()) };
 }
 
+// --- Search Functionality ---
+function performSearch(term) {
+    const resEl = document.getElementById('search-results');
+    if (!resEl) return;
+    const q = term.trim().toLowerCase();
+    if (q.length < 2) {
+        resEl.innerHTML = '';
+        return;
+    }
+    const results = [];
+    state.pointFeatures.forEach(f => {
+        const p = f.properties;
+        if (p.cell_name.toLowerCase().includes(q) || p.site_name.toLowerCase().includes(q)) {
+            results.push({ type: 'cell', name: p.cell_name, site: p.site_name });
+        }
+    });
+    Object.keys(state.siteHierarchy).forEach(site => {
+        if (site.toLowerCase().includes(q)) results.push({ type: 'site', name: site });
+    });
+    const limited = results.slice(0, 20);
+    resEl.innerHTML = limited.map(r => `
+        <div class="search-item" data-type="${r.type}" data-name="${r.name}">
+            <span class="search-type">${r.type === 'cell' ? 'Cell' : 'Site'}</span>
+            <span class="search-name">${r.name}</span>
+        </div>
+    `).join('');
+}
+
+// --- Site Info Panel ---
+function showSiteInfoPanel(siteName, focusCell = null) {
+    const site = state.siteHierarchy[siteName];
+    if (!site) return;
+    state.selectedSite = siteName;
+    applyFilters();
+    
+    const panel = document.getElementById('cell-info-panel');
+    if (!panel) return;
+    panel.classList.remove('hidden');
+    document.getElementById('cell-info-name').textContent = site.name;
+
+    let totalCells = 0, congestedCells = 0, lowCQI = 0, avgLoad = 0, avgCQI = 0, loadCount = 0, cqiCount = 0;
+
+    Object.values(site.antennas).forEach(ant => {
+        ant.cells.forEach(cell => {
+            totalCells++;
+            const obs = state.currentObservations[cell.cellName];
+            if (obs) {
+                if (obs.congested) congestedCells++;
+                if (obs.cqi !== null && obs.cqi < CONFIG.CQI_THRESHOLD) lowCQI++;
+                if (obs.load !== null && obs.load !== undefined) { avgLoad += obs.load; loadCount++; }
+                if (obs.cqi !== null && obs.cqi !== undefined) { avgCQI += obs.cqi; cqiCount++; }
+            }
+        });
+    });
+
+    avgLoad = loadCount ? avgLoad / loadCount : 0;
+    avgCQI = cqiCount ? avgCQI / cqiCount : 0;
+
+    const statusEl = document.getElementById('cell-status');
+    let statusClass = 'normal', statusText = 'Normal';
+    if (congestedCells > 0) { statusClass = 'congested'; statusText = `${congestedCells} congested`; }
+    else if (lowCQI > 0) { statusClass = 'poor-cqi'; statusText = `${lowCQI} low CQI`; }
+    statusEl.className = `cell-status ${statusClass}`;
+    statusEl.textContent = statusText;
+    document.getElementById('cell-health').textContent = `Cells: ${totalCells}`;
+
+    const body = document.getElementById('cell-info-body');
+    const antennaEntries = Object.entries(site.antennas).sort((a, b) => a[0].localeCompare(b[0]));
+    let html = `
+        <div class="site-info-section">
+            <div class="site-info-row"><span>Location</span><span>${site.latitude.toFixed(5)}, ${site.longitude.toFixed(5)}</span></div>
+            <div class="site-info-row"><span>Avg Load</span><span>${avgLoad.toFixed(1)}%</span></div>
+            <div class="site-info-row"><span>Avg CQI</span><span class="${avgCQI < CONFIG.CQI_THRESHOLD ? 'text-danger' : ''}">${avgCQI.toFixed(1)}</span></div>
+        </div>
+        <div class="site-antennas">
+    `;
+
+    antennaEntries.forEach(([antennaId, ant]) => {
+        html += `
+            <div class="antenna-block" data-antenna="${antennaId}">
+                <div class="antenna-header" onclick="toggleAntennaDropdown('${siteName}','${antennaId}')">
+                    <span class="material-symbols-outlined">cell_tower</span>
+                    <div class="antenna-title">
+                        <div>${antennaId.toUpperCase()} • Band ${ant.band}</div>
+                        <div class="antenna-sub">Azimuth ${ant.azimuth}° • ${ant.type}</div>
+                    </div>
+                    <span class="material-symbols-outlined expand-icon" id="expand-icon-${siteName}-${antennaId}">expand_more</span>
+                </div>
+                <div class="antenna-cells" id="antenna-cells-${siteName}-${antennaId}">
+        `;
+        ant.cells.forEach(cell => {
+            const obs = state.currentObservations[cell.cellName];
+            const status = getCellStatus(obs);
+            const cqiVal = obs?.cqi;
+            const low = cqiVal !== null && cqiVal !== undefined && cqiVal < CONFIG.CQI_THRESHOLD;
+            html += `
+                <div class="cell-item" onclick="selectCell('${cell.cellName}')">
+                    <div class="cell-item-main">
+                        <span class="cell-dot status-${status}"></span>
+                        <span class="cell-name">${cell.cellName}</span>
+                        <span class="cell-band">${cell.frequency_band}</span>
+                    </div>
+                    <div class="cell-item-stats">
+                        <span>Load: ${formatNumber(obs?.load)}%</span>
+                        <span class="${low ? 'text-danger' : ''}">CQI: ${formatNumber(cqiVal)}</span>
+                    </div>
+                </div>
+            `;
+        });
+        html += `</div></div>`;
+    });
+
+    html += '</div>';
+    body.innerHTML = html;
+
+    if (focusCell) selectCell(focusCell, false);
+}
+
+function hideSiteInfoPanel() {
+    state.selectedSite = null;
+    document.getElementById('cell-info-panel')?.classList.add('hidden');
+    applyFilters();
+}
+
+window.toggleAntennaDropdown = (siteName, antennaId) => {
+    const el = document.getElementById(`antenna-cells-${siteName}-${antennaId}`);
+    const icon = document.getElementById(`expand-icon-${siteName}-${antennaId}`);
+    if (el) {
+        el.classList.toggle('expanded');
+        icon?.classList.toggle('rotated');
+    }
+};
+
+window.selectCell = (cellName, fly = true) => {
+    const feature = state.pointFeatures.find(f => f.properties.cell_name === cellName);
+    if (feature && state.map && fly) {
+        state.map.flyTo({ center: feature.geometry.coordinates, zoom: 15, pitch: 45 });
+    }
+    if (feature && state.popup) {
+        const p = feature.properties;
+        state.popup
+            .setLngLat(feature.geometry.coordinates)
+            .setHTML(`
+                <div class="cell-popup">
+                    <div class="cell-popup-header" style="border-left:4px solid ${p.color}">${p.cell_name}</div>
+                    <div class="cell-popup-body">
+                        <div class="popup-row"><span>Site</span><span>${p.site_name}</span></div>
+                        <div class="popup-row"><span>Antenna</span><span>${p.antenna_id.toUpperCase()}</span></div>
+                        <div class="popup-row"><span>Band</span><span>${p.band}</span></div>
+                        <div class="popup-row"><span>Local ID</span><span>${p.localcell_id}</span></div>
+                        <div class="popup-row"><span>Load</span><span>${formatNumber(p.load)}%</span></div>
+                        <div class="popup-row ${p.has_low_cqi ? 'text-danger' : ''}"><span>CQI</span><span>${formatNumber(p.cqi)}</span></div>
+                        <div class="popup-row"><span>Throughput</span><span>${formatThroughput(p.throughput)}</span></div>
+                    </div>
+                </div>
+            `)
+            .addTo(state.map);
+    }
+};
+
+// --- Filtering ---
+function applyFilters() {
+    const { status, loadRange, severityRange, showLowCQIOnly, bands, issueTypes } = state.filters;
+    const [minLoad, maxLoad] = loadRange;
+    const [minSeverity, maxSeverity] = severityRange;
+    
+    const points = state.pointFeatures.filter(f => {
+        const p = f.properties;
+        if (state.selectedSite && p.site_name !== state.selectedSite) return false;
+        if (!status[p.status]) return false;
+        if (showLowCQIOnly && !p.has_low_cqi) return false;
+        if (Object.keys(bands).length > 0 && bands[p.band] === false) return false;
+        if (Object.keys(issueTypes).length > 0) {
+            const it = p.issue_type || 'Normal';
+            if (issueTypes[it] === false) return false;
+        }
+        if (p.load !== null && (p.load < minLoad || p.load > maxLoad)) return false;
+        if (p.severity !== null && p.severity !== undefined && (p.severity < minSeverity || p.severity > maxSeverity)) return false;
+        return true;
+    });
+    const sectors = state.sectorFeatures.filter(f => points.some(p => p.id === f.id));
+    state.filteredPointFeatures = points;
+    state.filteredSectorFeatures = sectors;
+    updateMapData();
+    updateAnalyticsCharts(points);
+}
+
+function populateFrequencyFilters(bandsList = []) {
+    const container = document.getElementById('frequency-filters');
+    if (!container) return;
+    container.innerHTML = '';
+    state.filters.bands = {};
+    bandsList.forEach(b => {
+        const id = `band-${b}`;
+        const wrapper = document.createElement('label');
+        wrapper.className = 'checkbox-item';
+        wrapper.innerHTML = `<input type="checkbox" id="${id}" data-band="${b}" checked><span class="checkmark"></span><span>Band ${b}</span>`;
+        container.appendChild(wrapper);
+        state.filters.bands[b] = true;
+    });
+}
+
+function populateIssueFilters(issueTypes = []) {
+    const container = document.getElementById('issue-type-filters');
+    if (!container) return;
+    container.innerHTML = '';
+    state.filters.issueTypes = {};
+    issueTypes.forEach(type => {
+        const safeId = `issue-${type.replace(/\s+/g, '-').toLowerCase()}`;
+        const wrapper = document.createElement('label');
+        wrapper.className = 'checkbox-item';
+        wrapper.innerHTML = `<input type="checkbox" id="${safeId}" data-issue="${type}" checked><span class="checkmark"></span><span>${type}</span>`;
+        container.appendChild(wrapper);
+        state.filters.issueTypes[type] = true;
+    });
+}
+
+function collectIssueTypesFromCurrent() {
+    const set = new Set();
+    state.pointFeatures.forEach(f => set.add(f.properties.issue_type || 'Normal'));
+    return Array.from(set).sort();
+}
+
+function resetFiltersUI() {
+    document.querySelectorAll('input[data-filter]').forEach(cb => { cb.checked = true; state.filters.status[cb.dataset.filter] = true; });
+    Object.keys(state.filters.bands).forEach(k => state.filters.bands[k] = true);
+    document.querySelectorAll('#frequency-filters input[type="checkbox"]').forEach(cb => cb.checked = true);
+    Object.keys(state.filters.issueTypes).forEach(k => state.filters.issueTypes[k] = true);
+    document.querySelectorAll('#issue-type-filters input[type="checkbox"]').forEach(cb => cb.checked = true);
+    state.filters.loadRange = [0, 100];
+    state.filters.severityRange = [0, 100];
+    const lowCqi = document.getElementById('filter-low-cqi');
+    if (lowCqi) lowCqi.checked = false;
+    state.filters.showLowCQIOnly = false;
+    applyFilters();
+}
+
+// --- Export ---
+function downloadBlob(filename, content, type = 'application/json') {
+    const blob = new Blob([content], { type });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+function exportJSON(filteredOnly = false) {
+    const data = filteredOnly ? state.filteredPointFeatures : state.pointFeatures;
+    downloadBlob('netvision-data.json', JSON.stringify(data, null, 2));
+}
+
+function exportCSV(filteredOnly = false) {
+    const rows = filteredOnly ? state.filteredPointFeatures : state.pointFeatures;
+    const header = ['cell_name','site_name','band','load','cqi','throughput','issue_type','severity','congested'];
+    const lines = [header.join(',')];
+    rows.forEach(f => {
+        const p = f.properties;
+        lines.push([p.cell_name, p.site_name, p.band, p.load ?? '', p.cqi ?? '', p.throughput ?? '', p.issue_type ?? '', p.severity ?? '', p.congested ? 'true' : 'false'].join(','));
+    });
+    downloadBlob('netvision-data.csv', lines.join('\n'), 'text/csv');
+}
+
+function simpleReport() {
+    const total = state.filteredPointFeatures.length;
+    const congested = state.filteredPointFeatures.filter(f => f.properties.congested).length;
+    const lowCqi = state.filteredPointFeatures.filter(f => f.properties.has_low_cqi).length;
+    const summary = `NetVision Report\nCells: ${total}\nCongested: ${congested}\nLow CQI: ${lowCqi}`;
+    downloadBlob('netvision-report.txt', summary, 'text/plain');
+}
+
 // --- Time Navigation ---
 async function loadTimeSlice(index) {
     if (index < 0 || index >= state.timeIndex.length) return;
@@ -230,7 +627,6 @@ async function loadTimeSlice(index) {
     const timeEntry = state.timeIndex[index];
     state.currentTimeIndex = index;
     
-    // Fetch time slice data
     try {
         const res = await fetch(`/time_data/${timeEntry.filename}?t=${Date.now()}`);
         const data = await res.json();
@@ -238,19 +634,22 @@ async function loadTimeSlice(index) {
         state.currentObservations = data.observations;
         state.currentStats = data.stats;
         
-        // Rebuild features
-        const { pointFeatures, sectorFeatures, sites } = buildFeaturesForTime(data.observations);
+        const { pointFeatures, sectorFeatures } = buildFeaturesForTime(data.observations);
         state.pointFeatures = pointFeatures;
         state.sectorFeatures = sectorFeatures;
         state.features = pointFeatures;
+        applyFilters();
         
-        // Update map
-        updateMapData();
-        
-        // Update UI
         updateStatsUI(data.stats);
         updateAlertsUI(pointFeatures);
         updateTimeSliderUI();
+
+        const issueTypes = collectIssueTypesFromCurrent();
+        populateIssueFilters(issueTypes);
+
+        if (state.selectedSite) {
+            showSiteInfoPanel(state.selectedSite);
+        }
         
     } catch (err) {
         console.error('Failed to load time slice:', err);
@@ -260,14 +659,11 @@ async function loadTimeSlice(index) {
 function updateMapData() {
     if (!state.map) return;
     
-    const pointsGeojson = { type: 'FeatureCollection', features: state.pointFeatures };
-    const sectorsGeojson = { type: 'FeatureCollection', features: state.sectorFeatures };
+    const pointsGeojson = { type: 'FeatureCollection', features: state.filteredPointFeatures };
+    const sectorsGeojson = { type: 'FeatureCollection', features: state.filteredSectorFeatures };
     
     if (state.map.getSource('cells')) {
         state.map.getSource('cells').setData(pointsGeojson);
-    }
-    if (state.map.getSource('cells-heatmap-source')) {
-        state.map.getSource('cells-heatmap-source').setData(pointsGeojson);
     }
     if (state.map.getSource('sectors')) {
         state.map.getSource('sectors').setData(sectorsGeojson);
@@ -279,9 +675,7 @@ function updateTimeSliderUI() {
     const currentLabel = document.getElementById('time-current-label');
     const timestampEl = document.getElementById('timestamp');
     
-    if (slider) {
-        slider.value = state.currentTimeIndex;
-    }
+    if (slider) slider.value = state.currentTimeIndex;
     
     const currentTime = state.timeIndex[state.currentTimeIndex]?.timestamp || '--';
     if (currentLabel) currentLabel.textContent = currentTime;
@@ -293,6 +687,7 @@ function setupTimeControls() {
     const prevBtn = document.getElementById('time-prev');
     const nextBtn = document.getElementById('time-next');
     const playBtn = document.getElementById('time-play');
+    const speedSelect = document.getElementById('time-speed-select');
     const startLabel = document.getElementById('time-start-label');
     const endLabel = document.getElementById('time-end-label');
     
@@ -300,29 +695,22 @@ function setupTimeControls() {
         slider.min = 0;
         slider.max = state.timeIndex.length - 1;
         slider.value = 0;
-        
+
+        const debouncedLoad = debounce((val) => loadTimeSlice(val), 120);
         slider.addEventListener('input', (e) => {
-            loadTimeSlice(parseInt(e.target.value));
+            debouncedLoad(parseInt(e.target.value, 10));
         });
     }
     
-    if (startLabel && state.timeIndex.length > 0) {
-        startLabel.textContent = state.timeIndex[0]?.timestamp || '--';
-    }
-    if (endLabel && state.timeIndex.length > 0) {
-        endLabel.textContent = state.timeIndex[state.timeIndex.length - 1]?.timestamp || '--';
-    }
+    if (startLabel && state.timeIndex.length > 0) startLabel.textContent = state.timeIndex[0]?.timestamp || '--';
+    if (endLabel && state.timeIndex.length > 0) endLabel.textContent = state.timeIndex[state.timeIndex.length - 1]?.timestamp || '--';
     
     prevBtn?.addEventListener('click', () => {
-        if (state.currentTimeIndex > 0) {
-            loadTimeSlice(state.currentTimeIndex - 1);
-        }
+        if (state.currentTimeIndex > 0) loadTimeSlice(state.currentTimeIndex - 1);
     });
     
     nextBtn?.addEventListener('click', () => {
-        if (state.currentTimeIndex < state.timeIndex.length - 1) {
-            loadTimeSlice(state.currentTimeIndex + 1);
-        }
+        if (state.currentTimeIndex < state.timeIndex.length - 1) loadTimeSlice(state.currentTimeIndex + 1);
     });
     
     playBtn?.addEventListener('click', () => {
@@ -332,17 +720,27 @@ function setupTimeControls() {
         if (state.isPlaying) {
             playBtn.classList.add('playing');
             icon.textContent = 'pause';
+            const interval = CONFIG.PLAY_INTERVAL_MS / Math.max(0.25, state.playSpeed);
             state.playInterval = setInterval(() => {
                 if (state.currentTimeIndex < state.timeIndex.length - 1) {
                     loadTimeSlice(state.currentTimeIndex + 1);
                 } else {
-                    loadTimeSlice(0); // Loop back
+                    loadTimeSlice(0);
                 }
-            }, 500);
+            }, interval);
         } else {
             playBtn.classList.remove('playing');
             icon.textContent = 'play_arrow';
             clearInterval(state.playInterval);
+        }
+    });
+
+    speedSelect?.addEventListener('change', (e) => {
+        const val = Number(e.target.value);
+        state.playSpeed = isNaN(val) ? 1 : val;
+        if (state.isPlaying) {
+            document.getElementById('time-play')?.click();
+            document.getElementById('time-play')?.click();
         }
     });
 }
@@ -367,7 +765,6 @@ function updateStatsUI(stats) {
     document.getElementById('metric-coverage').textContent = 
         Math.round(((stats?.cells_observed || 0) / totalCells) * 100) + '%';
     
-    // Health gauge
     const gaugeValue = document.getElementById('gauge-value');
     const gaugeFill = document.getElementById('gauge-fill');
     if (gaugeValue && gaugeFill) {
@@ -400,6 +797,184 @@ function updateAlertsUI(features) {
             </div>
         </div>
     `).join('');
+}
+
+function destroyCharts() {
+    Object.keys(state.charts).forEach(k => {
+        if (state.charts[k]) {
+            state.charts[k].destroy();
+            state.charts[k] = null;
+        }
+    });
+}
+
+function updateAnalyticsCharts(features) {
+    const issueCtx = document.getElementById('chart-issues');
+    const sevCtx = document.getElementById('chart-severity');
+    const bandCtx = document.getElementById('chart-bands');
+    const loadCtx = document.getElementById('chart-load');
+    if (!issueCtx || !sevCtx || !bandCtx || !loadCtx) return;
+
+    destroyCharts();
+
+    // Issue distribution
+    const issueCounts = {};
+    features.forEach(f => {
+        const type = f.properties.issue_type || 'Normal';
+        issueCounts[type] = (issueCounts[type] || 0) + 1;
+    });
+    
+    state.charts.issues = new Chart(issueCtx, {
+        type: 'doughnut',
+        data: {
+            labels: Object.keys(issueCounts),
+            datasets: [{
+                data: Object.values(issueCounts),
+                backgroundColor: [
+                    '#66BB6A', '#FF7900', '#E53935', '#FFB74D', '#42A5F5', '#AB47BC'
+                ],
+                borderWidth: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'right', labels: { color: '#ccc', boxWidth: 12 } }
+            }
+        }
+    });
+
+    // Severity distribution
+    const severityBuckets = { 'Low (0-30)': 0, 'Medium (30-70)': 0, 'High (70-100)': 0 };
+    features.forEach(f => {
+        const s = f.properties.severity || 0;
+        if (s < 30) severityBuckets['Low (0-30)']++;
+        else if (s < 70) severityBuckets['Medium (30-70)']++;
+        else severityBuckets['High (70-100)']++;
+    });
+
+    state.charts.severity = new Chart(sevCtx, {
+        type: 'bar',
+        data: {
+            labels: Object.keys(severityBuckets),
+            datasets: [{
+                label: 'Cells',
+                data: Object.values(severityBuckets),
+                backgroundColor: ['#66BB6A', '#FFB74D', '#E53935']
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: { beginAtZero: true, grid: { color: '#333' }, ticks: { color: '#ccc' } },
+                x: { grid: { display: false }, ticks: { color: '#ccc' } }
+            },
+            plugins: { legend: { display: false } }
+        }
+    });
+
+    // Band distribution
+    const bandCounts = {};
+    features.forEach(f => {
+        const b = f.properties.band;
+        bandCounts[b] = (bandCounts[b] || 0) + 1;
+    });
+
+    state.charts.bands = new Chart(bandCtx, {
+        type: 'bar',
+        data: {
+            labels: Object.keys(bandCounts).map(b => 'B' + b),
+            datasets: [{
+                label: 'Cells',
+                data: Object.values(bandCounts),
+                backgroundColor: '#42A5F5'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: { beginAtZero: true, grid: { color: '#333' }, ticks: { color: '#ccc' } },
+                x: { grid: { display: false }, ticks: { color: '#ccc' } }
+            },
+            plugins: { legend: { display: false } }
+        }
+    });
+
+    // Load distribution
+    const loadBuckets = { '0-30%': 0, '30-50%': 0, '50-70%': 0, '70-85%': 0, '85-100%': 0 };
+    features.forEach(f => {
+        const l = f.properties.load || 0;
+        if (l < 30) loadBuckets['0-30%']++;
+        else if (l < 50) loadBuckets['30-50%']++;
+        else if (l < 70) loadBuckets['50-70%']++;
+        else if (l < 85) loadBuckets['70-85%']++;
+        else loadBuckets['85-100%']++;
+    });
+
+    state.charts.load = new Chart(loadCtx, {
+        type: 'bar',
+        data: {
+            labels: Object.keys(loadBuckets),
+            datasets: [{
+                label: 'Cells',
+                data: Object.values(loadBuckets),
+                backgroundColor: [
+                    '#AED581', '#66BB6A', '#FDD835', '#FFB74D', '#FF7900'
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: { beginAtZero: true, grid: { color: '#333' }, ticks: { color: '#ccc' } },
+                x: { grid: { display: false }, ticks: { color: '#ccc' } }
+            },
+            plugins: { legend: { display: false } }
+        }
+    });
+}
+
+function toggleModal(id, show) {
+    const modal = document.getElementById(id);
+    if (!modal) return;
+    modal.classList.toggle('hidden', !show);
+}
+
+function toggleTheme() {
+    const body = document.body;
+    const isLight = body.classList.contains('theme-light');
+    body.classList.toggle('theme-light', !isLight);
+    body.classList.toggle('theme-dark', isLight);
+    const icon = document.querySelector('#btn-theme .material-symbols-outlined');
+    if (icon) icon.textContent = isLight ? 'dark_mode' : 'light_mode';
+}
+
+function setViewMode(mode) {
+    if (!state.map) return;
+    if (mode === '2d') {
+        state.map.easeTo({ pitch: 0, bearing: 0, duration: 400 });
+    } else if (mode === '3d') {
+        state.map.easeTo({ pitch: 45, duration: 400 });
+    }
+    document.querySelectorAll('.toggle-btn[data-view]').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.view === mode);
+    });
+}
+
+function resetView() {
+    if (!state.map) return;
+    const bounds = new maplibregl.LngLatBounds();
+    const features = state.filteredPointFeatures.length ? state.filteredPointFeatures : state.pointFeatures;
+    features.forEach(f => bounds.extend(f.geometry.coordinates));
+    if (features.length > 0) {
+        state.map.fitBounds(bounds, { padding: 50, maxZoom: 13 });
+    } else {
+        state.map.flyTo({ center: CONFIG.MAP_CENTER, zoom: CONFIG.MAP_ZOOM, pitch: 45 });
+    }
 }
 
 // --- Map Initialization ---
@@ -444,10 +1019,8 @@ function addMapLayers(map, sites) {
     const pointsGeojson = { type: 'FeatureCollection', features: state.pointFeatures };
     const sectorsGeojson = { type: 'FeatureCollection', features: state.sectorFeatures };
     
-    // Sectors source
     map.addSource('sectors', { type: 'geojson', data: sectorsGeojson });
     
-    // Sector fill
     map.addLayer({
         id: 'sectors-fill',
         type: 'fill',
@@ -459,7 +1032,6 @@ function addMapLayers(map, sites) {
         }
     });
     
-    // Sector outline
     map.addLayer({
         id: 'sectors-outline',
         type: 'line',
@@ -472,157 +1044,75 @@ function addMapLayers(map, sites) {
         }
     });
     
-    // Separate source for heatmap (no clustering)
-    map.addSource('cells-heatmap-source', {
-        type: 'geojson',
-        data: pointsGeojson
-    });
+    map.addSource('cells', { type: 'geojson', data: pointsGeojson });
     
-    // Points source with clustering
-    map.addSource('cells', {
-        type: 'geojson',
-        data: pointsGeojson,
-        cluster: true,
-        clusterRadius: 50,
-        clusterMaxZoom: 12
-    });
-    
-    // Heatmap layer
+    // Heatmap - zoom-independent with fixed radius/intensity
     map.addLayer({
         id: 'cells-heatmap',
         type: 'heatmap',
-        source: 'cells-heatmap-source',
-        maxzoom: 24,
+        source: 'cells',
+        maxzoom: 22,
         layout: { 'visibility': 'none' },
         paint: {
-            'heatmap-weight': ['interpolate', ['linear'], ['coalesce', ['get', 'load'], 50], 0, 0, 50, 0.5, 100, 1],
-            'heatmap-intensity': [
-    'interpolate',
-    ['linear'],
-    ['zoom'],
-    10, 3,  // Higher intensity when zoomed OUT
-    15, 1   // Lower intensity when zoomed IN
-],
-            'heatmap-opacity': 0.8,
+            'heatmap-weight': ['interpolate', ['linear'], ['coalesce', ['get', 'load'], 0], 0, 0.1, 100, 1],
+            'heatmap-radius': CONFIG.HEATMAP_RADIUS,
+            'heatmap-intensity': CONFIG.HEATMAP_INTENSITY,
+            'heatmap-opacity': CONFIG.HEATMAP_OPACITY,
             'heatmap-color': [
                 'interpolate', ['linear'], ['heatmap-density'],
-                0, 'rgba(0,0,0,0)',
-                0.1, 'rgba(30,60,150,0.6)',
-                0.2, 'rgba(0,120,180,0.7)',
-                0.3, 'rgba(0,180,150,0.75)',
-                0.4, 'rgba(100,200,80,0.8)',
-                0.5, 'rgba(180,220,50,0.82)',
-                0.6, 'rgba(240,200,30,0.85)',
-                0.7, 'rgba(255,150,20,0.88)',
-                0.8, 'rgba(255,80,20,0.92)',
-                0.9, 'rgba(240,30,30,0.96)',
-                1, 'rgba(180,0,50,1)'
+                0.0, 'rgba(0,0,0,0)',
+                0.1, 'rgb(0, 0, 255)',
+                0.4, 'rgb(0, 200, 100)',
+                0.7, 'rgb(255, 0, 0)',
+                0.95, 'rgb(128, 0, 128)'
             ]
         }
     });
     
-    // Cluster circles - Scaled by zoom
-    map.addLayer({
-        id: 'cells-clusters',
-        type: 'circle',
-        source: 'cells',
-        filter: ['has', 'point_count'],
-        paint: {
-            'circle-color': [
-                'step', 
-                ['get', 'point_count'],
-                CONFIG.COLORS.HEALTHY, 
-                20, CONFIG.COLORS.LOW_LOAD,
-                50, CONFIG.COLORS.MEDIUM_LOAD,
-                100, CONFIG.COLORS.HIGH_LOAD,
-                200, CONFIG.COLORS.CONGESTED
-            ],
-            'circle-radius': [
-                '*',
-                [
-                    'interpolate', ['linear'], ['zoom'],
-                    10, 0.6,
-                    13, 0.8,
-                    16, 1.2
-                ],
-                [
-                    'step',
-                    ['get', 'point_count'],
-                    15,   // 0-19 points: 15px
-                    20, 18,   // 20-49 points: 18px
-                    50, 22,   // 50-99 points: 22px
-                    100, 26   // 100+ points: 26px
-                ]
-            ],
-            'circle-stroke-color': '#ffffff',
-            'circle-stroke-width': 2
-        }
-    });
-    
-    // Cluster labels
-    map.addLayer({
-        id: 'cells-cluster-count',
-        type: 'symbol',
-        source: 'cells',
-        filter: ['has', 'point_count'],
-        layout: {
-            'text-field': ['get', 'point_count_abbreviated'],
-            'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
-            'text-size': [
-                'interpolate', ['linear'], ['zoom'],
-                10, 9,
-                13, 12,
-                16, 14
-            ],
-            'text-allow-overlap': true
-        },
-        paint: {
-            'text-color': '#ffffff',
-            'text-halo-color': 'rgba(0,0,0,0.5)',
-            'text-halo-width': 1
-        }
-    });
-    
-    // Individual points - Scaled by zoom
     map.addLayer({
         id: 'cells-points',
         type: 'circle',
         source: 'cells',
-        filter: ['!', ['has', 'point_count']],
         paint: {
-            'circle-radius': [
-                'interpolate', ['linear'], ['zoom'],
-                10, 2,
-                13, 5,
-                16, 8
-            ],
+            'circle-radius': ['interpolate', ['linear'], ['zoom'], 8, 4, 12, 6, 16, 10],
             'circle-color': ['get', 'color'],
             'circle-opacity': 0.8,
             'circle-stroke-color': '#ffffff',
             'circle-stroke-width': 1.5
         }
     });
+
+    map.addLayer({
+        id: 'cells-labels',
+        type: 'symbol',
+        source: 'cells',
+        minzoom: 13,
+        layout: {
+            'text-field': ['get', 'cell_name'],
+            'text-font': ['Open Sans Regular', 'Arial Unicode MS Regular'],
+            'text-size': 11,
+            'text-offset': [0, 1.2]
+        },
+        paint: {
+            'text-color': '#ffffff',
+            'text-halo-color': 'rgba(0,0,0,0.6)',
+            'text-halo-width': 1
+        }
+    });
     
-    // Congested ring - Scaled by zoom
     map.addLayer({
         id: 'cells-congested-ring',
         type: 'circle',
         source: 'cells',
-        filter: ['all', ['!', ['has', 'point_count']], ['==', ['get', 'congested'], true]],
+        filter: ['==', ['get', 'congested'], true],
         paint: {
-            'circle-radius': [
-                'interpolate', ['linear'], ['zoom'],
-                10, 3,
-                13, 8,
-                16, 12
-            ],
+            'circle-radius': ['interpolate', ['linear'], ['zoom'], 8, 6, 12, 9, 16, 14],
             'circle-color': 'rgba(0,0,0,0)',
             'circle-stroke-color': CONFIG.COLORS.CONGESTED,
-            'circle-stroke-width': 2.5
+            'circle-stroke-width': 3
         }
     });
     
-    // Sites source
     const sitesGeojson = {
         type: 'FeatureCollection',
         features: sites.map((site, i) => ({
@@ -635,18 +1125,12 @@ function addMapLayers(map, sites) {
     
     map.addSource('sites', { type: 'geojson', data: sitesGeojson });
     
-    // Site markers - Scaled by zoom
     map.addLayer({
         id: 'sites-circle',
         type: 'circle',
         source: 'sites',
         paint: {
-            'circle-radius': [
-                'interpolate', ['linear'], ['zoom'],
-                10, 3,
-                13, 6,
-                16, 10
-            ],
+            'circle-radius': ['interpolate', ['linear'], ['zoom'], 8, 5, 14, 10],
             'circle-color': CONFIG.COLORS.SITE_MARKER,
             'circle-stroke-color': '#ffffff',
             'circle-stroke-width': 2
@@ -655,18 +1139,22 @@ function addMapLayers(map, sites) {
 }
 
 function setupMapInteractions(map) {
-    // Click handlers
-    map.on('click', 'cells-clusters', (e) => {
-        const features = map.queryRenderedFeatures(e.point, { layers: ['cells-clusters'] });
-        if (!features.length) return;
-        const clusterId = features[0].properties.cluster_id;
-        map.getSource('cells').getClusterExpansionZoom(clusterId, (err, zoom) => {
-            if (err) return;
-            map.easeTo({ center: features[0].geometry.coordinates, zoom: zoom + 1 });
-        });
+    map.on('click', 'cells-points', (e) => {
+        const feature = e.features?.[0];
+        if (!feature) return;
+        const p = feature.properties;
+        showSiteInfoPanel(p.site_name, p.cell_name);
+        map.flyTo({ center: feature.geometry.coordinates, zoom: 14, pitch: 45 });
     });
     
-    // Hover popup for cells
+    map.on('click', 'sites-circle', (e) => {
+        const feature = e.features?.[0];
+        if (!feature) return;
+        const siteName = feature.properties.name;
+        showSiteInfoPanel(siteName);
+        map.flyTo({ center: feature.geometry.coordinates, zoom: 13, pitch: 30 });
+    });
+    
     map.on('mouseenter', 'cells-points', (e) => {
         map.getCanvas().style.cursor = 'pointer';
         const p = e.features[0].properties;
@@ -696,14 +1184,12 @@ function setVisualizationMode(mode) {
     if (!state.map) return;
     state.layers.heatmap = mode === 'heatmap';
     
-    // Heatmap
     if (state.map.getLayer('cells-heatmap')) {
         state.map.setLayoutProperty('cells-heatmap', 'visibility', mode === 'heatmap' ? 'visible' : 'none');
         if (mode === 'heatmap') state.map.moveLayer('cells-heatmap');
     }
     
-    // Hide everything else in heatmap mode
-    const hideInHeatmap = ['cells-clusters', 'cells-cluster-count', 'cells-points', 'cells-congested-ring', 
+    const hideInHeatmap = ['cells-points', 'cells-labels', 'cells-congested-ring', 
                           'sectors-fill', 'sectors-outline', 'sites-circle'];
     hideInHeatmap.forEach(id => {
         if (state.map.getLayer(id)) {
@@ -718,12 +1204,14 @@ function setVisualizationMode(mode) {
 
 // --- Event Handlers ---
 function setupEventHandlers() {
-    // Visualization toggle
     document.querySelectorAll('.toggle-btn[data-viz]').forEach(btn => {
         btn.addEventListener('click', () => setVisualizationMode(btn.dataset.viz));
     });
+
+    document.querySelectorAll('.toggle-btn[data-view]').forEach(btn => {
+        btn.addEventListener('click', () => setViewMode(btn.dataset.view));
+    });
     
-    // Basemap select
     document.getElementById('basemap-select')?.addEventListener('change', (e) => {
         const basemap = CONFIG.BASEMAPS[e.target.value];
         if (basemap && state.map) {
@@ -734,12 +1222,100 @@ function setupEventHandlers() {
         }
     });
     
-    // Sidebar toggles
     document.getElementById('toggle-left')?.addEventListener('click', () => {
         document.getElementById('sidebar-left')?.classList.toggle('collapsed');
     });
     document.getElementById('toggle-right')?.addEventListener('click', () => {
         document.getElementById('sidebar-right')?.classList.toggle('collapsed');
+    });
+
+    document.getElementById('cell-info-close')?.addEventListener('click', hideSiteInfoPanel);
+
+    document.getElementById('filter-low-cqi')?.addEventListener('change', (e) => {
+        state.filters.showLowCQIOnly = e.target.checked;
+        applyFilters();
+    });
+
+    document.querySelectorAll('input[data-filter]').forEach(cb => {
+        cb.addEventListener('change', () => {
+            const key = cb.dataset.filter;
+            state.filters.status[key] = cb.checked;
+            applyFilters();
+        });
+    });
+
+    document.getElementById('frequency-filters')?.addEventListener('change', (e) => {
+        if (e.target instanceof HTMLInputElement && e.target.dataset.band) {
+            const band = Number(e.target.dataset.band);
+            state.filters.bands[band] = e.target.checked;
+            applyFilters();
+        }
+    });
+
+    document.getElementById('issue-type-filters')?.addEventListener('change', (e) => {
+        if (e.target instanceof HTMLInputElement && e.target.dataset.issue) {
+            const issue = e.target.dataset.issue;
+            state.filters.issueTypes[issue] = e.target.checked;
+            applyFilters();
+        }
+    });
+
+    document.getElementById('btn-apply-filters')?.addEventListener('click', applyFilters);
+    document.getElementById('btn-reset-filters')?.addEventListener('click', resetFiltersUI);
+
+    // Search
+    const searchInput = document.getElementById('cell-search');
+    const searchClear = document.getElementById('search-clear');
+    const doSearch = debounce(() => performSearch(searchInput.value), 150);
+    searchInput?.addEventListener('input', () => {
+        if (searchInput.value.length > 0) searchClear?.classList.remove('hidden');
+        else searchClear?.classList.add('hidden');
+        doSearch();
+    });
+    searchClear?.addEventListener('click', () => {
+        searchInput.value = '';
+        document.getElementById('search-results').innerHTML = '';
+        searchClear.classList.add('hidden');
+    });
+    document.getElementById('search-results')?.addEventListener('click', (e) => {
+        const item = e.target.closest('.search-item');
+        if (!item) return;
+        const type = item.dataset.type;
+        const name = item.dataset.name;
+        if (type === 'cell') selectCell(name, true);
+        else if (type === 'site') showSiteInfoPanel(name);
+    });
+
+    // Export buttons
+    document.getElementById('export-json')?.addEventListener('click', () => exportJSON(false));
+    document.getElementById('export-csv')?.addEventListener('click', () => exportCSV(false));
+    document.getElementById('export-report')?.addEventListener('click', simpleReport);
+    document.getElementById('export-congested')?.addEventListener('click', () => exportCSV(true));
+
+    document.getElementById('btn-theme')?.addEventListener('click', toggleTheme);
+
+    document.getElementById('btn-analytics')?.addEventListener('click', () => toggleModal('analytics-modal', true));
+    document.getElementById('analytics-close')?.addEventListener('click', () => toggleModal('analytics-modal', false));
+
+    document.getElementById('btn-export')?.addEventListener('click', () => toggleModal('export-modal', true));
+    document.getElementById('export-close')?.addEventListener('click', () => toggleModal('export-modal', false));
+
+    document.getElementById('btn-refresh')?.addEventListener('click', () => window.location.reload());
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+        const tag = (e.target instanceof HTMLElement) ? e.target.tagName.toLowerCase() : '';
+        const isTyping = tag === 'input' || tag === 'textarea';
+        if (isTyping) return;
+        switch (e.key.toLowerCase()) {
+            case 'f': e.preventDefault(); document.getElementById('cell-search')?.focus(); break;
+            case 'r': e.preventDefault(); resetView(); break;
+            case 't': e.preventDefault(); toggleTheme(); break;
+            case '2': e.preventDefault(); setViewMode('2d'); break;
+            case '3': e.preventDefault(); setViewMode('3d'); break;
+            case 'a': e.preventDefault(); toggleModal('analytics-modal', true); break;
+            case 'e': e.preventDefault(); toggleModal('export-modal', true); break;
+        }
     });
 }
 
@@ -758,7 +1334,6 @@ async function init() {
     try {
         setLoading(true, 'Loading baseline...');
         
-        // Load baseline (static cell info)
         const [baselineRes, timeIndexRes, statsRes] = await Promise.all([
             fetch('/baseline.json?t=' + Date.now()),
             fetch('/time_index.json?t=' + Date.now()),
@@ -767,31 +1342,32 @@ async function init() {
         
         state.baseline = await baselineRes.json();
         const timeIndexData = await timeIndexRes.json();
-        state.timeIndex = timeIndexData.timestamps;
+        state.timeIndex = [...timeIndexData.timestamps].sort((a, b) => parseTimestamp(a.timestamp) - parseTimestamp(b.timestamp));
         state.globalStats = await statsRes.json();
+        buildSiteHierarchy();
+
+        populateFrequencyFilters(state.globalStats?.frequency_bands || []);
         
         console.log(`Loaded ${Object.keys(state.baseline).length} cells, ${state.timeIndex.length} time slices`);
         
         setLoading(true, 'Loading initial time slice...');
         
-        // Load first time slice
         await loadTimeSlice(0);
         
         setLoading(true, 'Initializing map...');
         
-        // Build initial features
         const { pointFeatures, sectorFeatures, sites } = buildFeaturesForTime(state.currentObservations);
         state.pointFeatures = pointFeatures;
         state.sectorFeatures = sectorFeatures;
+        state.filteredPointFeatures = pointFeatures;
+        state.filteredSectorFeatures = sectorFeatures;
         
-        // Initialize map
         const map = initMap();
         
         map.on('load', () => {
             addMapLayers(map, sites);
             setupMapInteractions(map);
             
-            // Fit bounds
             if (pointFeatures.length > 0) {
                 const bounds = new maplibregl.LngLatBounds();
                 pointFeatures.forEach(f => bounds.extend(f.geometry.coordinates));
@@ -801,7 +1377,6 @@ async function init() {
             setLoading(false);
         });
         
-        // Setup controls
         setupTimeControls();
         setupEventHandlers();
         
@@ -809,7 +1384,6 @@ async function init() {
         console.error('Initialization failed:', err);
         setLoading(false);
     }
-document.addEventListener('DOMContentLoaded', init);
 }
 
 // Start
