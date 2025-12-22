@@ -288,13 +288,6 @@ const pageMarkup = `
                         Action Simulator
                     </h3>
                     <div class="action-field">
-                        <label for="simulation-mode">Simulation Mode</label>
-                        <select id="simulation-mode">
-                            <option value="fast">⚡ Fast (1-3s, ±15%)</option>
-                            <option value="precise">🎯 Precise - ns-3 (10-30s, ±5%)</option>
-                        </select>
-                    </div>
-                    <div class="action-field">
                         <label for="action-select">Select action</label>
                         <select id="action-select">
                             <option value="">-- Choose --</option>

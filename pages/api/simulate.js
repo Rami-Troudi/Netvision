@@ -2,7 +2,7 @@ import { spawn } from 'child_process'
 import path from 'path'
 
 const ALLOWED_ACTIONS = new Set(['tilt', 'power', 'add_carrier', 'redistribute'])
-const ALLOWED_MODES = new Set(['fast', 'precise'])
+const ALLOWED_MODES = new Set(['fast']) // ns-3 removed; fast is the only mode
 
 function isPlainObject(val) {
   return val !== null && typeof val === 'object' && !Array.isArray(val)
@@ -55,8 +55,9 @@ export default async function handler(req, res) {
     action, 
     params = {}, 
     time_entry: timeEntry = {},
-    mode = 'fast'  // 'fast' or 'precise' (ns-3)
   } = req.body || {}
+
+  const mode = 'fast'
 
   if (!cellName || !action) {
     return res.status(400).json({ error: 'Missing cell_name or action' })
@@ -67,10 +68,7 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Deploy new site is handled in the site planning tool, not inline actions' })
   }
 
-  // Redistribute not yet modeled in ns-3 precise mode
-  if (action === 'redistribute' && mode === 'precise') {
-    return res.status(400).json({ error: 'Precise mode is not available for redistribute. Use fast mode.' })
-  }
+  // ns-3 removed: only fast mode is available
 
   const projectRoot = process.cwd()
   const scriptPath = path.join(projectRoot, 'simulation', 'simulator.py')

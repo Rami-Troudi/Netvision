@@ -629,7 +629,6 @@ function displaySimulationResults(result) {
 
 async function runSimulation(cellName, action) {
     const resultEl = document.getElementById('action-result');
-    const modeSelect = document.getElementById('simulation-mode');
     const runBtn = document.getElementById('action-run');
     
     console.log('Running simulation:', { cellName, action });
@@ -641,12 +640,7 @@ async function runSimulation(cellName, action) {
 
     const params = collectActionParams(action);
     const timeEntry = state.timeIndex[state.currentTimeIndex] || {};
-    const mode = modeSelect?.value || 'fast';
-
-    if (action === 'redistribute' && mode === 'precise') {
-        if (resultEl) resultEl.innerHTML = '<div class="action-error">Precise mode is not available for redistribute. Please use Fast.</div>';
-        return;
-    }
+    const mode = 'fast'; // ns-3 removed; always use fast estimator
 
     if (action === 'add_carrier') {
         if (!params.band) {
@@ -666,11 +660,8 @@ async function runSimulation(cellName, action) {
     }
 
     try {
-        // Update UI for loading state
-        const isPrecise = mode === 'precise';
-        const loadingMsg = isPrecise 
-            ? '<div class="action-hint">🎯 Running ns-3 simulation (this may take 10-30 seconds)...</div>' 
-            : '<div class="action-hint">⚡ Simulating...</div>';
+        // Update UI for loading state (fast only)
+        const loadingMsg = '<div class="action-hint">⚡ Simulating...</div>';
         if (resultEl) resultEl.innerHTML = loadingMsg;
         if (runBtn) {
             runBtn.disabled = true;
