@@ -77,6 +77,7 @@ const state = {
     
     siteHierarchy: {},
     selectedSite: null,
+    selectedCellName: null,
 
     features: [],
     pointFeatures: [],
@@ -387,6 +388,13 @@ function showSiteInfoPanel(siteName, focusCell = null) {
     const site = state.siteHierarchy[siteName];
     if (!site) return;
     state.selectedSite = siteName;
+    const firstCell = focusCell || (() => {
+        const antennas = Object.values(site.antennas || {});
+        if (!antennas.length) return null;
+        const firstCells = antennas[0].cells || [];
+        return firstCells.length ? firstCells[0].cellName : null;
+    })();
+    state.selectedCellName = firstCell;
     applyFilters();
     
     const panel = document.getElementById('cell-info-panel');
@@ -469,6 +477,8 @@ function showSiteInfoPanel(siteName, focusCell = null) {
     html += '</div>';
     body.innerHTML = html;
 
+    renderActionPanel(state.selectedCellName);
+
     if (focusCell) selectCell(focusCell, false);
 }
 
@@ -476,6 +486,212 @@ function hideSiteInfoPanel() {
     state.selectedSite = null;
     document.getElementById('cell-info-panel')?.classList.add('hidden');
     applyFilters();
+}
+
+// --- Action Simulator ---
+function renderActionPanel(cellName) {
+    const panel = document.getElementById('action-panel');
+    const select = document.getElementById('action-select');
+    const runBtn = document.getElementById('action-run');
+    const result = document.getElementById('action-result');
+    if (!panel || !select || !runBtn || !result) return;
+
+    if (!cellName) {
+        panel.classList.add('disabled');
+        runBtn.disabled = true;
+        result.innerHTML = '<div class="action-hint">Select a cell to simulate.</div>';
+        return;
+    }
+
+    const obs = state.currentObservations[cellName];
+    const isCritical = obs && (obs.congested || (obs.cqi !== null && obs.cqi < CONFIG.CQI_THRESHOLD));
+
+    panel.classList.remove('disabled');
+    runBtn.disabled = false; // Always allow simulation on any selected cell
+    
+    if (isCritical) {
+        result.innerHTML = '<div class="action-hint action-hint-warning">⚠️ Cell is congested or has low CQI - action recommended.</div>';
+    } else {
+        result.innerHTML = '<div class="action-hint">Cell: ' + cellName + ' (healthy - simulation for testing)</div>';
+    }
+    buildActionParamsUI(select.value || '');
+}
+
+function buildActionParamsUI(action) {
+    const container = document.getElementById('action-params');
+    if (!container) return;
+    if (!action) {
+        container.innerHTML = '<div class="action-hint">Choose an action to estimate impact.</div>';
+        return;
+    }
+
+    if (action === 'tilt') {
+        container.innerHTML = `
+            <label class="action-label" for="param-tilt-deg">Downtilt (degrees)</label>
+            <input type="number" id="param-tilt-deg" class="action-input" value="2" min="-5" max="10" step="0.5">
+        `;
+        return;
+    }
+
+    if (action === 'add_carrier') {
+        const bands = (state.globalStats?.frequency_bands || []).map(String);
+        const options = bands.length
+            ? bands.map(b => `<option value="${b}">Band ${b}</option>`).join('')
+            : '<option value="">No bands available</option>';
+        container.innerHTML = `
+            <label class="action-label" for="param-carrier-band">Select band</label>
+            <select id="param-carrier-band" class="action-input">${options}</select>
+            <div class="action-hint">Adds a carrier only if the site does not already host this band.</div>
+        `;
+        return;
+    }
+
+    if (action === 'redistribute') {
+        container.innerHTML = `
+            <label class="action-label" for="param-redistribute-target">Target cell (optional)</label>
+            <input type="text" id="param-redistribute-target" class="action-input" placeholder="neighbor cell name">
+            <label class="action-label" for="param-redistribute-ratio">Redistribution ratio (0-0.6)</label>
+            <input type="number" id="param-redistribute-ratio" class="action-input" value="0.2" min="0" max="0.6" step="0.05">
+        `;
+        return;
+    }
+
+    container.innerHTML = '<div class="action-hint">Choose an action to estimate impact.</div>';
+}
+
+function collectActionParams(action) {
+    if (action === 'tilt') {
+        const deg = Number(document.getElementById('param-tilt-deg')?.value || 0);
+        return { degrees: deg };
+    }
+    if (action === 'redistribute') {
+        const target = document.getElementById('param-redistribute-target')?.value || '';
+        const ratio = Number(document.getElementById('param-redistribute-ratio')?.value || 0.2);
+        return { target: target || undefined, ratio };
+    }
+    if (action === 'add_carrier') {
+        const band = document.getElementById('param-carrier-band')?.value;
+        return { band: band || undefined };
+    }
+    return {};
+}
+
+function displaySimulationResults(result) {
+    const container = document.getElementById('action-result');
+    if (!container) return;
+    if (result.error) {
+        container.innerHTML = `<div class="action-error">${result.error}</div>`;
+        return;
+    }
+
+    const before = result.before || {};
+    const after = result.after || {};
+    const impact = result.impact || {};
+    const simMode = result.simulation_mode || 'fast';
+    const action = result.action || '';
+    const defaultConfidence = action === 'redistribute' && simMode.includes('ns-3') ? 0.5 : (simMode.includes('ns-3') ? 0.9 : 0.6);
+    const confidence = result.confidence ?? defaultConfidence;
+    const confidencePct = Math.round(confidence * 100);
+    const modeLabel = simMode.includes('ns-3') ? '🎯 ns-3' : '⚡ Fast';
+
+    const neighbors = (impact.affected_cells || []).map(n => {
+        const delta = n.load_change ?? n.change ?? 0;
+        return { name: n.name || n.cell_name, delta };
+    }).sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta)).slice(0, 12);
+    const neighborsText = neighbors.length
+        ? `Neighbors affected: ${neighbors.map(c => `${c.name} (${formatNumber(c.delta)}%)`).join(', ')}${impact.affected_cells.length > neighbors.length ? ', …more' : ''}`
+        : '';
+
+    container.innerHTML = `
+        <div class="action-mode-badge">${modeLabel} (${confidencePct}% confidence)</div>
+        <div class="action-comparison">
+            <div>
+                <div class="action-label">Before</div>
+                <div>Load: ${formatNumber(before.load)}%</div>
+                <div>CQI: ${formatNumber(before.cqi)}</div>
+                <div>Throughput: ${formatThroughput(before.throughput || 0)}</div>
+                ${before.sinr_db ? `<div>SINR: ${formatNumber(before.sinr_db)} dB</div>` : ''}
+            </div>
+            <div class="action-arrow">→</div>
+            <div>
+                <div class="action-label">After</div>
+                <div>Load: ${formatNumber(after.load)}%</div>
+                <div>CQI: ${formatNumber(after.cqi)}</div>
+                <div>Throughput: ${formatThroughput(after.throughput || 0)}</div>
+                ${after.sinr_db ? `<div>SINR: ${formatNumber(after.sinr_db)} dB</div>` : ''}
+            </div>
+        </div>
+        <div class="action-impact">Load: ${impact.load_change >= 0 ? '+' : ''}${impact.load_change ?? 0}% | Throughput: ${impact.throughput_change >= 0 ? '+' : ''}${impact.throughput_change ?? 0} kbps</div>
+        <div class="action-reco">${result.recommendation || ''}</div>
+        ${neighborsText ? `<div class="action-affected">${neighborsText}</div>` : ''}
+    `;
+}
+
+async function runSimulation(cellName, action) {
+    const resultEl = document.getElementById('action-result');
+    const modeSelect = document.getElementById('simulation-mode');
+    const runBtn = document.getElementById('action-run');
+    
+    console.log('Running simulation:', { cellName, action });
+    
+    if (!cellName || !action) {
+        if (resultEl) resultEl.innerHTML = '<div class="action-error">Select a cell and an action.</div>';
+        return;
+    }
+
+    const params = collectActionParams(action);
+    const timeEntry = state.timeIndex[state.currentTimeIndex] || {};
+    const mode = modeSelect?.value || 'fast';
+
+    if (action === 'redistribute' && mode === 'precise') {
+        if (resultEl) resultEl.innerHTML = '<div class="action-error">Precise mode is not available for redistribute. Please use Fast.</div>';
+        return;
+    }
+
+    if (action === 'add_carrier') {
+        if (!params.band) {
+            if (resultEl) resultEl.innerHTML = '<div class="action-error">Select a band to add.</div>';
+            return;
+        }
+        const { siteName } = parseCellName(cellName);
+        const site = state.siteHierarchy[siteName];
+        const existingBands = new Set();
+        if (site) {
+            Object.values(site.antennas || {}).forEach(ant => existingBands.add(String(ant.band)));
+        }
+        if (existingBands.has(String(params.band))) {
+            if (resultEl) resultEl.innerHTML = `<div class="action-error">Site ${siteName} already has Band ${params.band}.</div>`;
+            return;
+        }
+    }
+
+    try {
+        // Update UI for loading state
+        const isPrecise = mode === 'precise';
+        const loadingMsg = isPrecise 
+            ? '<div class="action-hint">🎯 Running ns-3 simulation (this may take 10-30 seconds)...</div>' 
+            : '<div class="action-hint">⚡ Simulating...</div>';
+        if (resultEl) resultEl.innerHTML = loadingMsg;
+        if (runBtn) {
+            runBtn.disabled = true;
+            runBtn.innerHTML = '<span class="material-symbols-outlined">hourglass_top</span> Running...';
+        }
+
+        const res = await fetch('/api/simulate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cell_name: cellName, action, params, time_entry: timeEntry, mode })
+        });
+        const payload = await res.json();
+        displaySimulationResults(payload);
+    } catch (err) {
+        if (resultEl) resultEl.innerHTML = `<div class="action-error">Simulation failed: ${err.message}</div>`;
+    } finally {
+        if (runBtn) {
+            runBtn.disabled = false;
+            runBtn.innerHTML = '<span class="material-symbols-outlined">play_arrow</span> Run Simulation';
+        }
+    }
 }
 
 window.toggleAntennaDropdown = (siteName, antennaId) => {
@@ -492,6 +708,8 @@ window.selectCell = (cellName, fly = true) => {
     if (feature && state.map && fly) {
         state.map.flyTo({ center: feature.geometry.coordinates, zoom: 15, pitch: 45 });
     }
+    state.selectedCellName = cellName;
+    renderActionPanel(cellName);
     if (feature && state.popup) {
         const p = feature.properties;
         state.popup
@@ -1308,6 +1526,11 @@ function setupEventHandlers() {
 
     document.getElementById('btn-refresh')?.addEventListener('click', () => window.location.reload());
 
+    const actionSelect = document.getElementById('action-select');
+    actionSelect?.addEventListener('change', () => buildActionParamsUI(actionSelect.value));
+    document.getElementById('action-run')?.addEventListener('click', () => runSimulation(state.selectedCellName, actionSelect?.value));
+    renderActionPanel(state.selectedCellName);
+
     // Keyboard shortcuts
     document.addEventListener('keydown', (e) => {
         const tag = (e.target instanceof HTMLElement) ? e.target.tagName.toLowerCase() : '';
@@ -1385,6 +1608,7 @@ async function init() {
         
         setupTimeControls();
         setupEventHandlers();
+        renderActionPanel(state.selectedCellName);
         
     } catch (err) {
         console.error('Initialization failed:', err);

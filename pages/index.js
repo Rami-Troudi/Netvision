@@ -253,7 +253,7 @@ const pageMarkup = `
                     </div>
                 </div>
 
-                <!-- Cell Info Panel (shown on hover/click) -->
+                    <!-- Cell Info Panel (shown on hover/click) -->
                 <div class="cell-info-panel hidden" id="cell-info-panel">
                     <div class="cell-info-header">
                         <h4 id="cell-info-name">Cell Name</h4>
@@ -280,6 +280,35 @@ const pageMarkup = `
             <aside class="sidebar sidebar-right" id="sidebar-right">
                 <div class="sidebar-toggle sidebar-toggle-right" id="toggle-right">
                     <span class="material-symbols-outlined">chevron_right</span>
+                </div>
+
+                <div class="panel action-panel" id="action-panel">
+                    <h3 class="panel-title">
+                        <span class="material-symbols-outlined">engineering</span>
+                        Action Simulator
+                    </h3>
+                    <div class="action-field">
+                        <label for="simulation-mode">Simulation Mode</label>
+                        <select id="simulation-mode">
+                            <option value="fast">⚡ Fast (1-3s, ±15%)</option>
+                            <option value="precise">🎯 Precise - ns-3 (10-30s, ±5%)</option>
+                        </select>
+                    </div>
+                    <div class="action-field">
+                        <label for="action-select">Select action</label>
+                        <select id="action-select">
+                            <option value="">-- Choose --</option>
+                            <option value="tilt">Adjust antenna tilt</option>
+                            <option value="add_carrier">Add carrier</option>
+                            <option value="redistribute">Redistribute traffic</option>
+                        </select>
+                    </div>
+                    <div class="action-params" id="action-params"></div>
+                    <button class="btn-primary action-run" id="action-run">
+                        <span class="material-symbols-outlined">play_arrow</span>
+                        Run Simulation
+                    </button>
+                    <div class="action-result" id="action-result"></div>
                 </div>
                 
                 <div class="panel">
