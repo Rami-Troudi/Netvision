@@ -33,12 +33,13 @@ yarn-debug.log*
 yarn-error.log*
 
 # Data files (keep structure but not actual data)
-# data.json
-# stats.json
+# data.json - Uncomment to ignore generated data
+# stats.json - Uncomment to ignore generated stats
 
 # Vite
 .vite/
 *.local
+node_modules/.vite/
 
 # Python virtual environment
 venv/
