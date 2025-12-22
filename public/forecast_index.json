@@ -1,0 +1,2162 @@
+[
+  {
+    "filename": "16-12-2025_00-00.json",
+    "timestamp": "16-12-2025 00:00",
+    "is_forecast": true,
+    "confidence": 0.85,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 54.72,
+      "max_load": 72.23,
+      "avg_cqi": 9.87,
+      "min_cqi": 8.42
+    }
+  },
+  {
+    "filename": "16-12-2025_01-00.json",
+    "timestamp": "16-12-2025 01:00",
+    "is_forecast": true,
+    "confidence": 0.85,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 54.86,
+      "max_load": 73.43,
+      "avg_cqi": 9.88,
+      "min_cqi": 8.23
+    }
+  },
+  {
+    "filename": "16-12-2025_02-00.json",
+    "timestamp": "16-12-2025 02:00",
+    "is_forecast": true,
+    "confidence": 0.85,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 54.84,
+      "max_load": 71.92,
+      "avg_cqi": 9.87,
+      "min_cqi": 8.48
+    }
+  },
+  {
+    "filename": "16-12-2025_03-00.json",
+    "timestamp": "16-12-2025 03:00",
+    "is_forecast": true,
+    "confidence": 0.85,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 54.61,
+      "max_load": 74.87,
+      "avg_cqi": 9.85,
+      "min_cqi": 8.56
+    }
+  },
+  {
+    "filename": "16-12-2025_04-00.json",
+    "timestamp": "16-12-2025 04:00",
+    "is_forecast": true,
+    "confidence": 0.85,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 54.89,
+      "max_load": 73.56,
+      "avg_cqi": 9.86,
+      "min_cqi": 8.54
+    }
+  },
+  {
+    "filename": "16-12-2025_05-00.json",
+    "timestamp": "16-12-2025 05:00",
+    "is_forecast": true,
+    "confidence": 0.85,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 54.95,
+      "max_load": 75.69,
+      "avg_cqi": 9.87,
+      "min_cqi": 8.51
+    }
+  },
+  {
+    "filename": "16-12-2025_06-00.json",
+    "timestamp": "16-12-2025 06:00",
+    "is_forecast": true,
+    "confidence": 0.85,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 54.96,
+      "max_load": 73.23,
+      "avg_cqi": 9.86,
+      "min_cqi": 8.5
+    }
+  },
+  {
+    "filename": "16-12-2025_07-00.json",
+    "timestamp": "16-12-2025 07:00",
+    "is_forecast": true,
+    "confidence": 0.85,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 54.86,
+      "max_load": 74.38,
+      "avg_cqi": 9.85,
+      "min_cqi": 8.64
+    }
+  },
+  {
+    "filename": "16-12-2025_08-00.json",
+    "timestamp": "16-12-2025 08:00",
+    "is_forecast": true,
+    "confidence": 0.85,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 54,
+      "congestion_rate": 3.47,
+      "avg_load": 63.29,
+      "max_load": 80.42,
+      "avg_cqi": 9.6,
+      "min_cqi": 7.9
+    }
+  },
+  {
+    "filename": "16-12-2025_09-00.json",
+    "timestamp": "16-12-2025 09:00",
+    "is_forecast": true,
+    "confidence": 0.85,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 41,
+      "congestion_rate": 2.64,
+      "avg_load": 63.15,
+      "max_load": 82.11,
+      "avg_cqi": 9.61,
+      "min_cqi": 8.26
+    }
+  },
+  {
+    "filename": "16-12-2025_10-00.json",
+    "timestamp": "16-12-2025 10:00",
+    "is_forecast": true,
+    "confidence": 0.85,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 45,
+      "congestion_rate": 2.9,
+      "avg_load": 62.92,
+      "max_load": 82.67,
+      "avg_cqi": 9.61,
+      "min_cqi": 8.24
+    }
+  },
+  {
+    "filename": "16-12-2025_11-00.json",
+    "timestamp": "16-12-2025 11:00",
+    "is_forecast": true,
+    "confidence": 0.85,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 48,
+      "congestion_rate": 3.09,
+      "avg_load": 63.28,
+      "max_load": 83.57,
+      "avg_cqi": 9.59,
+      "min_cqi": 8.13
+    }
+  },
+  {
+    "filename": "16-12-2025_12-00.json",
+    "timestamp": "16-12-2025 12:00",
+    "is_forecast": true,
+    "confidence": 0.85,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 49,
+      "congestion_rate": 3.15,
+      "avg_load": 63.12,
+      "max_load": 81.06,
+      "avg_cqi": 9.61,
+      "min_cqi": 8.11
+    }
+  },
+  {
+    "filename": "16-12-2025_13-00.json",
+    "timestamp": "16-12-2025 13:00",
+    "is_forecast": true,
+    "confidence": 0.85,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 55.06,
+      "max_load": 76.15,
+      "avg_cqi": 9.84,
+      "min_cqi": 8.6
+    }
+  },
+  {
+    "filename": "16-12-2025_14-00.json",
+    "timestamp": "16-12-2025 14:00",
+    "is_forecast": true,
+    "confidence": 0.85,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 54.97,
+      "max_load": 71.92,
+      "avg_cqi": 9.87,
+      "min_cqi": 8.48
+    }
+  },
+  {
+    "filename": "16-12-2025_15-00.json",
+    "timestamp": "16-12-2025 15:00",
+    "is_forecast": true,
+    "confidence": 0.85,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 55.03,
+      "max_load": 72.96,
+      "avg_cqi": 9.86,
+      "min_cqi": 8.48
+    }
+  },
+  {
+    "filename": "16-12-2025_16-00.json",
+    "timestamp": "16-12-2025 16:00",
+    "is_forecast": true,
+    "confidence": 0.85,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 55.05,
+      "max_load": 75.04,
+      "avg_cqi": 9.86,
+      "min_cqi": 8.38
+    }
+  },
+  {
+    "filename": "16-12-2025_17-00.json",
+    "timestamp": "16-12-2025 17:00",
+    "is_forecast": true,
+    "confidence": 0.85,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 54.9,
+      "max_load": 73.63,
+      "avg_cqi": 9.87,
+      "min_cqi": 8.35
+    }
+  },
+  {
+    "filename": "16-12-2025_18-00.json",
+    "timestamp": "16-12-2025 18:00",
+    "is_forecast": true,
+    "confidence": 0.85,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 51,
+      "congestion_rate": 3.28,
+      "avg_load": 63.26,
+      "max_load": 82.99,
+      "avg_cqi": 9.6,
+      "min_cqi": 8.31
+    }
+  },
+  {
+    "filename": "16-12-2025_19-00.json",
+    "timestamp": "16-12-2025 19:00",
+    "is_forecast": true,
+    "confidence": 0.85,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 48,
+      "congestion_rate": 3.09,
+      "avg_load": 63.31,
+      "max_load": 82.47,
+      "avg_cqi": 9.6,
+      "min_cqi": 7.98
+    }
+  },
+  {
+    "filename": "16-12-2025_20-00.json",
+    "timestamp": "16-12-2025 20:00",
+    "is_forecast": true,
+    "confidence": 0.85,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 56,
+      "congestion_rate": 3.6,
+      "avg_load": 63.11,
+      "max_load": 84.0,
+      "avg_cqi": 9.61,
+      "min_cqi": 8.09
+    }
+  },
+  {
+    "filename": "16-12-2025_21-00.json",
+    "timestamp": "16-12-2025 21:00",
+    "is_forecast": true,
+    "confidence": 0.85,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 57,
+      "congestion_rate": 3.67,
+      "avg_load": 63.32,
+      "max_load": 81.23,
+      "avg_cqi": 9.59,
+      "min_cqi": 8.16
+    }
+  },
+  {
+    "filename": "16-12-2025_22-00.json",
+    "timestamp": "16-12-2025 22:00",
+    "is_forecast": true,
+    "confidence": 0.85,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 55.16,
+      "max_load": 74.35,
+      "avg_cqi": 9.84,
+      "min_cqi": 8.49
+    }
+  },
+  {
+    "filename": "16-12-2025_23-00.json",
+    "timestamp": "16-12-2025 23:00",
+    "is_forecast": true,
+    "confidence": 0.85,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 54.96,
+      "max_load": 73.75,
+      "avg_cqi": 9.87,
+      "min_cqi": 8.24
+    }
+  },
+  {
+    "filename": "17-12-2025_00-00.json",
+    "timestamp": "17-12-2025 00:00",
+    "is_forecast": true,
+    "confidence": 0.8,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 56.11,
+      "max_load": 75.17,
+      "avg_cqi": 9.82,
+      "min_cqi": 8.28
+    }
+  },
+  {
+    "filename": "17-12-2025_01-00.json",
+    "timestamp": "17-12-2025 01:00",
+    "is_forecast": true,
+    "confidence": 0.8,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 56.06,
+      "max_load": 73.08,
+      "avg_cqi": 9.81,
+      "min_cqi": 8.49
+    }
+  },
+  {
+    "filename": "17-12-2025_02-00.json",
+    "timestamp": "17-12-2025 02:00",
+    "is_forecast": true,
+    "confidence": 0.8,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 56.1,
+      "max_load": 73.18,
+      "avg_cqi": 9.83,
+      "min_cqi": 8.18
+    }
+  },
+  {
+    "filename": "17-12-2025_03-00.json",
+    "timestamp": "17-12-2025 03:00",
+    "is_forecast": true,
+    "confidence": 0.8,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 56.02,
+      "max_load": 72.6,
+      "avg_cqi": 9.81,
+      "min_cqi": 8.57
+    }
+  },
+  {
+    "filename": "17-12-2025_04-00.json",
+    "timestamp": "17-12-2025 04:00",
+    "is_forecast": true,
+    "confidence": 0.8,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 56.22,
+      "max_load": 71.56,
+      "avg_cqi": 9.82,
+      "min_cqi": 8.6
+    }
+  },
+  {
+    "filename": "17-12-2025_05-00.json",
+    "timestamp": "17-12-2025 05:00",
+    "is_forecast": true,
+    "confidence": 0.8,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 55.91,
+      "max_load": 72.22,
+      "avg_cqi": 9.81,
+      "min_cqi": 8.1
+    }
+  },
+  {
+    "filename": "17-12-2025_06-00.json",
+    "timestamp": "17-12-2025 06:00",
+    "is_forecast": true,
+    "confidence": 0.8,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 55.81,
+      "max_load": 73.93,
+      "avg_cqi": 9.82,
+      "min_cqi": 8.36
+    }
+  },
+  {
+    "filename": "17-12-2025_07-00.json",
+    "timestamp": "17-12-2025 07:00",
+    "is_forecast": true,
+    "confidence": 0.8,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 56.1,
+      "max_load": 71.85,
+      "avg_cqi": 9.82,
+      "min_cqi": 8.43
+    }
+  },
+  {
+    "filename": "17-12-2025_08-00.json",
+    "timestamp": "17-12-2025 08:00",
+    "is_forecast": true,
+    "confidence": 0.8,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 88,
+      "congestion_rate": 5.66,
+      "avg_load": 64.46,
+      "max_load": 82.45,
+      "avg_cqi": 9.56,
+      "min_cqi": 8.15
+    }
+  },
+  {
+    "filename": "17-12-2025_09-00.json",
+    "timestamp": "17-12-2025 09:00",
+    "is_forecast": true,
+    "confidence": 0.8,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 68,
+      "congestion_rate": 4.38,
+      "avg_load": 64.31,
+      "max_load": 83.03,
+      "avg_cqi": 9.58,
+      "min_cqi": 8.38
+    }
+  },
+  {
+    "filename": "17-12-2025_10-00.json",
+    "timestamp": "17-12-2025 10:00",
+    "is_forecast": true,
+    "confidence": 0.8,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 89,
+      "congestion_rate": 5.73,
+      "avg_load": 64.66,
+      "max_load": 79.9,
+      "avg_cqi": 9.55,
+      "min_cqi": 7.75
+    }
+  },
+  {
+    "filename": "17-12-2025_11-00.json",
+    "timestamp": "17-12-2025 11:00",
+    "is_forecast": true,
+    "confidence": 0.8,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 89,
+      "congestion_rate": 5.73,
+      "avg_load": 64.28,
+      "max_load": 79.93,
+      "avg_cqi": 9.56,
+      "min_cqi": 7.88
+    }
+  },
+  {
+    "filename": "17-12-2025_12-00.json",
+    "timestamp": "17-12-2025 12:00",
+    "is_forecast": true,
+    "confidence": 0.8,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 85,
+      "congestion_rate": 5.47,
+      "avg_load": 64.31,
+      "max_load": 82.1,
+      "avg_cqi": 9.57,
+      "min_cqi": 8.14
+    }
+  },
+  {
+    "filename": "17-12-2025_13-00.json",
+    "timestamp": "17-12-2025 13:00",
+    "is_forecast": true,
+    "confidence": 0.8,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 55.99,
+      "max_load": 73.37,
+      "avg_cqi": 9.82,
+      "min_cqi": 8.44
+    }
+  },
+  {
+    "filename": "17-12-2025_14-00.json",
+    "timestamp": "17-12-2025 14:00",
+    "is_forecast": true,
+    "confidence": 0.8,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 56.0,
+      "max_load": 75.66,
+      "avg_cqi": 9.83,
+      "min_cqi": 8.6
+    }
+  },
+  {
+    "filename": "17-12-2025_15-00.json",
+    "timestamp": "17-12-2025 15:00",
+    "is_forecast": true,
+    "confidence": 0.8,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 56.07,
+      "max_load": 75.98,
+      "avg_cqi": 9.83,
+      "min_cqi": 8.5
+    }
+  },
+  {
+    "filename": "17-12-2025_16-00.json",
+    "timestamp": "17-12-2025 16:00",
+    "is_forecast": true,
+    "confidence": 0.8,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 56.14,
+      "max_load": 77.05,
+      "avg_cqi": 9.83,
+      "min_cqi": 8.46
+    }
+  },
+  {
+    "filename": "17-12-2025_17-00.json",
+    "timestamp": "17-12-2025 17:00",
+    "is_forecast": true,
+    "confidence": 0.8,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 55.99,
+      "max_load": 70.44,
+      "avg_cqi": 9.82,
+      "min_cqi": 8.54
+    }
+  },
+  {
+    "filename": "17-12-2025_18-00.json",
+    "timestamp": "17-12-2025 18:00",
+    "is_forecast": true,
+    "confidence": 0.8,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 76,
+      "congestion_rate": 4.89,
+      "avg_load": 64.62,
+      "max_load": 85.25,
+      "avg_cqi": 9.57,
+      "min_cqi": 8.24
+    }
+  },
+  {
+    "filename": "17-12-2025_19-00.json",
+    "timestamp": "17-12-2025 19:00",
+    "is_forecast": true,
+    "confidence": 0.8,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 87,
+      "congestion_rate": 5.6,
+      "avg_load": 64.46,
+      "max_load": 81.2,
+      "avg_cqi": 9.56,
+      "min_cqi": 8.03
+    }
+  },
+  {
+    "filename": "17-12-2025_20-00.json",
+    "timestamp": "17-12-2025 20:00",
+    "is_forecast": true,
+    "confidence": 0.8,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 85,
+      "congestion_rate": 5.47,
+      "avg_load": 64.48,
+      "max_load": 85.65,
+      "avg_cqi": 9.56,
+      "min_cqi": 8.28
+    }
+  },
+  {
+    "filename": "17-12-2025_21-00.json",
+    "timestamp": "17-12-2025 21:00",
+    "is_forecast": true,
+    "confidence": 0.8,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 84,
+      "congestion_rate": 5.41,
+      "avg_load": 64.51,
+      "max_load": 89.28,
+      "avg_cqi": 9.56,
+      "min_cqi": 7.99
+    }
+  },
+  {
+    "filename": "17-12-2025_22-00.json",
+    "timestamp": "17-12-2025 22:00",
+    "is_forecast": true,
+    "confidence": 0.8,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 56.09,
+      "max_load": 73.13,
+      "avg_cqi": 9.82,
+      "min_cqi": 8.26
+    }
+  },
+  {
+    "filename": "17-12-2025_23-00.json",
+    "timestamp": "17-12-2025 23:00",
+    "is_forecast": true,
+    "confidence": 0.8,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 55.82,
+      "max_load": 75.05,
+      "avg_cqi": 9.83,
+      "min_cqi": 8.36
+    }
+  },
+  {
+    "filename": "18-12-2025_00-00.json",
+    "timestamp": "18-12-2025 00:00",
+    "is_forecast": true,
+    "confidence": 0.75,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 1,
+      "congestion_rate": 0.06,
+      "avg_load": 57.02,
+      "max_load": 73.03,
+      "avg_cqi": 9.79,
+      "min_cqi": 8.57
+    }
+  },
+  {
+    "filename": "18-12-2025_01-00.json",
+    "timestamp": "18-12-2025 01:00",
+    "is_forecast": true,
+    "confidence": 0.75,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 57.1,
+      "max_load": 74.67,
+      "avg_cqi": 9.8,
+      "min_cqi": 8.31
+    }
+  },
+  {
+    "filename": "18-12-2025_02-00.json",
+    "timestamp": "18-12-2025 02:00",
+    "is_forecast": true,
+    "confidence": 0.75,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 1,
+      "congestion_rate": 0.06,
+      "avg_load": 57.22,
+      "max_load": 74.6,
+      "avg_cqi": 9.77,
+      "min_cqi": 8.25
+    }
+  },
+  {
+    "filename": "18-12-2025_03-00.json",
+    "timestamp": "18-12-2025 03:00",
+    "is_forecast": true,
+    "confidence": 0.75,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 57.14,
+      "max_load": 74.21,
+      "avg_cqi": 9.79,
+      "min_cqi": 8.2
+    }
+  },
+  {
+    "filename": "18-12-2025_04-00.json",
+    "timestamp": "18-12-2025 04:00",
+    "is_forecast": true,
+    "confidence": 0.75,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 1,
+      "congestion_rate": 0.06,
+      "avg_load": 57.16,
+      "max_load": 75.35,
+      "avg_cqi": 9.78,
+      "min_cqi": 8.28
+    }
+  },
+  {
+    "filename": "18-12-2025_05-00.json",
+    "timestamp": "18-12-2025 05:00",
+    "is_forecast": true,
+    "confidence": 0.75,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 57.08,
+      "max_load": 73.21,
+      "avg_cqi": 9.78,
+      "min_cqi": 8.39
+    }
+  },
+  {
+    "filename": "18-12-2025_06-00.json",
+    "timestamp": "18-12-2025 06:00",
+    "is_forecast": true,
+    "confidence": 0.75,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 1,
+      "congestion_rate": 0.06,
+      "avg_load": 57.23,
+      "max_load": 74.83,
+      "avg_cqi": 9.78,
+      "min_cqi": 8.16
+    }
+  },
+  {
+    "filename": "18-12-2025_07-00.json",
+    "timestamp": "18-12-2025 07:00",
+    "is_forecast": true,
+    "confidence": 0.75,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 2,
+      "congestion_rate": 0.13,
+      "avg_load": 57.08,
+      "max_load": 73.48,
+      "avg_cqi": 9.78,
+      "min_cqi": 8.15
+    }
+  },
+  {
+    "filename": "18-12-2025_08-00.json",
+    "timestamp": "18-12-2025 08:00",
+    "is_forecast": true,
+    "confidence": 0.75,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 132,
+      "congestion_rate": 8.49,
+      "avg_load": 65.75,
+      "max_load": 86.57,
+      "avg_cqi": 9.54,
+      "min_cqi": 8.13
+    }
+  },
+  {
+    "filename": "18-12-2025_09-00.json",
+    "timestamp": "18-12-2025 09:00",
+    "is_forecast": true,
+    "confidence": 0.75,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 133,
+      "congestion_rate": 8.56,
+      "avg_load": 65.66,
+      "max_load": 85.93,
+      "avg_cqi": 9.55,
+      "min_cqi": 8.04
+    }
+  },
+  {
+    "filename": "18-12-2025_10-00.json",
+    "timestamp": "18-12-2025 10:00",
+    "is_forecast": true,
+    "confidence": 0.75,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 132,
+      "congestion_rate": 8.49,
+      "avg_load": 65.72,
+      "max_load": 86.69,
+      "avg_cqi": 9.54,
+      "min_cqi": 8.22
+    }
+  },
+  {
+    "filename": "18-12-2025_11-00.json",
+    "timestamp": "18-12-2025 11:00",
+    "is_forecast": true,
+    "confidence": 0.75,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 129,
+      "congestion_rate": 8.3,
+      "avg_load": 65.71,
+      "max_load": 86.86,
+      "avg_cqi": 9.52,
+      "min_cqi": 7.96
+    }
+  },
+  {
+    "filename": "18-12-2025_12-00.json",
+    "timestamp": "18-12-2025 12:00",
+    "is_forecast": true,
+    "confidence": 0.75,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 137,
+      "congestion_rate": 8.82,
+      "avg_load": 66.09,
+      "max_load": 82.17,
+      "avg_cqi": 9.51,
+      "min_cqi": 8.33
+    }
+  },
+  {
+    "filename": "18-12-2025_13-00.json",
+    "timestamp": "18-12-2025 13:00",
+    "is_forecast": true,
+    "confidence": 0.75,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 56.98,
+      "max_load": 72.39,
+      "avg_cqi": 9.78,
+      "min_cqi": 8.15
+    }
+  },
+  {
+    "filename": "18-12-2025_14-00.json",
+    "timestamp": "18-12-2025 14:00",
+    "is_forecast": true,
+    "confidence": 0.75,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 56.89,
+      "max_load": 71.39,
+      "avg_cqi": 9.8,
+      "min_cqi": 8.36
+    }
+  },
+  {
+    "filename": "18-12-2025_15-00.json",
+    "timestamp": "18-12-2025 15:00",
+    "is_forecast": true,
+    "confidence": 0.75,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 57.03,
+      "max_load": 74.32,
+      "avg_cqi": 9.78,
+      "min_cqi": 8.47
+    }
+  },
+  {
+    "filename": "18-12-2025_16-00.json",
+    "timestamp": "18-12-2025 16:00",
+    "is_forecast": true,
+    "confidence": 0.75,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 57.17,
+      "max_load": 76.62,
+      "avg_cqi": 9.78,
+      "min_cqi": 8.43
+    }
+  },
+  {
+    "filename": "18-12-2025_17-00.json",
+    "timestamp": "18-12-2025 17:00",
+    "is_forecast": true,
+    "confidence": 0.75,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 57.28,
+      "max_load": 76.84,
+      "avg_cqi": 9.77,
+      "min_cqi": 8.24
+    }
+  },
+  {
+    "filename": "18-12-2025_18-00.json",
+    "timestamp": "18-12-2025 18:00",
+    "is_forecast": true,
+    "confidence": 0.75,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 123,
+      "congestion_rate": 7.92,
+      "avg_load": 65.69,
+      "max_load": 82.5,
+      "avg_cqi": 9.52,
+      "min_cqi": 7.79
+    }
+  },
+  {
+    "filename": "18-12-2025_19-00.json",
+    "timestamp": "18-12-2025 19:00",
+    "is_forecast": true,
+    "confidence": 0.75,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 128,
+      "congestion_rate": 8.24,
+      "avg_load": 65.66,
+      "max_load": 84.55,
+      "avg_cqi": 9.53,
+      "min_cqi": 8.26
+    }
+  },
+  {
+    "filename": "18-12-2025_20-00.json",
+    "timestamp": "18-12-2025 20:00",
+    "is_forecast": true,
+    "confidence": 0.75,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 149,
+      "congestion_rate": 9.59,
+      "avg_load": 65.66,
+      "max_load": 82.24,
+      "avg_cqi": 9.54,
+      "min_cqi": 8.03
+    }
+  },
+  {
+    "filename": "18-12-2025_21-00.json",
+    "timestamp": "18-12-2025 21:00",
+    "is_forecast": true,
+    "confidence": 0.75,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 122,
+      "congestion_rate": 7.85,
+      "avg_load": 65.6,
+      "max_load": 84.12,
+      "avg_cqi": 9.56,
+      "min_cqi": 7.94
+    }
+  },
+  {
+    "filename": "18-12-2025_22-00.json",
+    "timestamp": "18-12-2025 22:00",
+    "is_forecast": true,
+    "confidence": 0.75,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 1,
+      "congestion_rate": 0.06,
+      "avg_load": 57.32,
+      "max_load": 77.42,
+      "avg_cqi": 9.78,
+      "min_cqi": 8.32
+    }
+  },
+  {
+    "filename": "18-12-2025_23-00.json",
+    "timestamp": "18-12-2025 23:00",
+    "is_forecast": true,
+    "confidence": 0.75,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 57.08,
+      "max_load": 75.81,
+      "avg_cqi": 9.81,
+      "min_cqi": 8.4
+    }
+  },
+  {
+    "filename": "19-12-2025_00-00.json",
+    "timestamp": "19-12-2025 00:00",
+    "is_forecast": true,
+    "confidence": 0.7,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 2,
+      "congestion_rate": 0.13,
+      "avg_load": 58.33,
+      "max_load": 74.8,
+      "avg_cqi": 9.76,
+      "min_cqi": 8.36
+    }
+  },
+  {
+    "filename": "19-12-2025_01-00.json",
+    "timestamp": "19-12-2025 01:00",
+    "is_forecast": true,
+    "confidence": 0.7,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 2,
+      "congestion_rate": 0.13,
+      "avg_load": 58.48,
+      "max_load": 75.29,
+      "avg_cqi": 9.75,
+      "min_cqi": 8.46
+    }
+  },
+  {
+    "filename": "19-12-2025_02-00.json",
+    "timestamp": "19-12-2025 02:00",
+    "is_forecast": true,
+    "confidence": 0.7,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 2,
+      "congestion_rate": 0.13,
+      "avg_load": 58.21,
+      "max_load": 76.04,
+      "avg_cqi": 9.75,
+      "min_cqi": 8.07
+    }
+  },
+  {
+    "filename": "19-12-2025_03-00.json",
+    "timestamp": "19-12-2025 03:00",
+    "is_forecast": true,
+    "confidence": 0.7,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 58.18,
+      "max_load": 75.94,
+      "avg_cqi": 9.76,
+      "min_cqi": 8.42
+    }
+  },
+  {
+    "filename": "19-12-2025_04-00.json",
+    "timestamp": "19-12-2025 04:00",
+    "is_forecast": true,
+    "confidence": 0.7,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 1,
+      "congestion_rate": 0.06,
+      "avg_load": 58.17,
+      "max_load": 75.36,
+      "avg_cqi": 9.76,
+      "min_cqi": 8.42
+    }
+  },
+  {
+    "filename": "19-12-2025_05-00.json",
+    "timestamp": "19-12-2025 05:00",
+    "is_forecast": true,
+    "confidence": 0.7,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 1,
+      "congestion_rate": 0.06,
+      "avg_load": 58.25,
+      "max_load": 73.66,
+      "avg_cqi": 9.74,
+      "min_cqi": 8.46
+    }
+  },
+  {
+    "filename": "19-12-2025_06-00.json",
+    "timestamp": "19-12-2025 06:00",
+    "is_forecast": true,
+    "confidence": 0.7,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 3,
+      "congestion_rate": 0.19,
+      "avg_load": 58.24,
+      "max_load": 75.98,
+      "avg_cqi": 9.77,
+      "min_cqi": 8.17
+    }
+  },
+  {
+    "filename": "19-12-2025_07-00.json",
+    "timestamp": "19-12-2025 07:00",
+    "is_forecast": true,
+    "confidence": 0.7,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 3,
+      "congestion_rate": 0.19,
+      "avg_load": 58.27,
+      "max_load": 75.31,
+      "avg_cqi": 9.75,
+      "min_cqi": 8.36
+    }
+  },
+  {
+    "filename": "19-12-2025_08-00.json",
+    "timestamp": "19-12-2025 08:00",
+    "is_forecast": true,
+    "confidence": 0.7,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 198,
+      "congestion_rate": 12.74,
+      "avg_load": 66.94,
+      "max_load": 86.27,
+      "avg_cqi": 9.49,
+      "min_cqi": 8.11
+    }
+  },
+  {
+    "filename": "19-12-2025_09-00.json",
+    "timestamp": "19-12-2025 09:00",
+    "is_forecast": true,
+    "confidence": 0.7,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 185,
+      "congestion_rate": 11.9,
+      "avg_load": 66.81,
+      "max_load": 86.11,
+      "avg_cqi": 9.49,
+      "min_cqi": 7.98
+    }
+  },
+  {
+    "filename": "19-12-2025_10-00.json",
+    "timestamp": "19-12-2025 10:00",
+    "is_forecast": true,
+    "confidence": 0.7,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 177,
+      "congestion_rate": 11.39,
+      "avg_load": 67.15,
+      "max_load": 87.27,
+      "avg_cqi": 9.5,
+      "min_cqi": 7.94
+    }
+  },
+  {
+    "filename": "19-12-2025_11-00.json",
+    "timestamp": "19-12-2025 11:00",
+    "is_forecast": true,
+    "confidence": 0.7,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 192,
+      "congestion_rate": 12.36,
+      "avg_load": 67.05,
+      "max_load": 87.66,
+      "avg_cqi": 9.48,
+      "min_cqi": 8.07
+    }
+  },
+  {
+    "filename": "19-12-2025_12-00.json",
+    "timestamp": "19-12-2025 12:00",
+    "is_forecast": true,
+    "confidence": 0.7,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 184,
+      "congestion_rate": 11.84,
+      "avg_load": 66.93,
+      "max_load": 85.29,
+      "avg_cqi": 9.48,
+      "min_cqi": 7.82
+    }
+  },
+  {
+    "filename": "19-12-2025_13-00.json",
+    "timestamp": "19-12-2025 13:00",
+    "is_forecast": true,
+    "confidence": 0.7,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 58.1,
+      "max_load": 75.82,
+      "avg_cqi": 9.74,
+      "min_cqi": 8.29
+    }
+  },
+  {
+    "filename": "19-12-2025_14-00.json",
+    "timestamp": "19-12-2025 14:00",
+    "is_forecast": true,
+    "confidence": 0.7,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 1,
+      "congestion_rate": 0.06,
+      "avg_load": 58.07,
+      "max_load": 75.53,
+      "avg_cqi": 9.74,
+      "min_cqi": 8.19
+    }
+  },
+  {
+    "filename": "19-12-2025_15-00.json",
+    "timestamp": "19-12-2025 15:00",
+    "is_forecast": true,
+    "confidence": 0.7,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 3,
+      "congestion_rate": 0.19,
+      "avg_load": 58.1,
+      "max_load": 74.27,
+      "avg_cqi": 9.76,
+      "min_cqi": 8.26
+    }
+  },
+  {
+    "filename": "19-12-2025_16-00.json",
+    "timestamp": "19-12-2025 16:00",
+    "is_forecast": true,
+    "confidence": 0.7,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 58.26,
+      "max_load": 75.13,
+      "avg_cqi": 9.76,
+      "min_cqi": 8.37
+    }
+  },
+  {
+    "filename": "19-12-2025_17-00.json",
+    "timestamp": "19-12-2025 17:00",
+    "is_forecast": true,
+    "confidence": 0.7,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 2,
+      "congestion_rate": 0.13,
+      "avg_load": 58.23,
+      "max_load": 76.22,
+      "avg_cqi": 9.76,
+      "min_cqi": 8.45
+    }
+  },
+  {
+    "filename": "19-12-2025_18-00.json",
+    "timestamp": "19-12-2025 18:00",
+    "is_forecast": true,
+    "confidence": 0.7,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 182,
+      "congestion_rate": 11.71,
+      "avg_load": 66.93,
+      "max_load": 83.93,
+      "avg_cqi": 9.49,
+      "min_cqi": 7.94
+    }
+  },
+  {
+    "filename": "19-12-2025_19-00.json",
+    "timestamp": "19-12-2025 19:00",
+    "is_forecast": true,
+    "confidence": 0.7,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 169,
+      "congestion_rate": 10.88,
+      "avg_load": 66.76,
+      "max_load": 87.12,
+      "avg_cqi": 9.5,
+      "min_cqi": 7.94
+    }
+  },
+  {
+    "filename": "19-12-2025_20-00.json",
+    "timestamp": "19-12-2025 20:00",
+    "is_forecast": true,
+    "confidence": 0.7,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 187,
+      "congestion_rate": 12.03,
+      "avg_load": 66.92,
+      "max_load": 86.69,
+      "avg_cqi": 9.47,
+      "min_cqi": 7.95
+    }
+  },
+  {
+    "filename": "19-12-2025_21-00.json",
+    "timestamp": "19-12-2025 21:00",
+    "is_forecast": true,
+    "confidence": 0.7,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 202,
+      "congestion_rate": 13.0,
+      "avg_load": 66.96,
+      "max_load": 85.69,
+      "avg_cqi": 9.48,
+      "min_cqi": 8.01
+    }
+  },
+  {
+    "filename": "19-12-2025_22-00.json",
+    "timestamp": "19-12-2025 22:00",
+    "is_forecast": true,
+    "confidence": 0.7,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 58.26,
+      "max_load": 75.71,
+      "avg_cqi": 9.77,
+      "min_cqi": 8.22
+    }
+  },
+  {
+    "filename": "19-12-2025_23-00.json",
+    "timestamp": "19-12-2025 23:00",
+    "is_forecast": true,
+    "confidence": 0.7,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 1,
+      "congestion_rate": 0.06,
+      "avg_load": 58.06,
+      "max_load": 77.0,
+      "avg_cqi": 9.77,
+      "min_cqi": 8.3
+    }
+  },
+  {
+    "filename": "20-12-2025_00-00.json",
+    "timestamp": "20-12-2025 00:00",
+    "is_forecast": true,
+    "confidence": 0.65,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 50.44,
+      "max_load": 68.06,
+      "avg_cqi": 9.99,
+      "min_cqi": 8.74
+    }
+  },
+  {
+    "filename": "20-12-2025_01-00.json",
+    "timestamp": "20-12-2025 01:00",
+    "is_forecast": true,
+    "confidence": 0.65,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 50.32,
+      "max_load": 67.05,
+      "avg_cqi": 10.0,
+      "min_cqi": 8.49
+    }
+  },
+  {
+    "filename": "20-12-2025_02-00.json",
+    "timestamp": "20-12-2025 02:00",
+    "is_forecast": true,
+    "confidence": 0.65,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 50.48,
+      "max_load": 68.55,
+      "avg_cqi": 9.99,
+      "min_cqi": 8.41
+    }
+  },
+  {
+    "filename": "20-12-2025_03-00.json",
+    "timestamp": "20-12-2025 03:00",
+    "is_forecast": true,
+    "confidence": 0.65,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 50.44,
+      "max_load": 68.93,
+      "avg_cqi": 9.99,
+      "min_cqi": 8.73
+    }
+  },
+  {
+    "filename": "20-12-2025_04-00.json",
+    "timestamp": "20-12-2025 04:00",
+    "is_forecast": true,
+    "confidence": 0.65,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 50.72,
+      "max_load": 69.35,
+      "avg_cqi": 9.97,
+      "min_cqi": 8.29
+    }
+  },
+  {
+    "filename": "20-12-2025_05-00.json",
+    "timestamp": "20-12-2025 05:00",
+    "is_forecast": true,
+    "confidence": 0.65,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 50.48,
+      "max_load": 67.81,
+      "avg_cqi": 10.0,
+      "min_cqi": 8.52
+    }
+  },
+  {
+    "filename": "20-12-2025_06-00.json",
+    "timestamp": "20-12-2025 06:00",
+    "is_forecast": true,
+    "confidence": 0.65,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 50.39,
+      "max_load": 70.09,
+      "avg_cqi": 9.98,
+      "min_cqi": 8.63
+    }
+  },
+  {
+    "filename": "20-12-2025_07-00.json",
+    "timestamp": "20-12-2025 07:00",
+    "is_forecast": true,
+    "confidence": 0.65,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 50.41,
+      "max_load": 68.66,
+      "avg_cqi": 10.0,
+      "min_cqi": 8.79
+    }
+  },
+  {
+    "filename": "20-12-2025_08-00.json",
+    "timestamp": "20-12-2025 08:00",
+    "is_forecast": true,
+    "confidence": 0.65,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 2,
+      "congestion_rate": 0.13,
+      "avg_load": 57.87,
+      "max_load": 79.69,
+      "avg_cqi": 9.76,
+      "min_cqi": 8.4
+    }
+  },
+  {
+    "filename": "20-12-2025_09-00.json",
+    "timestamp": "20-12-2025 09:00",
+    "is_forecast": true,
+    "confidence": 0.65,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 4,
+      "congestion_rate": 0.26,
+      "avg_load": 58.01,
+      "max_load": 74.83,
+      "avg_cqi": 9.77,
+      "min_cqi": 7.36
+    }
+  },
+  {
+    "filename": "20-12-2025_10-00.json",
+    "timestamp": "20-12-2025 10:00",
+    "is_forecast": true,
+    "confidence": 0.65,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 57.87,
+      "max_load": 74.96,
+      "avg_cqi": 9.77,
+      "min_cqi": 8.27
+    }
+  },
+  {
+    "filename": "20-12-2025_11-00.json",
+    "timestamp": "20-12-2025 11:00",
+    "is_forecast": true,
+    "confidence": 0.65,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 1,
+      "congestion_rate": 0.06,
+      "avg_load": 57.97,
+      "max_load": 75.57,
+      "avg_cqi": 9.75,
+      "min_cqi": 8.27
+    }
+  },
+  {
+    "filename": "20-12-2025_12-00.json",
+    "timestamp": "20-12-2025 12:00",
+    "is_forecast": true,
+    "confidence": 0.65,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 2,
+      "congestion_rate": 0.13,
+      "avg_load": 58.06,
+      "max_load": 75.28,
+      "avg_cqi": 9.76,
+      "min_cqi": 8.5
+    }
+  },
+  {
+    "filename": "20-12-2025_13-00.json",
+    "timestamp": "20-12-2025 13:00",
+    "is_forecast": true,
+    "confidence": 0.65,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 50.26,
+      "max_load": 65.23,
+      "avg_cqi": 9.98,
+      "min_cqi": 8.59
+    }
+  },
+  {
+    "filename": "20-12-2025_14-00.json",
+    "timestamp": "20-12-2025 14:00",
+    "is_forecast": true,
+    "confidence": 0.65,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 50.51,
+      "max_load": 69.52,
+      "avg_cqi": 9.97,
+      "min_cqi": 8.45
+    }
+  },
+  {
+    "filename": "20-12-2025_15-00.json",
+    "timestamp": "20-12-2025 15:00",
+    "is_forecast": true,
+    "confidence": 0.65,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 50.47,
+      "max_load": 67.08,
+      "avg_cqi": 9.98,
+      "min_cqi": 8.4
+    }
+  },
+  {
+    "filename": "20-12-2025_16-00.json",
+    "timestamp": "20-12-2025 16:00",
+    "is_forecast": true,
+    "confidence": 0.65,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 50.4,
+      "max_load": 67.56,
+      "avg_cqi": 9.99,
+      "min_cqi": 8.84
+    }
+  },
+  {
+    "filename": "20-12-2025_17-00.json",
+    "timestamp": "20-12-2025 17:00",
+    "is_forecast": true,
+    "confidence": 0.65,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 50.35,
+      "max_load": 66.27,
+      "avg_cqi": 9.99,
+      "min_cqi": 8.45
+    }
+  },
+  {
+    "filename": "20-12-2025_18-00.json",
+    "timestamp": "20-12-2025 18:00",
+    "is_forecast": true,
+    "confidence": 0.65,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 57.94,
+      "max_load": 78.57,
+      "avg_cqi": 9.76,
+      "min_cqi": 8.11
+    }
+  },
+  {
+    "filename": "20-12-2025_19-00.json",
+    "timestamp": "20-12-2025 19:00",
+    "is_forecast": true,
+    "confidence": 0.65,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 1,
+      "congestion_rate": 0.06,
+      "avg_load": 57.91,
+      "max_load": 75.66,
+      "avg_cqi": 9.77,
+      "min_cqi": 8.31
+    }
+  },
+  {
+    "filename": "20-12-2025_20-00.json",
+    "timestamp": "20-12-2025 20:00",
+    "is_forecast": true,
+    "confidence": 0.65,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 57.85,
+      "max_load": 75.73,
+      "avg_cqi": 9.76,
+      "min_cqi": 8.44
+    }
+  },
+  {
+    "filename": "20-12-2025_21-00.json",
+    "timestamp": "20-12-2025 21:00",
+    "is_forecast": true,
+    "confidence": 0.65,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 1,
+      "congestion_rate": 0.06,
+      "avg_load": 57.98,
+      "max_load": 76.38,
+      "avg_cqi": 9.76,
+      "min_cqi": 8.12
+    }
+  },
+  {
+    "filename": "20-12-2025_22-00.json",
+    "timestamp": "20-12-2025 22:00",
+    "is_forecast": true,
+    "confidence": 0.65,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 50.46,
+      "max_load": 66.51,
+      "avg_cqi": 9.98,
+      "min_cqi": 8.45
+    }
+  },
+  {
+    "filename": "20-12-2025_23-00.json",
+    "timestamp": "20-12-2025 23:00",
+    "is_forecast": true,
+    "confidence": 0.65,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 50.43,
+      "max_load": 68.69,
+      "avg_cqi": 9.98,
+      "min_cqi": 8.57
+    }
+  },
+  {
+    "filename": "21-12-2025_00-00.json",
+    "timestamp": "21-12-2025 00:00",
+    "is_forecast": true,
+    "confidence": 0.6,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 51.25,
+      "max_load": 70.01,
+      "avg_cqi": 9.97,
+      "min_cqi": 8.48
+    }
+  },
+  {
+    "filename": "21-12-2025_01-00.json",
+    "timestamp": "21-12-2025 01:00",
+    "is_forecast": true,
+    "confidence": 0.6,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 51.54,
+      "max_load": 69.76,
+      "avg_cqi": 9.94,
+      "min_cqi": 8.58
+    }
+  },
+  {
+    "filename": "21-12-2025_02-00.json",
+    "timestamp": "21-12-2025 02:00",
+    "is_forecast": true,
+    "confidence": 0.6,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 51.18,
+      "max_load": 71.0,
+      "avg_cqi": 9.96,
+      "min_cqi": 8.53
+    }
+  },
+  {
+    "filename": "21-12-2025_03-00.json",
+    "timestamp": "21-12-2025 03:00",
+    "is_forecast": true,
+    "confidence": 0.6,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 51.36,
+      "max_load": 70.46,
+      "avg_cqi": 9.95,
+      "min_cqi": 8.65
+    }
+  },
+  {
+    "filename": "21-12-2025_04-00.json",
+    "timestamp": "21-12-2025 04:00",
+    "is_forecast": true,
+    "confidence": 0.6,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 51.59,
+      "max_load": 68.24,
+      "avg_cqi": 9.94,
+      "min_cqi": 8.71
+    }
+  },
+  {
+    "filename": "21-12-2025_05-00.json",
+    "timestamp": "21-12-2025 05:00",
+    "is_forecast": true,
+    "confidence": 0.6,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 51.45,
+      "max_load": 71.1,
+      "avg_cqi": 9.96,
+      "min_cqi": 8.48
+    }
+  },
+  {
+    "filename": "21-12-2025_06-00.json",
+    "timestamp": "21-12-2025 06:00",
+    "is_forecast": true,
+    "confidence": 0.6,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 51.34,
+      "max_load": 69.53,
+      "avg_cqi": 9.97,
+      "min_cqi": 8.67
+    }
+  },
+  {
+    "filename": "21-12-2025_07-00.json",
+    "timestamp": "21-12-2025 07:00",
+    "is_forecast": true,
+    "confidence": 0.6,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 51.27,
+      "max_load": 67.96,
+      "avg_cqi": 9.96,
+      "min_cqi": 8.73
+    }
+  },
+  {
+    "filename": "21-12-2025_08-00.json",
+    "timestamp": "21-12-2025 08:00",
+    "is_forecast": true,
+    "confidence": 0.6,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 1,
+      "congestion_rate": 0.06,
+      "avg_load": 58.95,
+      "max_load": 76.84,
+      "avg_cqi": 9.72,
+      "min_cqi": 8.33
+    }
+  },
+  {
+    "filename": "21-12-2025_09-00.json",
+    "timestamp": "21-12-2025 09:00",
+    "is_forecast": true,
+    "confidence": 0.6,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 2,
+      "congestion_rate": 0.13,
+      "avg_load": 59.15,
+      "max_load": 76.67,
+      "avg_cqi": 9.71,
+      "min_cqi": 8.34
+    }
+  },
+  {
+    "filename": "21-12-2025_10-00.json",
+    "timestamp": "21-12-2025 10:00",
+    "is_forecast": true,
+    "confidence": 0.6,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 4,
+      "congestion_rate": 0.26,
+      "avg_load": 59.04,
+      "max_load": 78.34,
+      "avg_cqi": 9.73,
+      "min_cqi": 8.32
+    }
+  },
+  {
+    "filename": "21-12-2025_11-00.json",
+    "timestamp": "21-12-2025 11:00",
+    "is_forecast": true,
+    "confidence": 0.6,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 4,
+      "congestion_rate": 0.26,
+      "avg_load": 59.38,
+      "max_load": 76.36,
+      "avg_cqi": 9.73,
+      "min_cqi": 8.3
+    }
+  },
+  {
+    "filename": "21-12-2025_12-00.json",
+    "timestamp": "21-12-2025 12:00",
+    "is_forecast": true,
+    "confidence": 0.6,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 59.2,
+      "max_load": 80.7,
+      "avg_cqi": 9.75,
+      "min_cqi": 8.66
+    }
+  },
+  {
+    "filename": "21-12-2025_13-00.json",
+    "timestamp": "21-12-2025 13:00",
+    "is_forecast": true,
+    "confidence": 0.6,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 51.18,
+      "max_load": 68.92,
+      "avg_cqi": 9.97,
+      "min_cqi": 8.72
+    }
+  },
+  {
+    "filename": "21-12-2025_14-00.json",
+    "timestamp": "21-12-2025 14:00",
+    "is_forecast": true,
+    "confidence": 0.6,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 51.38,
+      "max_load": 70.01,
+      "avg_cqi": 9.96,
+      "min_cqi": 8.06
+    }
+  },
+  {
+    "filename": "21-12-2025_15-00.json",
+    "timestamp": "21-12-2025 15:00",
+    "is_forecast": true,
+    "confidence": 0.6,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 51.67,
+      "max_load": 67.34,
+      "avg_cqi": 9.95,
+      "min_cqi": 8.52
+    }
+  },
+  {
+    "filename": "21-12-2025_16-00.json",
+    "timestamp": "21-12-2025 16:00",
+    "is_forecast": true,
+    "confidence": 0.6,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 51.46,
+      "max_load": 67.56,
+      "avg_cqi": 9.95,
+      "min_cqi": 8.56
+    }
+  },
+  {
+    "filename": "21-12-2025_17-00.json",
+    "timestamp": "21-12-2025 17:00",
+    "is_forecast": true,
+    "confidence": 0.6,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 51.42,
+      "max_load": 68.99,
+      "avg_cqi": 9.96,
+      "min_cqi": 8.57
+    }
+  },
+  {
+    "filename": "21-12-2025_18-00.json",
+    "timestamp": "21-12-2025 18:00",
+    "is_forecast": true,
+    "confidence": 0.6,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 2,
+      "congestion_rate": 0.13,
+      "avg_load": 59.01,
+      "max_load": 76.74,
+      "avg_cqi": 9.73,
+      "min_cqi": 8.29
+    }
+  },
+  {
+    "filename": "21-12-2025_19-00.json",
+    "timestamp": "21-12-2025 19:00",
+    "is_forecast": true,
+    "confidence": 0.6,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 59.07,
+      "max_load": 76.37,
+      "avg_cqi": 9.71,
+      "min_cqi": 8.3
+    }
+  },
+  {
+    "filename": "21-12-2025_20-00.json",
+    "timestamp": "21-12-2025 20:00",
+    "is_forecast": true,
+    "confidence": 0.6,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 2,
+      "congestion_rate": 0.13,
+      "avg_load": 59.02,
+      "max_load": 76.8,
+      "avg_cqi": 9.71,
+      "min_cqi": 8.09
+    }
+  },
+  {
+    "filename": "21-12-2025_21-00.json",
+    "timestamp": "21-12-2025 21:00",
+    "is_forecast": true,
+    "confidence": 0.6,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 2,
+      "congestion_rate": 0.13,
+      "avg_load": 59.15,
+      "max_load": 76.56,
+      "avg_cqi": 9.71,
+      "min_cqi": 8.36
+    }
+  },
+  {
+    "filename": "21-12-2025_22-00.json",
+    "timestamp": "21-12-2025 22:00",
+    "is_forecast": true,
+    "confidence": 0.6,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 51.55,
+      "max_load": 69.57,
+      "avg_cqi": 9.95,
+      "min_cqi": 8.5
+    }
+  },
+  {
+    "filename": "21-12-2025_23-00.json",
+    "timestamp": "21-12-2025 23:00",
+    "is_forecast": true,
+    "confidence": 0.6,
+    "stats": {
+      "total_cells": 1554,
+      "congested": 0,
+      "congestion_rate": 0.0,
+      "avg_load": 51.46,
+      "max_load": 69.1,
+      "avg_cqi": 9.96,
+      "min_cqi": 8.44
+    }
+  }
+]

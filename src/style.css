@@ -199,14 +199,218 @@ html, body {
     border-bottom: 1px solid var(--border-color);
     padding: 12px 20px;
     z-index: 999;
+    position: relative;
 }
 
 .time-slider-container {
     display: flex;
     align-items: center;
     gap: 12px;
-    max-width: 1200px;
+    max-width: 1400px;
     margin: 0 auto;
+}
+
+/* Time Mode Toggle (Historical/Forecast) */
+.time-mode-toggle {
+    display: flex;
+    gap: 4px;
+    background: var(--bg-tertiary);
+    padding: 4px;
+    border-radius: var(--radius-md);
+    margin-right: 8px;
+}
+
+.time-mode-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 500;
+    transition: all var(--transition-fast);
+}
+
+.time-mode-btn:hover {
+    color: var(--text-primary);
+    background: var(--bg-hover);
+}
+
+.time-mode-btn.active {
+    background: var(--orange-primary);
+    color: white;
+}
+
+.time-mode-btn .material-symbols-outlined {
+    font-size: 18px;
+}
+
+.time-mode-btn .mode-label {
+    display: none;
+}
+
+@media (min-width: 900px) {
+    .time-mode-btn .mode-label {
+        display: inline;
+    }
+}
+
+/* Forecast Generate Button */
+.forecast-generate-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border: none;
+    background: linear-gradient(135deg, #7c3aed, #9333ea);
+    color: white;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    transition: all var(--transition-fast);
+    margin-left: 8px;
+}
+
+.forecast-generate-btn:hover {
+    background: linear-gradient(135deg, #6d28d9, #7c3aed);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
+}
+
+.forecast-generate-btn:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.forecast-generate-btn .material-symbols-outlined {
+    font-size: 18px;
+}
+
+.forecast-generate-btn.hidden {
+    display: none;
+}
+
+/* Forecast Indicator */
+.forecast-indicator {
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 16px;
+    background: linear-gradient(135deg, rgba(124, 58, 237, 0.9), rgba(147, 51, 234, 0.9));
+    color: white;
+    border-radius: 0 0 var(--radius-md) var(--radius-md);
+    font-size: 12px;
+    font-weight: 600;
+    box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
+    z-index: 100;
+}
+
+.forecast-indicator.hidden {
+    display: none;
+}
+
+.forecast-indicator .material-symbols-outlined {
+    font-size: 16px;
+    animation: sparkle 2s ease-in-out infinite;
+}
+
+.forecast-confidence {
+    font-size: 11px;
+    opacity: 0.85;
+    padding-left: 8px;
+    border-left: 1px solid rgba(255,255,255,0.3);
+}
+
+@keyframes sparkle {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+@keyframes spinning {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.spinning {
+    animation: spinning 1s linear infinite;
+}
+
+/* Forecast Mode Body Class */
+body.forecast-mode .stat-card {
+    border-left: 3px solid rgba(124, 58, 237, 0.5);
+}
+
+body.forecast-mode .time-current {
+    color: #9333ea;
+}
+
+body.forecast-mode .time-slider::-webkit-slider-thumb {
+    background: linear-gradient(135deg, #7c3aed, #9333ea);
+}
+
+body.forecast-mode .time-slider::-moz-range-thumb {
+    background: linear-gradient(135deg, #7c3aed, #9333ea);
+}
+
+/* Notification Toast */
+.notification-toast {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 20px;
+    background: var(--bg-card);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    z-index: 10000;
+    opacity: 0;
+    transform: translateY(20px);
+    transition: all 0.3s ease;
+}
+
+.notification-toast.show {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.notification-toast.notification-success {
+    border-left: 4px solid var(--success);
+}
+
+.notification-toast.notification-error {
+    border-left: 4px solid var(--danger);
+}
+
+.notification-toast.notification-info {
+    border-left: 4px solid var(--info);
+}
+
+.notification-toast .material-symbols-outlined {
+    font-size: 20px;
+}
+
+.notification-success .material-symbols-outlined {
+    color: var(--success);
+}
+
+.notification-error .material-symbols-outlined {
+    color: var(--danger);
+}
+
+.notification-info .material-symbols-outlined {
+    color: var(--info);
 }
 
 .time-nav-btn,
@@ -954,6 +1158,199 @@ html, body {
     font-size: 11px;
     font-weight: 600;
     color: var(--success);
+}
+
+/* Orange DRS Standard Styles */
+.reco-header-content {
+    flex: 1;
+}
+
+.reco-badges {
+    display: flex;
+    gap: 6px;
+    margin-top: 4px;
+    flex-wrap: wrap;
+}
+
+.reco-priority-badge {
+    font-size: 9px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.reco-priority-badge.priority-critical {
+    background: var(--danger);
+    color: white;
+}
+
+.reco-priority-badge.priority-high {
+    background: var(--warning);
+    color: #1a1a1a;
+}
+
+.reco-priority-badge.priority-medium {
+    background: var(--info);
+    color: #1a1a1a;
+}
+
+.reco-priority-badge.priority-low {
+    background: var(--text-muted);
+    color: white;
+}
+
+.reco-timeline-badge {
+    font-size: 9px;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 3px;
+}
+
+.reco-timeline-badge.timeline-short {
+    background: rgba(76, 175, 80, 0.2);
+    color: var(--success);
+}
+
+.reco-timeline-badge.timeline-medium {
+    background: rgba(255, 183, 77, 0.2);
+    color: var(--warning);
+}
+
+.reco-timeline-badge.timeline-long {
+    background: rgba(229, 115, 115, 0.2);
+    color: var(--danger);
+}
+
+.reco-recovery-badge {
+    font-size: 10px;
+    font-weight: 700;
+    background: var(--success);
+    color: white;
+    padding: 2px 5px;
+    border-radius: 3px;
+    margin-left: 4px;
+}
+
+/* Traffic Loss (Manque à gagner) Display */
+.reco-traffic-loss {
+    background: rgba(229, 115, 115, 0.08);
+    border: 1px solid rgba(229, 115, 115, 0.2);
+    border-radius: var(--radius-sm);
+    padding: 8px 10px;
+    margin-top: 8px;
+    font-size: 11px;
+}
+
+.traffic-loss-title {
+    font-weight: 600;
+    color: var(--danger);
+    margin-bottom: 6px;
+    font-size: 11px;
+}
+
+.traffic-loss-row {
+    display: flex;
+    justify-content: space-between;
+    color: var(--text-secondary);
+    margin-bottom: 3px;
+}
+
+.traffic-loss-row.recovery {
+    color: var(--success);
+    font-weight: 600;
+}
+
+.recovery-value {
+    color: var(--success);
+}
+
+/* CAPEX Note for long-term actions */
+.reco-capex-note {
+    margin-top: 10px;
+    padding: 8px;
+    background: rgba(255, 183, 77, 0.1);
+    border: 1px solid rgba(255, 183, 77, 0.3);
+    border-radius: var(--radius-sm);
+    font-size: 11px;
+    color: var(--warning);
+    text-align: center;
+}
+
+/* ===== Action Info Box (Simulator Panel) ===== */
+.action-info-box {
+    background: linear-gradient(135deg, rgba(255, 152, 0, 0.08), rgba(255, 152, 0, 0.02));
+    border: 1px solid rgba(255, 152, 0, 0.2);
+    border-radius: var(--radius-sm);
+    padding: 12px;
+    margin-bottom: 12px;
+}
+
+.action-info-box .action-badges {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+}
+
+.action-info-box .timeline-badge {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: var(--radius-sm);
+    text-transform: uppercase;
+}
+
+.action-info-box .timeline-badge.court_terme {
+    background: rgba(76, 175, 80, 0.15);
+    color: var(--success);
+}
+
+.action-info-box .timeline-badge.moyen_terme {
+    background: rgba(255, 183, 77, 0.15);
+    color: var(--warning);
+}
+
+.action-info-box .timeline-badge.long_terme {
+    background: rgba(229, 115, 115, 0.15);
+    color: var(--danger);
+}
+
+.action-info-box .recovery-badge {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: var(--radius-sm);
+    background: rgba(76, 175, 80, 0.15);
+    color: var(--success);
+}
+
+.action-info-box .capex-badge {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: var(--radius-sm);
+    background: rgba(229, 115, 115, 0.15);
+    color: var(--danger);
+}
+
+.action-info-box .opex-badge {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: var(--radius-sm);
+    background: rgba(33, 150, 243, 0.15);
+    color: #2196F3;
+}
+
+.action-effect {
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.4;
+    padding: 8px 0 0 0;
+    border-top: 1px dashed rgba(255, 255, 255, 0.1);
+    margin-top: 8px;
 }
 
 /* ===== Action Simulator ===== */

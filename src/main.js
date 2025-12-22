@@ -489,27 +489,135 @@ function hideSiteInfoPanel() {
     applyFilters();
 }
 
-// --- Smart Recommendation Engine (Dynamic) ---
+// --- Smart Recommendation Engine (Orange DRS Standards) ---
+
+/**
+ * Orange Action Recovery Rates (Taux de récupération)
+ * Based on Orange DRS engineering guidelines
+ */
+const ORANGE_ACTIONS = {
+    // === COURT TERME (OPEX) ===
+    tilt: {
+        name: 'Ajustement Tilt mécanique/électrique',
+        recoveryRate: 0.15,  // 15%
+        timeline: 'court_terme',
+        capex: false,
+        effect: 'Réduction footprint, moins d\'interférence'
+    },
+    power: {
+        name: 'Ajustement puissance (Tx Power)',
+        recoveryRate: 0.20,  // 20%
+        timeline: 'court_terme',
+        capex: false,
+        effect: 'Optimisation RSRP/SINR, réduction interférence'
+    },
+    redistribute: {
+        name: 'Équilibrage MLB (Mobility Load Balancing)',
+        recoveryRate: 0.40,  // 40%
+        timeline: 'court_terme',
+        capex: false,
+        effect: 'Déplacement UE vers cellules voisines moins chargées'
+    },
+    neighbor_optimization: {
+        name: 'Optimisation voisinage (ANR/HO params)',
+        recoveryRate: 0.35,  // 35%
+        timeline: 'court_terme',
+        capex: false,
+        effect: 'Meilleur handover, réduction ping-pong'
+    },
+    parameter_tuning: {
+        name: 'Tuning paramètres radio (CIO/Hysteresis)',
+        recoveryRate: 0.25,  // 25%
+        timeline: 'court_terme',
+        capex: false,
+        effect: 'Optimisation seuils HO, réduction RLF'
+    },
+    // === MOYEN TERME (OPEX/CAPEX léger) ===
+    add_carrier: {
+        name: 'Activation bande supplémentaire (CA)',
+        recoveryRate: 0.50,  // 50%
+        timeline: 'moyen_terme',
+        capex: true,
+        effect: 'Capacité +50%, Carrier Aggregation'
+    },
+    mimo_upgrade: {
+        name: 'Upgrade MIMO (2T2R → 4T4R/8T8R)',
+        recoveryRate: 0.35,  // 35%
+        timeline: 'moyen_terme',
+        capex: true,
+        effect: 'Débit ×1.5-2, meilleur SINR'
+    },
+    small_cell: {
+        name: 'Déploiement Small Cell / Micro',
+        recoveryRate: 0.45,  // 45%
+        timeline: 'moyen_terme',
+        capex: true,
+        effect: 'Capacité locale +45%, indoor/hotspot'
+    },
+    // === LONG TERME (CAPEX) ===
+    add_sector: {
+        name: 'Ajout 4ème secteur (sectorisation)',
+        recoveryRate: 0.85,  // 85%
+        timeline: 'long_terme',
+        capex: true,
+        effect: 'Capacité site ×1.33, meilleure répartition'
+    },
+    add_site: {
+        name: 'Nouveau site macro capacitaire',
+        recoveryRate: 0.90,  // 90%
+        timeline: 'long_terme',
+        capex: true,
+        effect: 'Réduction UE/cellule, nouvelle capacité zone'
+    },
+    split_cell: {
+        name: 'Cell Split (subdivision cellule)',
+        recoveryRate: 0.70,  // 70%
+        timeline: 'long_terme',
+        capex: true,
+        effect: 'Divise zone en 2+ cellules, capacité ×2'
+    }
+};
+
+/**
+ * Calculate "Manque à gagner" (Lost traffic/revenue)
+ * Based on Orange model: Perte actuelle, Taux de récupération, Gain estimé
+ */
+function calculateTrafficLoss(obs) {
+    const load = obs.load || 0;
+    const throughput = obs.throughput_dl || 10000;
+    const activeUsers = obs.active_users || obs.traffic_dl || 2;
+    
+    // Perte actuelle = excess capacity being denied
+    const excessLoad = Math.max(0, load - 70);
+    const throughputGap = Math.max(0, 10000 - throughput) / 10000; // Gap to 10 Mbps target
+    
+    // Estimated UE affected (users in queue or degraded)
+    const affectedUE = Math.round(activeUsers * (excessLoad / 100) * 0.6);
+    
+    // Estimated GB lost per month (2.4 GB per UE average)
+    const lostGB = Math.round(affectedUE * 2.4);
+    
+    return {
+        affectedUE,
+        lostGB,
+        excessLoad,
+        throughputGap: Math.round(throughputGap * 100)
+    };
+}
 
 /**
  * Calculate optimal tilt adjustment based on cell metrics
- * Returns { degrees, expectedLoadReduction, expectedCqiGain, expectedThroughputGain, efficiency }
  */
 function calculateOptimalTilt(obs, baseline) {
     const load = obs.load || 0;
     const cqi = obs.cqi || 10;
     const ta = obs.ta_avg || 5;
     
-    // Physics-based tilt calculation
-    // Higher load + low CQI = more aggressive downtilt needed
-    // High TA (distant users) = consider uptilt or less downtilt
-    
     let optimalDegrees = 0;
     let direction = 'downtilt';
     
     if (cqi < CONFIG.CQI_THRESHOLD) {
-        // Low CQI - interference likely, downtilt to reduce overlap
-        // More aggressive for very low CQI
+        // Low CQI - interference, downtilt to reduce overlap
         optimalDegrees = Math.min(5, Math.max(1, (CONFIG.CQI_THRESHOLD - cqi) * 0.8));
         direction = 'downtilt';
     } else if (load > 80) {
@@ -518,25 +626,17 @@ function calculateOptimalTilt(obs, baseline) {
         optimalDegrees = Math.min(4, Math.max(1, excessLoad * 0.1));
         direction = 'downtilt';
     } else if (ta > 20) {
-        // High TA - users are far, consider uptilt for better reach
+        // High TA - distant users, uptilt for better reach
         optimalDegrees = Math.min(2, (ta - 15) * 0.1);
         direction = 'uptilt';
     }
     
-    // Round to 0.5 degree precision
     optimalDegrees = Math.round(optimalDegrees * 2) / 2;
     if (optimalDegrees < 0.5) optimalDegrees = 1;
     
-    // Calculate expected gains based on degree change
     const signedDegrees = direction === 'uptilt' ? -optimalDegrees : optimalDegrees;
-    
-    // Load reduction: ~3-5% per degree of downtilt
     const loadReduction = direction === 'downtilt' ? Math.round(optimalDegrees * 4) : Math.round(optimalDegrees * -2);
-    
-    // CQI improvement: ~0.3-0.5 per degree downtilt (reduces interference)
     const cqiGain = direction === 'downtilt' ? Math.round(optimalDegrees * 0.4 * 10) / 10 : 0;
-    
-    // Throughput: derived from load and CQI improvements
     const throughputGain = Math.round((loadReduction * 0.5 + cqiGain * 3) * 100) / 100;
     
     // Efficiency based on how well-suited tilt is for this problem
@@ -552,7 +652,9 @@ function calculateOptimalTilt(obs, baseline) {
         expectedLoadReduction: loadReduction,
         expectedCqiGain: cqiGain,
         expectedThroughputGain: throughputGain,
-        efficiency
+        efficiency,
+        recoveryRate: ORANGE_ACTIONS.tilt.recoveryRate,
+        timeline: ORANGE_ACTIONS.tilt.timeline
     };
 }
 
@@ -567,18 +669,13 @@ function calculateOptimalRedistribution(obs, baseline) {
     const excessLoad = Math.max(0, load - targetLoad);
     
     // Ratio = how much to offload (max 0.4 = 40%)
-    // Conservative: don't offload more than 40% of excess
     let optimalRatio = Math.min(0.4, excessLoad / 100 * 0.8);
     optimalRatio = Math.round(optimalRatio * 100) / 100;
     if (optimalRatio < 0.1) optimalRatio = 0.15;
     
-    // Expected load reduction
     const expectedLoadReduction = Math.round(excessLoad * optimalRatio * 1.5);
-    
-    // Throughput gain from reduced congestion
     const throughputGain = Math.round(expectedLoadReduction * 0.8);
     
-    // Efficiency depends on how overloaded the cell is
     let efficiency = 60;
     if (load > 90) efficiency = 80;
     else if (load > 80) efficiency = 70;
@@ -588,7 +685,9 @@ function calculateOptimalRedistribution(obs, baseline) {
         ratio: optimalRatio,
         expectedLoadReduction,
         expectedThroughputGain: throughputGain,
-        efficiency
+        efficiency,
+        recoveryRate: ORANGE_ACTIONS.redistribute.recoveryRate,
+        timeline: ORANGE_ACTIONS.redistribute.timeline
     };
 }
 
@@ -599,7 +698,6 @@ function calculateOptimalCarrier(obs, baseline) {
     const currentBand = parseInt(obs.frequency_band) || 3;
     const load = obs.load || 0;
     
-    // Band characteristics
     const bandInfo = {
         7:  { name: 'L2600', capacity: 200, coverage: 'small', priority: 1 },
         3:  { name: 'L1800', capacity: 150, coverage: 'medium', priority: 2 },
@@ -607,21 +705,14 @@ function calculateOptimalCarrier(obs, baseline) {
         20: { name: 'L800',  capacity: 75,  coverage: 'large', priority: 4 },
     };
     
-    // Find best complementary band
     let bestBand = null;
     let bestScore = 0;
     
     for (const [band, info] of Object.entries(bandInfo)) {
         if (parseInt(band) === currentBand) continue;
-        
-        // Score based on capacity gain and complementarity
         let score = info.capacity;
-        
-        // If current is low-band, prefer high-band for capacity
         if (currentBand === 20 && (band === '7' || band === '3')) score += 50;
-        // If current is high-band, adding another high-band still helps
         if (currentBand === 7 && band === '3') score += 30;
-        
         if (score > bestScore) {
             bestScore = score;
             bestBand = { band, ...info };
@@ -630,11 +721,8 @@ function calculateOptimalCarrier(obs, baseline) {
     
     if (!bestBand) bestBand = { band: '7', name: 'L2600', capacity: 200 };
     
-    // Expected gains from carrier addition
     const expectedLoadReduction = Math.round(Math.min(35, load * 0.35));
     const expectedThroughputGain = Math.round(bestBand.capacity * 0.4);
-    
-    // High efficiency for carrier addition on congested cells
     const efficiency = load > 85 ? 90 : (load > 75 ? 80 : 70);
     
     return {
@@ -642,12 +730,197 @@ function calculateOptimalCarrier(obs, baseline) {
         bandName: bestBand.name,
         expectedLoadReduction,
         expectedThroughputGain,
-        efficiency
+        efficiency,
+        recoveryRate: ORANGE_ACTIONS.add_carrier.recoveryRate,
+        timeline: ORANGE_ACTIONS.add_carrier.timeline
     };
 }
 
 /**
- * Generate dynamic recommendations with calculated parameters
+ * Calculate neighbor optimization potential
+ */
+function calculateNeighborOptimization(obs, baseline) {
+    const load = obs.load || 0;
+    const cqi = obs.cqi || 10;
+    
+    // Neighbors can absorb users if we optimize handover params
+    const expectedLoadReduction = Math.round(Math.min(20, load * 0.15));
+    const cqiGain = cqi < 10 ? 0.5 : 0;
+    
+    return {
+        expectedLoadReduction,
+        expectedCqiGain: cqiGain,
+        efficiency: 65,
+        recoveryRate: ORANGE_ACTIONS.neighbor_optimization.recoveryRate,
+        timeline: ORANGE_ACTIONS.neighbor_optimization.timeline
+    };
+}
+
+/**
+ * Calculate add sector potential
+ */
+function calculateAddSector(obs, baseline) {
+    const load = obs.load || 0;
+    const activeUsers = obs.active_users || obs.traffic_dl || 2;
+    
+    // Adding a sector splits capacity
+    const expectedLoadReduction = Math.round(load * 0.4);
+    const userReduction = Math.round(activeUsers * 0.35);
+    
+    return {
+        expectedLoadReduction,
+        expectedUserReduction: userReduction,
+        capacityMultiplier: 1.5,
+        efficiency: 85,
+        recoveryRate: ORANGE_ACTIONS.add_sector.recoveryRate,
+        timeline: ORANGE_ACTIONS.add_sector.timeline
+    };
+}
+
+/**
+ * Calculate power adjustment potential
+ */
+function calculatePowerAdjustment(obs, baseline) {
+    const load = obs.load || 0;
+    const cqi = obs.cqi || 10;
+    const rsrp = obs.signal_power || -85;
+    
+    // Power reduction helps reduce interference to neighbors
+    const currentPower = 46; // dBm typical
+    let optimalReduction = 0;
+    
+    if (load > 85 && cqi < 9) {
+        // High load + moderate CQI = reduce power to limit cell edge
+        optimalReduction = Math.min(6, Math.round((load - 70) * 0.15));
+    } else if (cqi < 7) {
+        // Poor CQI likely from interference = reduce power
+        optimalReduction = Math.min(4, Math.round((10 - cqi) * 0.8));
+    }
+    
+    const expectedLoadReduction = Math.round(optimalReduction * 2);
+    const cqiGain = optimalReduction > 0 ? 0.3 : 0;
+    
+    return {
+        reduction: optimalReduction,
+        newPower: currentPower - optimalReduction,
+        expectedLoadReduction,
+        expectedCqiGain: cqiGain,
+        efficiency: optimalReduction > 3 ? 75 : 60,
+        recoveryRate: ORANGE_ACTIONS.power.recoveryRate,
+        timeline: ORANGE_ACTIONS.power.timeline
+    };
+}
+
+/**
+ * Calculate MIMO upgrade potential
+ */
+function calculateMimoUpgrade(obs, baseline) {
+    const load = obs.load || 0;
+    const throughput = obs.throughput_dl || 10000;
+    
+    // MIMO upgrade doubles spectral efficiency in good conditions
+    const expectedThroughputGain = Math.round(throughput * 0.4);
+    const expectedLoadReduction = Math.round(load * 0.2);
+    
+    return {
+        currentMimo: '2T2R',
+        targetMimo: '4T4R',
+        expectedLoadReduction,
+        expectedThroughputGain,
+        efficiency: 75,
+        recoveryRate: ORANGE_ACTIONS.mimo_upgrade.recoveryRate,
+        timeline: ORANGE_ACTIONS.mimo_upgrade.timeline
+    };
+}
+
+/**
+ * Calculate small cell deployment potential
+ */
+function calculateSmallCell(obs, baseline) {
+    const load = obs.load || 0;
+    const activeUsers = obs.active_users || obs.traffic_dl || 2;
+    const ta = obs.ta_avg || 5;
+    
+    // Small cell offloads nearby high-density users
+    const expectedLoadReduction = Math.round(load * 0.35);
+    const userReduction = Math.round(activeUsers * 0.3);
+    
+    // More effective if users are close (low TA)
+    const efficiency = ta < 10 ? 80 : (ta < 20 ? 70 : 55);
+    
+    return {
+        expectedLoadReduction,
+        expectedUserReduction: userReduction,
+        recommendedType: ta < 5 ? 'Femto indoor' : 'Micro outdoor',
+        efficiency,
+        recoveryRate: ORANGE_ACTIONS.small_cell.recoveryRate,
+        timeline: ORANGE_ACTIONS.small_cell.timeline
+    };
+}
+
+/**
+ * Calculate parameter tuning potential
+ */
+function calculateParameterTuning(obs, baseline) {
+    const load = obs.load || 0;
+    const cqi = obs.cqi || 10;
+    
+    // CIO and Hysteresis tuning helps balance load
+    const expectedLoadReduction = Math.round(Math.min(15, load * 0.12));
+    const cqiGain = cqi < 9 ? 0.4 : 0.1;
+    
+    return {
+        expectedLoadReduction,
+        expectedCqiGain: cqiGain,
+        efficiency: 55,
+        recoveryRate: ORANGE_ACTIONS.parameter_tuning.recoveryRate,
+        timeline: ORANGE_ACTIONS.parameter_tuning.timeline
+    };
+}
+
+/**
+ * Calculate cell split potential
+ */
+function calculateCellSplit(obs, baseline) {
+    const load = obs.load || 0;
+    const activeUsers = obs.active_users || obs.traffic_dl || 2;
+    
+    // Cell split divides capacity
+    const expectedLoadReduction = Math.round(load * 0.45);
+    const userReduction = Math.round(activeUsers * 0.5);
+    
+    return {
+        expectedLoadReduction,
+        expectedUserReduction: userReduction,
+        newCellCount: 2,
+        efficiency: 80,
+        recoveryRate: ORANGE_ACTIONS.split_cell.recoveryRate,
+        timeline: ORANGE_ACTIONS.split_cell.timeline
+    };
+}
+
+/**
+ * Calculate add site potential
+ */
+function calculateAddSite(obs, baseline) {
+    const load = obs.load || 0;
+    const activeUsers = obs.active_users || obs.traffic_dl || 2;
+    
+    const expectedLoadReduction = Math.round(load * 0.5);
+    const userReduction = Math.round(activeUsers * 0.45);
+    
+    return {
+        expectedLoadReduction,
+        expectedUserReduction: userReduction,
+        efficiency: 90,
+        recoveryRate: ORANGE_ACTIONS.add_site.recoveryRate,
+        timeline: ORANGE_ACTIONS.add_site.timeline
+    };
+}
+
+/**
+ * Generate dynamic recommendations with Orange DRS-standard actions
+ * Includes: recovery rates, timelines, manque à gagner
  */
 function generateSmartRecommendations(cellName) {
     const obs = state.currentObservations[cellName];
@@ -660,93 +933,523 @@ function generateSmartRecommendations(cellName) {
     const cqi = obs.cqi ?? 10;
     const congested = obs.congested;
     const ta = obs.ta_avg || 5;
+    const throughput = obs.throughput_dl || 10000;
+    const activeUsers = obs.active_users || obs.traffic_dl || 2;
     
-    // --- CONGESTION SCENARIOS ---
-    if (congested && load > 85) {
-        // Critical congestion - recommend all options ranked
+    // Calculate traffic loss for this cell
+    const trafficLoss = calculateTrafficLoss(obs);
+    
+    // --- CRITICAL CONGESTION: PRB ≥90% (Saturé) ---
+    if (load >= 90) {
+        // Long terme: Ajout site (90%)
+        const site = calculateAddSite(obs, baseline);
+        const siteGain = Math.round(trafficLoss.affectedUE * site.recoveryRate);
+        recommendations.push({
+            action: 'add_site',
+            title: ORANGE_ACTIONS.add_site.name,
+            icon: 'densify',
+            priority: 'critical',
+            efficiency: site.efficiency,
+            timeline: site.timeline,
+            recoveryRate: site.recoveryRate,
+            description: `Déployer un nouveau site pour absorber ${site.expectedUserReduction} UE. PRB actuel: ${load.toFixed(1)}% (saturé)`,
+            expectedGain: { 
+                load: -site.expectedLoadReduction, 
+                users: -site.expectedUserReduction 
+            },
+            trafficLoss,
+            estimatedRecovery: { ue: siteGain, gb: Math.round(siteGain * 2.4) },
+            computedParams: {},
+            cellName,
+            currentMetrics: { load, cqi, congested, activeUsers }
+        });
+        
+        // Long terme: Ajout secteur (85%)
+        const sector = calculateAddSector(obs, baseline);
+        const sectorGain = Math.round(trafficLoss.affectedUE * sector.recoveryRate);
+        recommendations.push({
+            action: 'add_sector',
+            title: ORANGE_ACTIONS.add_sector.name,
+            icon: 'densify',
+            priority: 'critical',
+            efficiency: sector.efficiency,
+            timeline: sector.timeline,
+            recoveryRate: sector.recoveryRate,
+            description: `Ajouter un 4ème secteur pour capacité ×${sector.capacityMultiplier}. Réduction charge: ${sector.expectedLoadReduction}%`,
+            expectedGain: { 
+                load: -sector.expectedLoadReduction, 
+                capacity: '+50%' 
+            },
+            trafficLoss,
+            estimatedRecovery: { ue: sectorGain, gb: Math.round(sectorGain * 2.4) },
+            computedParams: {},
+            cellName,
+            currentMetrics: { load, cqi, congested, activeUsers }
+        });
+        
+        // Long terme: Cell Split (70%)
+        const split = calculateCellSplit(obs, baseline);
+        const splitGain = Math.round(trafficLoss.affectedUE * split.recoveryRate);
+        recommendations.push({
+            action: 'split_cell',
+            title: ORANGE_ACTIONS.split_cell.name,
+            icon: 'densify',
+            priority: 'critical',
+            efficiency: split.efficiency,
+            timeline: split.timeline,
+            recoveryRate: split.recoveryRate,
+            description: `Subdiviser cellule saturée en ${split.splitFactor} cellules. PRB cible: ${(load / split.splitFactor).toFixed(0)}%`,
+            expectedGain: { 
+                load: -split.expectedLoadReduction, 
+                capacity: `×${split.splitFactor}` 
+            },
+            trafficLoss,
+            estimatedRecovery: { ue: splitGain, gb: Math.round(splitGain * 2.4) },
+            computedParams: { splitFactor: split.splitFactor },
+            cellName,
+            currentMetrics: { load, cqi, congested, activeUsers }
+        });
+        
+        // Moyen terme: Ajout carrier (50%)
         const carrier = calculateOptimalCarrier(obs, baseline);
+        const carrierGain = Math.round(trafficLoss.affectedUE * carrier.recoveryRate);
         recommendations.push({
             action: 'add_carrier',
-            title: `Add ${carrier.bandName} Carrier`,
+            title: `${ORANGE_ACTIONS.add_carrier.name} (${carrier.bandName})`,
             icon: 'carrier',
-            priority: 'critical',
+            priority: 'high',
             efficiency: carrier.efficiency,
-            description: `Add Band ${carrier.band} (${carrier.bandName}) to double capacity. Current load: ${load.toFixed(1)}%`,
+            timeline: carrier.timeline,
+            recoveryRate: carrier.recoveryRate,
+            description: `Activer bande ${carrier.band} (${carrier.bandName}). Capacité +50%, PRB cible: ${(load - carrier.expectedLoadReduction).toFixed(0)}%`,
             expectedGain: { 
                 load: -carrier.expectedLoadReduction, 
                 throughput: carrier.expectedThroughputGain 
             },
+            trafficLoss,
+            estimatedRecovery: { ue: carrierGain, gb: Math.round(carrierGain * 2.4) },
             computedParams: { band: carrier.band },
             cellName,
             currentMetrics: { load, cqi, congested }
         });
         
+        // Moyen terme: MIMO Upgrade (35%)
+        const mimo = calculateMimoUpgrade(obs, baseline);
+        const mimoGain = Math.round(trafficLoss.affectedUE * mimo.recoveryRate);
+        recommendations.push({
+            action: 'mimo_upgrade',
+            title: ORANGE_ACTIONS.mimo_upgrade.name,
+            icon: 'carrier',
+            priority: 'high',
+            efficiency: mimo.efficiency,
+            timeline: mimo.timeline,
+            recoveryRate: mimo.recoveryRate,
+            description: `Upgrade ${mimo.currentConfig} → ${mimo.targetConfig}. Gain capacité: +${mimo.capacityGain}%`,
+            expectedGain: { 
+                throughput: mimo.expectedThroughputGain, 
+                capacity: `+${mimo.capacityGain}%` 
+            },
+            trafficLoss,
+            estimatedRecovery: { ue: mimoGain, gb: Math.round(mimoGain * 2.4) },
+            computedParams: { config: mimo.targetConfig },
+            cellName,
+            currentMetrics: { load, cqi, congested }
+        });
+        
+        // Moyen terme: Small Cell (45%)
+        const smallCell = calculateSmallCell(obs, baseline);
+        const smallCellGain = Math.round(trafficLoss.affectedUE * smallCell.recoveryRate);
+        recommendations.push({
+            action: 'small_cell',
+            title: ORANGE_ACTIONS.small_cell.name,
+            icon: 'densify',
+            priority: 'high',
+            efficiency: smallCell.efficiency,
+            timeline: smallCell.timeline,
+            recoveryRate: smallCell.recoveryRate,
+            description: `Installer ${smallCell.recommendedCount} small cells pour décharger ${smallCell.offloadPercent}% du trafic`,
+            expectedGain: { 
+                load: -smallCell.expectedLoadReduction, 
+                users: -smallCell.expectedUserReduction 
+            },
+            trafficLoss,
+            estimatedRecovery: { ue: smallCellGain, gb: Math.round(smallCellGain * 2.4) },
+            computedParams: { count: smallCell.recommendedCount },
+            cellName,
+            currentMetrics: { load, cqi, congested, activeUsers }
+        });
+        
+        // Court terme: Rebalancing (40%)
         const redist = calculateOptimalRedistribution(obs, baseline);
+        const redistGain = Math.round(trafficLoss.affectedUE * redist.recoveryRate);
         recommendations.push({
             action: 'redistribute',
-            title: 'Load Balancing (MLB)',
+            title: ORANGE_ACTIONS.redistribute.name,
             icon: 'redistribute',
             priority: 'high',
             efficiency: redist.efficiency,
-            description: `Offload ${Math.round(redist.ratio * 100)}% traffic to neighbors. Expected load: ${(load - redist.expectedLoadReduction).toFixed(1)}%`,
+            timeline: redist.timeline,
+            recoveryRate: redist.recoveryRate,
+            description: `Équilibrer ${Math.round(redist.ratio * 100)}% du trafic vers cellules voisines. Charge cible: ${(load - redist.expectedLoadReduction).toFixed(0)}%`,
             expectedGain: { 
                 load: -redist.expectedLoadReduction, 
                 throughput: redist.expectedThroughputGain 
             },
+            trafficLoss,
+            estimatedRecovery: { ue: redistGain, gb: Math.round(redistGain * 2.4) },
             computedParams: { ratio: redist.ratio },
             cellName,
             currentMetrics: { load, cqi, congested }
         });
         
+        // Court terme: Power Adjustment (20%)
+        const power = calculatePowerAdjustment(obs, baseline);
+        const powerGain = Math.round(trafficLoss.affectedUE * power.recoveryRate);
+        recommendations.push({
+            action: 'power',
+            title: ORANGE_ACTIONS.power.name,
+            icon: 'tilt',
+            priority: 'medium',
+            efficiency: power.efficiency,
+            timeline: power.timeline,
+            recoveryRate: power.recoveryRate,
+            description: `${power.adjustment > 0 ? 'Augmenter' : 'Réduire'} puissance de ${Math.abs(power.adjustment)} dB. Puissance cible: ${power.targetPower} dBm`,
+            expectedGain: { 
+                coverage: power.coverageChange, 
+                load: power.loadChange 
+            },
+            trafficLoss,
+            estimatedRecovery: { ue: powerGain, gb: Math.round(powerGain * 2.4) },
+            computedParams: { adjustment: power.adjustment, target: power.targetPower },
+            cellName,
+            currentMetrics: { load, cqi, congested }
+        });
+        
+        // Court terme: Tilt (15%)
         const tilt = calculateOptimalTilt(obs, baseline);
+        const tiltGain = Math.round(trafficLoss.affectedUE * tilt.recoveryRate);
         recommendations.push({
             action: 'tilt',
-            title: `${tilt.direction === 'downtilt' ? 'Downtilt' : 'Uptilt'} ${tilt.optimalDegrees}°`,
+            title: ORANGE_ACTIONS.tilt.name,
             icon: 'tilt',
             priority: 'medium',
             efficiency: tilt.efficiency,
-            description: `${tilt.direction === 'downtilt' ? 'Reduce footprint' : 'Extend coverage'} by ${tilt.optimalDegrees}° to ${tilt.direction === 'downtilt' ? 'shed edge users' : 'improve distant user signal'}.`,
+            timeline: tilt.timeline,
+            recoveryRate: tilt.recoveryRate,
+            description: `${tilt.direction === 'downtilt' ? 'Downtilt' : 'Uptilt'} ${tilt.optimalDegrees}° pour ${tilt.direction === 'downtilt' ? 'réduire empreinte' : 'étendre couverture'}`,
             expectedGain: { 
                 load: -tilt.expectedLoadReduction, 
-                throughput: tilt.expectedThroughputGain,
-                cqi: tilt.expectedCqiGain
+                cqi: tilt.expectedCqiGain 
             },
+            trafficLoss,
+            estimatedRecovery: { ue: tiltGain, gb: Math.round(tiltGain * 2.4) },
+            computedParams: { degrees: tilt.degrees },
+            cellName,
+            currentMetrics: { load, cqi, congested }
+        });
+        
+        // Court terme: Parameter Tuning (25%)
+        const params = calculateParameterTuning(obs, baseline);
+        const paramsGain = Math.round(trafficLoss.affectedUE * params.recoveryRate);
+        recommendations.push({
+            action: 'parameter_tuning',
+            title: ORANGE_ACTIONS.parameter_tuning.name,
+            icon: 'redistribute',
+            priority: 'medium',
+            efficiency: params.efficiency,
+            timeline: params.timeline,
+            recoveryRate: params.recoveryRate,
+            description: `Optimiser CIO=${params.cio}dB, Hysteresis=${params.hysteresis}dB pour améliorer handover`,
+            expectedGain: { 
+                load: -params.expectedLoadReduction, 
+                handover: '+amélioration' 
+            },
+            trafficLoss,
+            estimatedRecovery: { ue: paramsGain, gb: Math.round(paramsGain * 2.4) },
+            computedParams: { cio: params.cio, hysteresis: params.hysteresis },
+            cellName,
+            currentMetrics: { load, cqi, congested }
+        });
+    }
+    // --- HIGH CONGESTION: PRB ≥80% ---
+    else if (congested && load >= 80) {
+        // Moyen terme: Carrier (50%)
+        const carrier = calculateOptimalCarrier(obs, baseline);
+        const carrierGain = Math.round(trafficLoss.affectedUE * carrier.recoveryRate);
+        recommendations.push({
+            action: 'add_carrier',
+            title: `${ORANGE_ACTIONS.add_carrier.name} (${carrier.bandName})`,
+            icon: 'carrier',
+            priority: 'high',
+            efficiency: carrier.efficiency,
+            timeline: carrier.timeline,
+            recoveryRate: carrier.recoveryRate,
+            description: `PRB ${load.toFixed(1)}% élevé. Ajouter ${carrier.bandName} pour capacité +50%`,
+            expectedGain: { 
+                load: -carrier.expectedLoadReduction, 
+                throughput: carrier.expectedThroughputGain 
+            },
+            trafficLoss,
+            estimatedRecovery: { ue: carrierGain, gb: Math.round(carrierGain * 2.4) },
+            computedParams: { band: carrier.band },
+            cellName,
+            currentMetrics: { load, cqi, congested }
+        });
+        
+        // Moyen terme: MIMO Upgrade (35%)
+        const mimo = calculateMimoUpgrade(obs, baseline);
+        const mimoGain = Math.round(trafficLoss.affectedUE * mimo.recoveryRate);
+        recommendations.push({
+            action: 'mimo_upgrade',
+            title: ORANGE_ACTIONS.mimo_upgrade.name,
+            icon: 'carrier',
+            priority: 'medium',
+            efficiency: mimo.efficiency,
+            timeline: mimo.timeline,
+            recoveryRate: mimo.recoveryRate,
+            description: `Upgrade ${mimo.currentConfig} → ${mimo.targetConfig}. Gain débit: +${mimo.capacityGain}%`,
+            expectedGain: { 
+                throughput: mimo.expectedThroughputGain, 
+                capacity: `+${mimo.capacityGain}%` 
+            },
+            trafficLoss,
+            estimatedRecovery: { ue: mimoGain, gb: Math.round(mimoGain * 2.4) },
+            computedParams: { config: mimo.targetConfig },
+            cellName,
+            currentMetrics: { load, cqi, congested }
+        });
+        
+        // Moyen terme: Small Cell (45%) - for high user density
+        if (activeUsers > 4) {
+            const smallCell = calculateSmallCell(obs, baseline);
+            const smallCellGain = Math.round(trafficLoss.affectedUE * smallCell.recoveryRate);
+            recommendations.push({
+                action: 'small_cell',
+                title: ORANGE_ACTIONS.small_cell.name,
+                icon: 'densify',
+                priority: 'medium',
+                efficiency: smallCell.efficiency,
+                timeline: smallCell.timeline,
+                recoveryRate: smallCell.recoveryRate,
+                description: `Densité UE élevée (${activeUsers}). Installer ${smallCell.recommendedCount} small cells`,
+                expectedGain: { 
+                    load: -smallCell.expectedLoadReduction, 
+                    users: -smallCell.expectedUserReduction 
+                },
+                trafficLoss,
+                estimatedRecovery: { ue: smallCellGain, gb: Math.round(smallCellGain * 2.4) },
+                computedParams: { count: smallCell.recommendedCount },
+                cellName,
+                currentMetrics: { load, cqi, congested, activeUsers }
+            });
+        }
+        
+        // Court terme: Rebalancing (40%)
+        const redist = calculateOptimalRedistribution(obs, baseline);
+        const redistGain = Math.round(trafficLoss.affectedUE * redist.recoveryRate);
+        recommendations.push({
+            action: 'redistribute',
+            title: ORANGE_ACTIONS.redistribute.name,
+            icon: 'redistribute',
+            priority: 'high',
+            efficiency: redist.efficiency,
+            timeline: redist.timeline,
+            recoveryRate: redist.recoveryRate,
+            description: `Redistribuer ${Math.round(redist.ratio * 100)}% vers voisins. Taux récupération: ${Math.round(redist.recoveryRate * 100)}%`,
+            expectedGain: { 
+                load: -redist.expectedLoadReduction, 
+                throughput: redist.expectedThroughputGain 
+            },
+            trafficLoss,
+            estimatedRecovery: { ue: redistGain, gb: Math.round(redistGain * 2.4) },
+            computedParams: { ratio: redist.ratio },
+            cellName,
+            currentMetrics: { load, cqi, congested }
+        });
+        
+        // Court terme: Power Adjustment (20%)
+        const power = calculatePowerAdjustment(obs, baseline);
+        const powerGain = Math.round(trafficLoss.affectedUE * power.recoveryRate);
+        recommendations.push({
+            action: 'power',
+            title: ORANGE_ACTIONS.power.name,
+            icon: 'tilt',
+            priority: 'medium',
+            efficiency: power.efficiency,
+            timeline: power.timeline,
+            recoveryRate: power.recoveryRate,
+            description: `${power.adjustment > 0 ? 'Augmenter' : 'Réduire'} puissance de ${Math.abs(power.adjustment)} dB`,
+            expectedGain: { 
+                coverage: power.coverageChange, 
+                load: power.loadChange 
+            },
+            trafficLoss,
+            estimatedRecovery: { ue: powerGain, gb: Math.round(powerGain * 2.4) },
+            computedParams: { adjustment: power.adjustment, target: power.targetPower },
+            cellName,
+            currentMetrics: { load, cqi, congested }
+        });
+        
+        // Court terme: Neighbor optimization (35%)
+        const neighbor = calculateNeighborOptimization(obs, baseline);
+        const neighborGain = Math.round(trafficLoss.affectedUE * neighbor.recoveryRate);
+        recommendations.push({
+            action: 'neighbor_optimization',
+            title: ORANGE_ACTIONS.neighbor_optimization.name,
+            icon: 'redistribute',
+            priority: 'medium',
+            efficiency: neighbor.efficiency,
+            timeline: neighbor.timeline,
+            recoveryRate: neighbor.recoveryRate,
+            description: `Optimiser paramètres handover vers voisins. Réduction charge: ${neighbor.expectedLoadReduction}%`,
+            expectedGain: { 
+                load: -neighbor.expectedLoadReduction, 
+                cqi: neighbor.expectedCqiGain 
+            },
+            trafficLoss,
+            estimatedRecovery: { ue: neighborGain, gb: Math.round(neighborGain * 2.4) },
+            computedParams: {},
+            cellName,
+            currentMetrics: { load, cqi, congested }
+        });
+        
+        // Court terme: Parameter Tuning (25%)
+        const params = calculateParameterTuning(obs, baseline);
+        const paramsGain = Math.round(trafficLoss.affectedUE * params.recoveryRate);
+        recommendations.push({
+            action: 'parameter_tuning',
+            title: ORANGE_ACTIONS.parameter_tuning.name,
+            icon: 'redistribute',
+            priority: 'low',
+            efficiency: params.efficiency,
+            timeline: params.timeline,
+            recoveryRate: params.recoveryRate,
+            description: `Tuning CIO/Hysteresis pour améliorer handover et réduire charge`,
+            expectedGain: { 
+                load: -params.expectedLoadReduction, 
+                handover: '+amélioration' 
+            },
+            trafficLoss,
+            estimatedRecovery: { ue: paramsGain, gb: Math.round(paramsGain * 2.4) },
+            computedParams: { cio: params.cio, hysteresis: params.hysteresis },
+            cellName,
+            currentMetrics: { load, cqi, congested }
+        });
+        
+        // Court terme: Tilt (15%)
+        const tilt = calculateOptimalTilt(obs, baseline);
+        const tiltGain = Math.round(trafficLoss.affectedUE * tilt.recoveryRate);
+        recommendations.push({
+            action: 'tilt',
+            title: ORANGE_ACTIONS.tilt.name,
+            icon: 'tilt',
+            priority: 'medium',
+            efficiency: tilt.efficiency,
+            timeline: tilt.timeline,
+            recoveryRate: tilt.recoveryRate,
+            description: `${tilt.direction === 'downtilt' ? 'Réduire' : 'Étendre'} couverture de ${tilt.optimalDegrees}°`,
+            expectedGain: { 
+                load: -tilt.expectedLoadReduction, 
+                cqi: tilt.expectedCqiGain 
+            },
+            trafficLoss,
+            estimatedRecovery: { ue: tiltGain, gb: Math.round(tiltGain * 2.4) },
             computedParams: { degrees: tilt.degrees },
             cellName,
             currentMetrics: { load, cqi, congested }
         });
     }
-    // Moderate congestion
-    else if (congested) {
+    // --- MODERATE CONGESTION or DEGRADED QUALITY ---
+    else if (congested || throughput < 4000 || activeUsers > 4) {
+        // Moyen terme: MIMO for throughput issues
+        if (throughput < 4000) {
+            const mimo = calculateMimoUpgrade(obs, baseline);
+            const mimoGain = Math.round(trafficLoss.affectedUE * mimo.recoveryRate);
+            recommendations.push({
+                action: 'mimo_upgrade',
+                title: ORANGE_ACTIONS.mimo_upgrade.name,
+                icon: 'carrier',
+                priority: 'high',
+                efficiency: mimo.efficiency,
+                timeline: mimo.timeline,
+                recoveryRate: mimo.recoveryRate,
+                description: `Débit faible (${(throughput/1000).toFixed(1)} Mbps). Upgrade MIMO ${mimo.currentConfig} → ${mimo.targetConfig}`,
+                expectedGain: { 
+                    throughput: mimo.expectedThroughputGain, 
+                    capacity: `+${mimo.capacityGain}%` 
+                },
+                trafficLoss,
+                estimatedRecovery: { ue: mimoGain, gb: Math.round(mimoGain * 2.4) },
+                computedParams: { config: mimo.targetConfig },
+                cellName,
+                currentMetrics: { load, cqi, congested, throughput }
+            });
+        }
+        
+        // Court terme: Rebalancing (40%)
         const redist = calculateOptimalRedistribution(obs, baseline);
+        const redistGain = Math.round(trafficLoss.affectedUE * redist.recoveryRate);
         recommendations.push({
             action: 'redistribute',
-            title: 'Load Balancing (MLB)',
+            title: ORANGE_ACTIONS.redistribute.name,
             icon: 'redistribute',
             priority: 'high',
             efficiency: redist.efficiency,
-            description: `Redistribute ${Math.round(redist.ratio * 100)}% to neighbors. Target: ${(load - redist.expectedLoadReduction).toFixed(1)}% load.`,
+            timeline: redist.timeline,
+            recoveryRate: redist.recoveryRate,
+            description: `Équilibrer charge vers cellules voisines (${Math.round(redist.ratio * 100)}%)`,
             expectedGain: { 
                 load: -redist.expectedLoadReduction, 
                 throughput: redist.expectedThroughputGain 
             },
+            trafficLoss,
+            estimatedRecovery: { ue: redistGain, gb: Math.round(redistGain * 2.4) },
             computedParams: { ratio: redist.ratio },
             cellName,
             currentMetrics: { load, cqi, congested }
         });
         
+        // Court terme: Power Adjustment (20%)
+        const power = calculatePowerAdjustment(obs, baseline);
+        const powerGain = Math.round(trafficLoss.affectedUE * power.recoveryRate);
+        recommendations.push({
+            action: 'power',
+            title: ORANGE_ACTIONS.power.name,
+            icon: 'tilt',
+            priority: 'medium',
+            efficiency: power.efficiency,
+            timeline: power.timeline,
+            recoveryRate: power.recoveryRate,
+            description: `Ajuster puissance Tx: ${power.adjustment > 0 ? '+' : ''}${power.adjustment} dB`,
+            expectedGain: { 
+                coverage: power.coverageChange, 
+                load: power.loadChange 
+            },
+            trafficLoss,
+            estimatedRecovery: { ue: powerGain, gb: Math.round(powerGain * 2.4) },
+            computedParams: { adjustment: power.adjustment, target: power.targetPower },
+            cellName,
+            currentMetrics: { load, cqi, congested }
+        });
+        
+        // Court terme: Tilt (15%)
         const tilt = calculateOptimalTilt(obs, baseline);
+        const tiltGain = Math.round(trafficLoss.affectedUE * tilt.recoveryRate);
         recommendations.push({
             action: 'tilt',
-            title: `Antenna ${tilt.direction === 'downtilt' ? 'Downtilt' : 'Uptilt'} ${tilt.optimalDegrees}°`,
+            title: ORANGE_ACTIONS.tilt.name,
             icon: 'tilt',
             priority: 'medium',
             efficiency: tilt.efficiency,
-            description: `Optimize coverage with ${tilt.optimalDegrees}° ${tilt.direction}. Reduces cell overlap.`,
+            timeline: tilt.timeline,
+            recoveryRate: tilt.recoveryRate,
+            description: `Ajustement ${tilt.direction} ${tilt.optimalDegrees}° pour optimiser couverture`,
             expectedGain: { 
                 load: -tilt.expectedLoadReduction, 
                 cqi: tilt.expectedCqiGain 
             },
+            trafficLoss,
+            estimatedRecovery: { ue: tiltGain, gb: Math.round(tiltGain * 2.4) },
             computedParams: { degrees: tilt.degrees },
             cellName,
             currentMetrics: { load, cqi, congested }
@@ -755,17 +1458,18 @@ function generateSmartRecommendations(cellName) {
     // --- POOR CQI (interference) ---
     else if (cqi < CONFIG.CQI_THRESHOLD) {
         const tilt = calculateOptimalTilt(obs, baseline);
-        // Force downtilt for interference
         const interferenceAngle = Math.max(2, tilt.optimalDegrees);
-        const expectedCqiGain = Math.round((15 - cqi) * 0.25 * 10) / 10; // Up to ~2 CQI improvement
+        const expectedCqiGain = Math.round((15 - cqi) * 0.25 * 10) / 10;
         
         recommendations.push({
             action: 'tilt',
-            title: `Downtilt ${interferenceAngle}° (Anti-Interference)`,
+            title: `Downtilt anti-interférence`,
             icon: 'tilt',
             priority: 'high',
             efficiency: 85,
-            description: `CQI is ${cqi.toFixed(1)} (poor). Downtilt by ${interferenceAngle}° to reduce overlap with neighbors. Expected CQI: ${(cqi + expectedCqiGain).toFixed(1)}`,
+            timeline: 'court_terme',
+            recoveryRate: ORANGE_ACTIONS.tilt.recoveryRate,
+            description: `CQI ${cqi.toFixed(1)} dégradé. Downtilt ${interferenceAngle}° pour réduire overlap. CQI cible: ${(cqi + expectedCqiGain).toFixed(1)}`,
             expectedGain: { 
                 cqi: expectedCqiGain, 
                 throughput: Math.round(expectedCqiGain * 8) 
@@ -775,16 +1479,19 @@ function generateSmartRecommendations(cellName) {
             currentMetrics: { load, cqi, congested }
         });
         
-        const carrier = calculateOptimalCarrier(obs, baseline);
+        // Court terme: Neighbor optimization
+        const neighbor = calculateNeighborOptimization(obs, baseline);
         recommendations.push({
-            action: 'add_carrier',
-            title: `Add ${carrier.bandName} (Less Interference)`,
-            icon: 'carrier',
+            action: 'neighbor_optimization',
+            title: ORANGE_ACTIONS.neighbor_optimization.name,
+            icon: 'redistribute',
             priority: 'medium',
-            efficiency: 65,
-            description: `Higher frequency bands have smaller footprint and less inter-cell interference.`,
-            expectedGain: { cqi: 1.5, throughput: 25 },
-            computedParams: { band: '7' },
+            efficiency: neighbor.efficiency,
+            timeline: neighbor.timeline,
+            recoveryRate: neighbor.recoveryRate,
+            description: `Optimiser voisinage pour réduire interférences inter-cellules`,
+            expectedGain: { cqi: 0.5, throughput: 10 },
+            computedParams: {},
             cellName,
             currentMetrics: { load, cqi, congested }
         });
@@ -794,11 +1501,13 @@ function generateSmartRecommendations(cellName) {
         const redist = calculateOptimalRedistribution(obs, baseline);
         recommendations.push({
             action: 'redistribute',
-            title: 'Preventive Load Balancing',
+            title: 'Équilibrage préventif',
             icon: 'redistribute',
             priority: 'medium',
             efficiency: redist.efficiency - 10,
-            description: `Load at ${load.toFixed(1)}% - approaching threshold. Preemptively offload ${Math.round(redist.ratio * 100)}%.`,
+            timeline: 'court_terme',
+            recoveryRate: redist.recoveryRate,
+            description: `Charge ${load.toFixed(1)}% approche seuil. Préempter avec ${Math.round(redist.ratio * 100)}% redistribution`,
             expectedGain: { 
                 load: -redist.expectedLoadReduction, 
                 throughput: Math.round(redist.expectedThroughputGain * 0.7)
@@ -813,24 +1522,29 @@ function generateSmartRecommendations(cellName) {
         const uptiltDegrees = Math.min(2, Math.round((ta - 15) * 0.15 * 2) / 2);
         recommendations.push({
             action: 'tilt',
-            title: `Uptilt ${uptiltDegrees}° (Coverage Extension)`,
+            title: `Uptilt couverture (+${uptiltDegrees}°)`,
             icon: 'tilt',
             priority: 'medium',
             efficiency: 55,
-            description: `High TA (${ta.toFixed(1)}) indicates distant users with weak signal. Uptilt extends range.`,
+            timeline: 'court_terme',
+            recoveryRate: ORANGE_ACTIONS.tilt.recoveryRate,
+            description: `TA élevé (${ta.toFixed(1)}) = utilisateurs distants. Uptilt pour meilleure portée`,
             expectedGain: { coverage: 15, throughput: 5 },
             computedParams: { degrees: -uptiltDegrees },
             cellName,
             currentMetrics: { load, cqi, ta }
         });
         
+        const site = calculateAddSite(obs, baseline);
         recommendations.push({
-            action: 'densify',
-            title: 'Site Densification',
+            action: 'add_site',
+            title: 'Densification couverture',
             icon: 'densify',
             priority: 'high',
-            efficiency: 90,
-            description: `TA of ${ta.toFixed(1)} suggests coverage gap. New site would improve edge throughput by ~50%.`,
+            efficiency: site.efficiency,
+            timeline: site.timeline,
+            recoveryRate: site.recoveryRate,
+            description: `TA ${ta.toFixed(1)} indique trou couverture. Nouveau site améliorerait débit +50%`,
             expectedGain: { coverage: 35, throughput: 50 },
             computedParams: {},
             cellName,
@@ -838,9 +1552,12 @@ function generateSmartRecommendations(cellName) {
         });
     }
     
-    // Sort by priority then efficiency
+    // Sort by timeline (court_terme first) then priority then efficiency
+    const timelineOrder = { court_terme: 0, moyen_terme: 1, long_terme: 2 };
     const priorityOrder = { critical: 0, high: 1, medium: 2, low: 3 };
     recommendations.sort((a, b) => {
+        const tDiff = (timelineOrder[a.timeline] || 2) - (timelineOrder[b.timeline] || 2);
+        if (tDiff !== 0) return tDiff;
         const pDiff = priorityOrder[a.priority] - priorityOrder[b.priority];
         if (pDiff !== 0) return pDiff;
         return b.efficiency - a.efficiency;
@@ -855,7 +1572,7 @@ function renderRecommendationsPanel(cellName) {
     if (!container) return;
     
     if (!cellName) {
-        container.innerHTML = '<div class="reco-placeholder">Select a cell to get recommendations</div>';
+        container.innerHTML = '<div class="reco-placeholder">Sélectionner une cellule pour les recommandations</div>';
         if (badge) badge.textContent = '0';
         return;
     }
@@ -869,7 +1586,7 @@ function renderRecommendationsPanel(cellName) {
         container.innerHTML = `
             <div class="reco-placeholder" style="color: var(--success);">
                 <span class="material-symbols-outlined" style="font-size: 24px; margin-bottom: 8px;">check_circle</span><br>
-                Cell is healthy. No action required.
+                Cellule saine. Aucune action requise.
             </div>
         `;
         return;
@@ -879,33 +1596,76 @@ function renderRecommendationsPanel(cellName) {
         const gains = reco.expectedGain || {};
         const metrics = reco.currentMetrics || {};
         
+        // Timeline badge
+        const timelineLabels = {
+            court_terme: { label: 'Court terme', class: 'timeline-short' },
+            moyen_terme: { label: 'Moyen terme', class: 'timeline-medium' },
+            long_terme: { label: 'Long terme', class: 'timeline-long' }
+        };
+        const timeline = timelineLabels[reco.timeline] || { label: '', class: '' };
+        
         // Build dynamic metrics display
         let metricsHtml = '';
         if (gains.load) {
             const newLoad = (metrics.load || 0) + gains.load;
-            metricsHtml += `<div class="reco-metric"><span class="reco-metric-label">Load:</span><span class="reco-metric-value">${metrics.load?.toFixed(0) || '--'}% → ${newLoad.toFixed(0)}%</span></div>`;
+            metricsHtml += `<div class="reco-metric"><span class="reco-metric-label">Charge:</span><span class="reco-metric-value">${metrics.load?.toFixed(0) || '--'}% → ${newLoad.toFixed(0)}%</span></div>`;
         }
         if (gains.cqi) {
             const newCqi = (metrics.cqi || 0) + gains.cqi;
             metricsHtml += `<div class="reco-metric"><span class="reco-metric-label">CQI:</span><span class="reco-metric-value">${metrics.cqi?.toFixed(1) || '--'} → ${newCqi.toFixed(1)}</span></div>`;
         }
         if (gains.throughput) {
-            metricsHtml += `<div class="reco-metric"><span class="reco-metric-label">Throughput:</span><span class="reco-metric-value">+${gains.throughput}%</span></div>`;
+            metricsHtml += `<div class="reco-metric"><span class="reco-metric-label">Débit:</span><span class="reco-metric-value">+${gains.throughput}%</span></div>`;
         }
         if (gains.coverage) {
-            metricsHtml += `<div class="reco-metric"><span class="reco-metric-label">Coverage:</span><span class="reco-metric-value">+${gains.coverage}%</span></div>`;
+            metricsHtml += `<div class="reco-metric"><span class="reco-metric-label">Couverture:</span><span class="reco-metric-value">+${gains.coverage}%</span></div>`;
+        }
+        if (gains.users) {
+            metricsHtml += `<div class="reco-metric"><span class="reco-metric-label">UE:</span><span class="reco-metric-value">${gains.users} utilisateurs</span></div>`;
         }
         
-        // Show optimal parameter in title for tilt actions
+        // Manque à gagner display
+        let trafficLossHtml = '';
+        if (reco.trafficLoss && reco.estimatedRecovery) {
+            trafficLossHtml = `
+                <div class="reco-traffic-loss">
+                    <div class="traffic-loss-title">📉 Manque à gagner</div>
+                    <div class="traffic-loss-row">
+                        <span>Perte actuelle:</span>
+                        <span>${reco.trafficLoss.affectedUE} UE / ${reco.trafficLoss.lostGB} Go/mois</span>
+                    </div>
+                    <div class="traffic-loss-row recovery">
+                        <span>Gain estimé (${Math.round(reco.recoveryRate * 100)}%):</span>
+                        <span class="recovery-value">+${reco.estimatedRecovery.ue} UE / +${reco.estimatedRecovery.gb} Go</span>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Show optimal parameter in title
         let paramHint = '';
         if (reco.action === 'tilt' && reco.computedParams.degrees !== undefined) {
             const deg = reco.computedParams.degrees;
             paramHint = `<span class="reco-param-hint">${deg > 0 ? '↓' : '↑'} ${Math.abs(deg)}°</span>`;
         } else if (reco.action === 'redistribute' && reco.computedParams.ratio) {
-            paramHint = `<span class="reco-param-hint">${Math.round(reco.computedParams.ratio * 100)}% offload</span>`;
+            paramHint = `<span class="reco-param-hint">${Math.round(reco.computedParams.ratio * 100)}%</span>`;
         } else if (reco.action === 'add_carrier' && reco.computedParams.band) {
-            paramHint = `<span class="reco-param-hint">Band ${reco.computedParams.band}</span>`;
+            paramHint = `<span class="reco-param-hint">B${reco.computedParams.band}</span>`;
         }
+        
+        // Recovery rate badge
+        const recoveryHtml = reco.recoveryRate 
+            ? `<span class="reco-recovery-badge">↑${Math.round(reco.recoveryRate * 100)}%</span>` 
+            : '';
+        
+        // Determine if action is simulatable
+        const simulatable = ['tilt', 'redistribute', 'add_carrier'].includes(reco.action);
+        const buttonHtml = simulatable 
+            ? `<button class="reco-apply-btn" onclick="applyRecommendation(${idx})">
+                <span class="material-symbols-outlined">bolt</span>
+                Simuler cette action
+               </button>`
+            : `<div class="reco-capex-note">⚠️ Action CAPEX - Planification requise</div>`;
         
         return `
         <div class="reco-item priority-${reco.priority}" data-reco-idx="${idx}">
@@ -913,22 +1673,23 @@ function renderRecommendationsPanel(cellName) {
                 <div class="reco-icon ${reco.icon}">
                     <span class="material-symbols-outlined">${getRecoIcon(reco.icon)}</span>
                 </div>
-                <div>
-                    <div class="reco-title">${reco.title} ${paramHint}</div>
-                    <div class="reco-subtitle">${reco.priority.toUpperCase()} priority</div>
+                <div class="reco-header-content">
+                    <div class="reco-title">${reco.title} ${paramHint} ${recoveryHtml}</div>
+                    <div class="reco-badges">
+                        <span class="reco-priority-badge priority-${reco.priority}">${reco.priority.toUpperCase()}</span>
+                        ${timeline.label ? `<span class="reco-timeline-badge ${timeline.class}">${timeline.label}</span>` : ''}
+                    </div>
                 </div>
             </div>
             <div class="reco-body">${reco.description}</div>
             <div class="reco-metrics">${metricsHtml}</div>
+            ${trafficLossHtml}
             <div class="reco-efficiency">
-                <span class="efficiency-label">Efficiency:</span>
+                <span class="efficiency-label">Efficacité:</span>
                 <div class="efficiency-bar"><div class="efficiency-fill" style="width: ${reco.efficiency}%"></div></div>
                 <span class="efficiency-value">${reco.efficiency}%</span>
             </div>
-            <button class="reco-apply-btn" onclick="applyRecommendation(${idx})">
-                <span class="material-symbols-outlined">bolt</span>
-                Simulate This Action
-            </button>
+            ${buttonHtml}
         </div>
     `}).join('');
     
@@ -941,7 +1702,10 @@ function getRecoIcon(type) {
         tilt: 'cell_tower',
         carrier: 'add_circle',
         redistribute: 'sync_alt',
-        densify: 'add_location'
+        densify: 'add_location',
+        add_site: 'add_location',
+        add_sector: 'settings_input_antenna',
+        neighbor_optimization: 'hub'
     };
     return icons[type] || 'lightbulb';
 }
@@ -1032,14 +1796,38 @@ function buildActionParamsUI(action) {
     const container = document.getElementById('action-params');
     if (!container) return;
     if (!action) {
-        container.innerHTML = '<div class="action-hint">Choose an action to estimate impact.</div>';
+        container.innerHTML = '<div class="action-hint">Choisir une action pour estimer l\'impact.</div>';
         return;
     }
 
+    // Get action info for timeline/recovery display
+    const actionInfo = ORANGE_ACTIONS[action];
+    const infoBox = actionInfo ? `
+        <div class="action-info-box">
+            <span class="timeline-badge ${actionInfo.timeline}">${
+                actionInfo.timeline === 'court_terme' ? '⚡ Court terme' :
+                actionInfo.timeline === 'moyen_terme' ? '📅 Moyen terme' : '🏗️ Long terme'
+            }</span>
+            <span class="recovery-badge">↑${Math.round(actionInfo.recoveryRate * 100)}% récup.</span>
+            ${actionInfo.capex ? '<span class="capex-badge">💰 CAPEX</span>' : '<span class="opex-badge">OPEX</span>'}
+        </div>
+        <div class="action-effect">${actionInfo.effect}</div>
+    ` : '';
+
     if (action === 'tilt') {
-        container.innerHTML = `
-            <label class="action-label" for="param-tilt-deg">Downtilt (degrees)</label>
+        container.innerHTML = `${infoBox}
+            <label class="action-label" for="param-tilt-deg">Downtilt (degrés)</label>
             <input type="number" id="param-tilt-deg" class="action-input" value="2" min="-5" max="10" step="0.5">
+            <div class="action-hint">Positif = downtilt, Négatif = uptilt</div>
+        `;
+        return;
+    }
+
+    if (action === 'power') {
+        container.innerHTML = `${infoBox}
+            <label class="action-label" for="param-power-delta">Réduction puissance (dB)</label>
+            <input type="number" id="param-power-delta" class="action-input" value="3" min="0" max="10" step="1">
+            <div class="action-hint">Réduction Tx Power en dB (0 = pas de changement)</div>
         `;
         return;
     }
@@ -1047,27 +1835,94 @@ function buildActionParamsUI(action) {
     if (action === 'add_carrier') {
         const bands = (state.globalStats?.frequency_bands || []).map(String);
         const options = bands.length
-            ? bands.map(b => `<option value="${b}">Band ${b}</option>`).join('')
-            : '<option value="">No bands available</option>';
-        container.innerHTML = `
-            <label class="action-label" for="param-carrier-band">Select band</label>
+            ? bands.map(b => `<option value="${b}">Bande ${b}</option>`).join('')
+            : '<option value="">Aucune bande disponible</option>';
+        container.innerHTML = `${infoBox}
+            <label class="action-label" for="param-carrier-band">Sélectionner bande</label>
             <select id="param-carrier-band" class="action-input">${options}</select>
-            <div class="action-hint">Adds a carrier only if the site does not already host this band.</div>
+            <div class="action-hint">Active Carrier Aggregation si bande non présente sur site.</div>
         `;
         return;
     }
 
     if (action === 'redistribute') {
-        container.innerHTML = `
-            <label class="action-label" for="param-redistribute-target">Target cell (optional)</label>
-            <input type="text" id="param-redistribute-target" class="action-input" placeholder="neighbor cell name">
-            <label class="action-label" for="param-redistribute-ratio">Redistribution ratio (0-0.6)</label>
+        container.innerHTML = `${infoBox}
+            <label class="action-label" for="param-redistribute-target">Cellule cible (optionnel)</label>
+            <input type="text" id="param-redistribute-target" class="action-input" placeholder="nom cellule voisine">
+            <label class="action-label" for="param-redistribute-ratio">Ratio redistribution (0-0.6)</label>
             <input type="number" id="param-redistribute-ratio" class="action-input" value="0.2" min="0" max="0.6" step="0.05">
+            <div class="action-hint">MLB: équilibrage charge vers voisins moins chargés</div>
         `;
         return;
     }
 
-    container.innerHTML = '<div class="action-hint">Choose an action to estimate impact.</div>';
+    if (action === 'parameter_tuning') {
+        container.innerHTML = `${infoBox}
+            <label class="action-label" for="param-cio">Cell Individual Offset (dB)</label>
+            <input type="number" id="param-cio" class="action-input" value="-3" min="-6" max="6" step="1">
+            <label class="action-label" for="param-hysteresis">Hysteresis (dB)</label>
+            <input type="number" id="param-hysteresis" class="action-input" value="2" min="0" max="6" step="1">
+            <div class="action-hint">CIO négatif = repousse UE vers voisins</div>
+        `;
+        return;
+    }
+
+    if (action === 'mimo_upgrade') {
+        container.innerHTML = `${infoBox}
+            <label class="action-label" for="param-mimo-target">Configuration MIMO cible</label>
+            <select id="param-mimo-target" class="action-input">
+                <option value="4T4R">4T4R (Recommandé)</option>
+                <option value="8T8R">8T8R (Massive MIMO)</option>
+            </select>
+            <div class="action-hint">Upgrade antenne pour meilleure efficacité spectrale</div>
+        `;
+        return;
+    }
+
+    if (action === 'small_cell') {
+        container.innerHTML = `${infoBox}
+            <label class="action-label" for="param-sc-type">Type Small Cell</label>
+            <select id="param-sc-type" class="action-input">
+                <option value="micro">Micro outdoor</option>
+                <option value="femto">Femto indoor</option>
+                <option value="pico">Pico hotspot</option>
+            </select>
+            <div class="action-hint">Déploiement capacité locale ciblée</div>
+        `;
+        return;
+    }
+
+    if (action === 'add_sector') {
+        container.innerHTML = `${infoBox}
+            <label class="action-label">Configuration actuelle</label>
+            <div class="action-static">3 secteurs → 4 secteurs</div>
+            <div class="action-hint">Sectorisation: +33% capacité site</div>
+        `;
+        return;
+    }
+
+    if (action === 'add_site') {
+        container.innerHTML = `${infoBox}
+            <label class="action-label" for="param-site-type">Type de site</label>
+            <select id="param-site-type" class="action-input">
+                <option value="macro">Macro capacitaire</option>
+                <option value="rooftop">Rooftop urbain</option>
+            </select>
+            <div class="action-hint">Nouveau site pour absorber trafic zone congestionnée</div>
+        `;
+        return;
+    }
+
+    if (action === 'split_cell') {
+        container.innerHTML = `${infoBox}
+            <label class="action-label">Cell Split</label>
+            <div class="action-static">1 cellule → 2 cellules</div>
+            <div class="action-hint">Subdivision cellule haute charge en 2+ cellules</div>
+        `;
+        return;
+    }
+
+    container.innerHTML = `${infoBox}<div class="action-hint">Action: ${actionInfo?.name || action}</div>`;
 }
 
 function collectActionParams(action) {
@@ -1456,6 +2311,19 @@ function computeExploreData(duration, metric) {
         };
     }
 
+    if (duration === 'all') {
+        const arr = data.map(entry => entry.stats?.[metric] ?? 0);
+        const total = arr.reduce((a, b) => a + b, 0);
+        const avg = arr.length ? total / arr.length : 0;
+        const maxValue = arr.length ? Math.max(...arr) : 0;
+        const minValue = arr.length ? Math.min(...arr) : 0;
+        return {
+            labels: ['All time total'],
+            values: [total],
+            insights: { total, avgValue: avg, maxValue, minValue, samples: arr.length }
+        };
+    }
+
     return { labels: [], values: [], insights: {} };
 }
 
@@ -1481,7 +2349,8 @@ function renderExploreCharts() {
     const durationLabels = {
         hour: 'Peak Hours Analysis',
         day: 'Daily Trends',
-        week: 'Weekly Pattern'
+        week: 'Weekly Pattern',
+        all: 'All Time Overview'
     };
     
     const titleEl = document.getElementById('explore-chart-title');
@@ -1499,22 +2368,26 @@ function renderExploreCharts() {
     const timeline = computeTimelineData(metric);
     
     // Main chart
+    const isBar = duration === 'hour' || duration === 'all';
+
     exploreCharts.main = new Chart(mainCtx, {
-        type: duration === 'hour' ? 'bar' : 'line',
+        type: isBar ? 'bar' : 'line',
         data: {
             labels,
             datasets: [{
                 label: metricLabels[metric],
                 data: values,
                 backgroundColor: duration === 'hour' 
-                    ? values.map((v, i) => {
+                    ? values.map((v) => {
                         const max = Math.max(...values);
                         return v >= max * 0.9 ? '#FF7900' : v >= max * 0.7 ? '#FFB74D' : '#42A5F5';
                     })
-                    : 'rgba(255, 121, 0, 0.3)',
+                    : duration === 'all'
+                        ? '#FF7900'
+                        : 'rgba(255, 121, 0, 0.3)',
                 borderColor: '#FF7900',
                 borderWidth: 2,
-                fill: duration !== 'hour',
+                fill: !isBar,
                 tension: 0.3
             }]
         },
@@ -1612,6 +2485,37 @@ function renderExploreCharts() {
                     </div>
                 </div>
             `;
+        } else if (duration === 'all') {
+            html += `
+                <div class="insight-card insight-warning">
+                    <span class="material-symbols-outlined">dns</span>
+                    <div>
+                        <div class="insight-label">Total (all time)</div>
+                        <div class="insight-value">${(insights.total || 0).toFixed(0)}</div>
+                    </div>
+                </div>
+                <div class="insight-card">
+                    <span class="material-symbols-outlined">analytics</span>
+                    <div>
+                        <div class="insight-label">Average per snapshot</div>
+                        <div class="insight-value">${(insights.avgValue || 0).toFixed(2)}</div>
+                    </div>
+                </div>
+                <div class="insight-card">
+                    <span class="material-symbols-outlined">trending_up</span>
+                    <div>
+                        <div class="insight-label">Max in a snapshot</div>
+                        <div class="insight-value">${(insights.maxValue || 0).toFixed(2)}</div>
+                    </div>
+                </div>
+                <div class="insight-card">
+                    <span class="material-symbols-outlined">trending_down</span>
+                    <div>
+                        <div class="insight-label">Min in a snapshot</div>
+                        <div class="insight-value">${(insights.minValue || 0).toFixed(2)}</div>
+                    </div>
+                </div>
+            `;
         }
         html += '</div>';
         insightsEl.innerHTML = html;
@@ -1627,6 +2531,265 @@ function setupExploreModal() {
     document.getElementById('explore-refresh')?.addEventListener('click', renderExploreCharts);
     document.getElementById('explore-duration')?.addEventListener('change', renderExploreCharts);
     document.getElementById('explore-metric')?.addEventListener('change', renderExploreCharts);
+}
+
+// --- Forecast Mode ---
+const forecastState = {
+    mode: 'historical',  // 'historical' or 'forecast'
+    forecastIndex: [],
+    forecastTimeIndex: 0,
+    isGenerating: false,
+    available: false
+};
+
+async function checkForecastAvailability() {
+    try {
+        const res = await fetch('/api/forecast');
+        const data = await res.json();
+        forecastState.available = data.available;
+        if (data.available && data.forecasts) {
+            forecastState.forecastIndex = data.forecasts;
+        }
+        return data;
+    } catch (err) {
+        console.warn('Could not check forecast availability:', err);
+        return { available: false };
+    }
+}
+
+async function generateForecast() {
+    if (forecastState.isGenerating) return;
+    
+    const btn = document.getElementById('btn-generate-forecast');
+    const originalHtml = btn?.innerHTML;
+    
+    try {
+        forecastState.isGenerating = true;
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<span class="material-symbols-outlined spinning">sync</span><span>Generating...</span>';
+        }
+        
+        const res = await fetch('/api/forecast', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ days: 6 })
+        });
+        
+        const data = await res.json();
+        
+        if (data.success) {
+            // Reload forecast data
+            await checkForecastAvailability();
+            
+            // Update UI
+            if (forecastState.forecastIndex.length > 0) {
+                updateForecastSlider();
+                loadForecastSlice(0);
+            }
+            
+            showNotification('Forecast generated successfully!', 'success');
+        } else {
+            showNotification('Forecast generation failed: ' + (data.error || 'Unknown error'), 'error');
+        }
+    } catch (err) {
+        console.error('Forecast generation error:', err);
+        showNotification('Forecast generation failed', 'error');
+    } finally {
+        forecastState.isGenerating = false;
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = originalHtml || '<span class="material-symbols-outlined">auto_awesome</span><span>Generate</span>';
+        }
+    }
+}
+
+function showNotification(message, type = 'info') {
+    // Simple notification - can be enhanced
+    const existing = document.querySelector('.notification-toast');
+    if (existing) existing.remove();
+    
+    const toast = document.createElement('div');
+    toast.className = `notification-toast notification-${type}`;
+    toast.innerHTML = `
+        <span class="material-symbols-outlined">${type === 'success' ? 'check_circle' : type === 'error' ? 'error' : 'info'}</span>
+        <span>${message}</span>
+    `;
+    document.body.appendChild(toast);
+    
+    setTimeout(() => toast.classList.add('show'), 10);
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
+    }, 4000);
+}
+
+function switchTimeMode(mode) {
+    if (mode === forecastState.mode) return;
+    
+    forecastState.mode = mode;
+    
+    const historicalBtn = document.getElementById('mode-historical');
+    const forecastBtn = document.getElementById('mode-forecast');
+    const generateBtn = document.getElementById('btn-generate-forecast');
+    const indicator = document.getElementById('forecast-indicator');
+    
+    historicalBtn?.classList.toggle('active', mode === 'historical');
+    forecastBtn?.classList.toggle('active', mode === 'forecast');
+    
+    if (mode === 'forecast') {
+        generateBtn?.classList.remove('hidden');
+        indicator?.classList.remove('hidden');
+        document.body.classList.add('forecast-mode');
+        
+        // Load forecast data
+        if (forecastState.forecastIndex.length > 0) {
+            updateForecastSlider();
+            loadForecastSlice(0);
+        } else {
+            // Check if forecast is available
+            checkForecastAvailability().then(data => {
+                if (data.available) {
+                    updateForecastSlider();
+                    loadForecastSlice(0);
+                }
+            });
+        }
+    } else {
+        generateBtn?.classList.add('hidden');
+        indicator?.classList.add('hidden');
+        document.body.classList.remove('forecast-mode');
+        
+        // Restore historical data
+        updateHistoricalSlider();
+        loadTimeSlice(state.currentTimeIndex);
+    }
+}
+
+function updateForecastSlider() {
+    const slider = document.getElementById('time-slider');
+    const startLabel = document.getElementById('time-start-label');
+    const endLabel = document.getElementById('time-end-label');
+    
+    if (!forecastState.forecastIndex.length) return;
+    
+    if (slider) {
+        slider.min = 0;
+        slider.max = forecastState.forecastIndex.length - 1;
+        slider.value = 0;
+    }
+    
+    if (startLabel) startLabel.textContent = forecastState.forecastIndex[0]?.timestamp || '--';
+    if (endLabel) endLabel.textContent = forecastState.forecastIndex[forecastState.forecastIndex.length - 1]?.timestamp || '--';
+}
+
+function updateHistoricalSlider() {
+    const slider = document.getElementById('time-slider');
+    const startLabel = document.getElementById('time-start-label');
+    const endLabel = document.getElementById('time-end-label');
+    
+    if (!state.timeIndex.length) return;
+    
+    if (slider) {
+        slider.min = 0;
+        slider.max = state.timeIndex.length - 1;
+        slider.value = state.currentTimeIndex;
+    }
+    
+    if (startLabel) startLabel.textContent = state.timeIndex[0]?.timestamp || '--';
+    if (endLabel) endLabel.textContent = state.timeIndex[state.timeIndex.length - 1]?.timestamp || '--';
+}
+
+async function loadForecastSlice(index) {
+    if (index < 0 || index >= forecastState.forecastIndex.length) return;
+    
+    const forecastEntry = forecastState.forecastIndex[index];
+    forecastState.forecastTimeIndex = index;
+    
+    try {
+        const res = await fetch(`/forecast_data/${forecastEntry.filename}?t=${Date.now()}`);
+        const data = await res.json();
+        
+        state.currentObservations = data.observations;
+        state.currentStats = data.stats;
+        
+        const { pointFeatures, sectorFeatures } = buildFeaturesForTime(data.observations);
+        
+        // Mark features as forecast
+        pointFeatures.forEach(f => {
+            f.properties.is_forecast = true;
+            f.properties.confidence = data.confidence || 0.75;
+        });
+        sectorFeatures.forEach(f => {
+            f.properties.is_forecast = true;
+        });
+        
+        state.pointFeatures = pointFeatures;
+        state.sectorFeatures = sectorFeatures;
+        state.features = pointFeatures;
+        applyFilters();
+        
+        updateTimeSliderUI();
+        updateStatsUI(data.stats);
+        updateAlertsUI(state.filteredPointFeatures);
+        
+        // Update confidence indicator
+        const confidenceEl = document.getElementById('forecast-confidence');
+        if (confidenceEl) {
+            const conf = Math.round((data.confidence || 0.75) * 100);
+            confidenceEl.textContent = `${conf}% confidence`;
+        }
+        
+        if (state.selectedSite) {
+            showSiteInfoPanel(state.selectedSite);
+        }
+        
+    } catch (err) {
+        console.error('Failed to load forecast slice:', err);
+    }
+}
+
+function setupForecastControls() {
+    const historicalBtn = document.getElementById('mode-historical');
+    const forecastBtn = document.getElementById('mode-forecast');
+    const generateBtn = document.getElementById('btn-generate-forecast');
+    const slider = document.getElementById('time-slider');
+    const prevBtn = document.getElementById('time-prev');
+    const nextBtn = document.getElementById('time-next');
+    
+    historicalBtn?.addEventListener('click', () => switchTimeMode('historical'));
+    forecastBtn?.addEventListener('click', () => switchTimeMode('forecast'));
+    generateBtn?.addEventListener('click', generateForecast);
+    
+    // Override slider behavior based on mode
+    const originalSliderHandler = slider?._inputHandler;
+    
+    slider?.addEventListener('input', (e) => {
+        if (forecastState.mode === 'forecast') {
+            const val = parseInt(e.target.value, 10);
+            loadForecastSlice(val);
+        }
+    });
+    
+    // Override nav buttons
+    prevBtn?.addEventListener('click', () => {
+        if (forecastState.mode === 'forecast') {
+            if (forecastState.forecastTimeIndex > 0) {
+                loadForecastSlice(forecastState.forecastTimeIndex - 1);
+            }
+        }
+    });
+    
+    nextBtn?.addEventListener('click', () => {
+        if (forecastState.mode === 'forecast') {
+            if (forecastState.forecastTimeIndex < forecastState.forecastIndex.length - 1) {
+                loadForecastSlice(forecastState.forecastTimeIndex + 1);
+            }
+        }
+    });
+    
+    // Check forecast availability on load
+    checkForecastAvailability();
 }
 
 // --- Time Navigation ---
@@ -2000,6 +3163,7 @@ function initMap() {
         container: 'map',
         style: {
             version: 8,
+            glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
             sources: {
                 'basemap': {
                     type: 'raster',
@@ -2246,6 +3410,18 @@ function setupEventHandlers() {
         document.getElementById('sidebar-right')?.classList.toggle('collapsed');
     });
 
+    const legendToggle = document.getElementById('legend-toggle');
+    const legendContent = document.getElementById('legend-content');
+    if (legendToggle && legendContent) {
+        legendToggle.addEventListener('click', () => {
+            legendContent.classList.toggle('collapsed');
+            const icon = legendToggle.querySelector('.material-symbols-outlined');
+            if (icon) {
+                icon.textContent = legendContent.classList.contains('collapsed') ? 'expand_more' : 'expand_less';
+            }
+        });
+    }
+
     document.getElementById('cell-info-close')?.addEventListener('click', hideSiteInfoPanel);
 
     document.getElementById('filter-low-cqi')?.addEventListener('change', (e) => {
@@ -2338,11 +3514,15 @@ function setupEventHandlers() {
             case 'a': e.preventDefault(); toggleModal('analytics-modal', true); break;
             case 'd': e.preventDefault(); toggleModal('explore-modal', true); renderExploreCharts(); break;
             case 'e': e.preventDefault(); toggleModal('export-modal', true); break;
+            case 'f': if (!e.shiftKey) { e.preventDefault(); switchTimeMode(forecastState.mode === 'forecast' ? 'historical' : 'forecast'); } break;
         }
     });
 
     // Data Exploration Modal
     setupExploreModal();
+    
+    // Forecast Mode Controls
+    setupForecastControls();
 }
 
 function setLoading(isLoading, progress = '') {
@@ -2391,16 +3571,20 @@ async function init() {
         const map = initMap();
         
         map.on('load', () => {
-            addMapLayers(map, sites);
-            setupMapInteractions(map);
-            
-            if (pointFeatures.length > 0) {
-                const bounds = new maplibregl.LngLatBounds();
-                pointFeatures.forEach(f => bounds.extend(f.geometry.coordinates));
-                map.fitBounds(bounds, { padding: 50, maxZoom: 13 });
+            try {
+                addMapLayers(map, sites);
+                setupMapInteractions(map);
+                
+                if (pointFeatures.length > 0) {
+                    const bounds = new maplibregl.LngLatBounds();
+                    pointFeatures.forEach(f => bounds.extend(f.geometry.coordinates));
+                    map.fitBounds(bounds, { padding: 50, maxZoom: 13 });
+                }
+            } catch (e) {
+                console.error('Map load error:', e);
+            } finally {
+                setLoading(false);
             }
-            
-            setLoading(false);
         });
         
         setupTimeControls();

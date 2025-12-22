@@ -2,7 +2,19 @@ import { spawn } from 'child_process'
 import path from 'path'
 import fs from 'fs'
 
-const ALLOWED_ACTIONS = new Set(['tilt', 'add_carrier', 'redistribute'])
+const ALLOWED_ACTIONS = new Set([
+  'tilt',
+  'add_carrier',
+  'redistribute',
+  'power',
+  'parameter_tuning',
+  'neighbor_optimization',
+  'mimo_upgrade',
+  'small_cell',
+  'add_sector',
+  'add_site',
+  'split_cell'
+])
 const ALLOWED_MODES = new Set(['fast']) // fast is the only supported mode
 
 let allowedTimeFiles = null

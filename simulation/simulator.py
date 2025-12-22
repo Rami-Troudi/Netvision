@@ -508,6 +508,18 @@ def simulate_action(base_dir: Path, cell_name: str, action: str, params: Dict[st
     if load < 50 and cqi > 10 and action in ["tilt", "add_carrier", "redistribute"]:
         healthy_cell_warning = "Cell is healthy - simulation still applied for testing purposes"
 
+    # Generic recovery profiles for actions not explicitly modeled
+    generic_recovery = {
+        "power": 0.20,
+        "parameter_tuning": 0.25,
+        "neighbor_optimization": 0.35,
+        "mimo_upgrade": 0.35,
+        "small_cell": 0.45,
+        "add_sector": 0.85,
+        "add_site": 0.90,
+        "split_cell": 0.70,
+    }
+
     if action == "tilt":
         after_raw, affected, confidence = apply_tilt_scenario(before_state, params, cell_info)
         
@@ -533,6 +545,19 @@ def simulate_action(base_dir: Path, cell_name: str, action: str, params: Dict[st
     elif action == "new_site":
         raise ValueError("Deploy new site is handled in the site planning tool")
         
+    elif action in generic_recovery:
+        # Apply simplified effect using recovery rate to reduce load and improve throughput
+        rec = generic_recovery[action]
+        after_raw = before_state.copy()
+        load_reduction = before_state["load"] * rec
+        after_raw["load"] = clamp(before_state["load"] - load_reduction, 0, 100)
+        throughput_gain = before_state["throughput"] * rec
+        after_raw["throughput"] = before_state["throughput"] + throughput_gain
+        after_raw["cqi"] = clamp(before_state["cqi"] + rec * 3, 0, 15)
+        affected = []
+        confidence = 0.55
+        recommendation = f"Applied {action} with estimated recovery of {int(rec * 100)}%"
+    
     else:
         after_raw = before_state.copy()
         recommendation = "No action applied"

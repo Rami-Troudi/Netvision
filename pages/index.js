@@ -43,6 +43,18 @@ const pageMarkup = `
         <!-- Time Slider Bar -->
         <div class="time-slider-bar" id="time-slider-bar">
             <div class="time-slider-container">
+                <!-- Mode Toggle: Historical / Forecast -->
+                <div class="time-mode-toggle">
+                    <button class="time-mode-btn active" id="mode-historical" title="Historical Data">
+                        <span class="material-symbols-outlined">history</span>
+                        <span class="mode-label">Historical</span>
+                    </button>
+                    <button class="time-mode-btn" id="mode-forecast" title="6-Day Forecast">
+                        <span class="material-symbols-outlined">trending_up</span>
+                        <span class="mode-label">Forecast</span>
+                    </button>
+                </div>
+                
                 <button class="time-nav-btn" id="time-prev" title="Previous hour">
                     <span class="material-symbols-outlined">chevron_left</span>
                 </button>
@@ -60,6 +72,19 @@ const pageMarkup = `
                 <button class="time-play-btn" id="time-play" title="Play/Pause">
                     <span class="material-symbols-outlined">play_arrow</span>
                 </button>
+                
+                <!-- Forecast Generate Button (visible in forecast mode) -->
+                <button class="forecast-generate-btn hidden" id="btn-generate-forecast" title="Generate 6-Day Forecast">
+                    <span class="material-symbols-outlined">auto_awesome</span>
+                    <span>Generate</span>
+                </button>
+            </div>
+            
+            <!-- Forecast indicator badge -->
+            <div class="forecast-indicator hidden" id="forecast-indicator">
+                <span class="material-symbols-outlined">auto_awesome</span>
+                <span>Forecast Mode</span>
+                <span class="forecast-confidence" id="forecast-confidence">85% confidence</span>
             </div>
         </div>
 
@@ -176,9 +201,7 @@ const pageMarkup = `
                         <label class="control-label">Base Map</label>
                         <select id="basemap-select" class="control-select">
                             <option value="satellite">Satellite</option>
-                            <option value="dark">Dark</option>
                             <option value="streets">Streets</option>
-                            <option value="light">Light</option>
                         </select>
                     </div>
                     <div class="control-group">
@@ -304,10 +327,23 @@ const pageMarkup = `
                     <div class="action-field">
                         <label for="action-select">Select action</label>
                         <select id="action-select">
-                            <option value="">-- Choose --</option>
-                            <option value="tilt">Adjust antenna tilt</option>
-                            <option value="add_carrier">Add carrier</option>
-                            <option value="redistribute">Redistribute traffic</option>
+                            <option value="">-- Choisir une action --</option>
+                            <optgroup label="Court terme (OPEX)">
+                                <option value="tilt">Ajustement Tilt</option>
+                                <option value="power">Ajustement Puissance</option>
+                                <option value="redistribute">Équilibrage MLB</option>
+                                <option value="parameter_tuning">Tuning paramètres radio</option>
+                            </optgroup>
+                            <optgroup label="Moyen terme">
+                                <option value="add_carrier">Activation carrier (CA)</option>
+                                <option value="mimo_upgrade">Upgrade MIMO</option>
+                                <option value="small_cell">Small Cell / Micro</option>
+                            </optgroup>
+                            <optgroup label="Long terme (CAPEX)">
+                                <option value="add_sector">Ajout 4ème secteur</option>
+                                <option value="add_site">Nouveau site macro</option>
+                                <option value="split_cell">Cell Split</option>
+                            </optgroup>
                         </select>
                     </div>
                     <div class="action-params" id="action-params"></div>
@@ -515,6 +551,7 @@ const pageMarkup = `
                                 <option value="hour">By Hour of Day</option>
                                 <option value="day">By Day</option>
                                 <option value="week">By Week</option>
+                                <option value="all">All Time (Total)</option>
                             </select>
                         </div>
                         <div class="explore-control-group">
