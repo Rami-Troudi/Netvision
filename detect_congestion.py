@@ -631,8 +631,8 @@ def process_network_data(input_files: List[str], output_path: str = 'data.json',
 if __name__ == "__main__":
     # Input files
     input_files = [
-        'public_data_set_radio_1_page1.csv',
-        'public_data_set_radio_all_hour_page1.csv'
+        'data_set_radio_1.csv',
+        'data_set_radio_all_hour.csv'
     ]
     
     # Run processing

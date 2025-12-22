@@ -22,9 +22,9 @@
                 <span class="header-subtitle">Digital Twin • Network Operations Center</span>
             </div>
             <div class="header-center">
-                <div class="live-indicator">
-                    <span class="live-dot"></span>
-                    <span>LIVE</span>
+                <div class="time-mode-indicator">
+                    <span class="material-symbols-outlined">history</span>
+                    <span>HISTORICAL</span>
                 </div>
                 <div class="timestamp" id="timestamp"></div>
             </div>
@@ -46,6 +46,29 @@
                 </button>
             </div>
         </header>
+
+        <!-- Time Slider Bar -->
+        <div class="time-slider-bar" id="time-slider-bar">
+            <div class="time-slider-container">
+                <button class="time-nav-btn" id="time-prev" title="Previous hour">
+                    <span class="material-symbols-outlined">chevron_left</span>
+                </button>
+                <div class="time-slider-wrapper">
+                    <input type="range" id="time-slider" class="time-slider" min="0" max="100" value="0">
+                    <div class="time-slider-labels">
+                        <span id="time-start-label">--</span>
+                        <span id="time-current-label" class="time-current">--</span>
+                        <span id="time-end-label">--</span>
+                    </div>
+                </div>
+                <button class="time-nav-btn" id="time-next" title="Next hour">
+                    <span class="material-symbols-outlined">chevron_right</span>
+                </button>
+                <button class="time-play-btn" id="time-play" title="Play/Pause">
+                    <span class="material-symbols-outlined">play_arrow</span>
+                </button>
+            </div>
+        </div>
 
         <!-- Main Content -->
         <div class="main-container">

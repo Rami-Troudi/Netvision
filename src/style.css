@@ -167,12 +167,130 @@ html, body {
     letter-spacing: 0.5px;
 }
 
+.time-mode-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--info-soft);
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--info);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.time-mode-indicator .material-symbols-outlined {
+    font-size: 16px;
+}
+
 .live-dot {
     width: 8px;
     height: 8px;
     background: var(--success);
     border-radius: 50%;
     animation: pulse 2.5s ease-in-out infinite;
+}
+
+/* ===== Time Slider Bar ===== */
+.time-slider-bar {
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+    padding: 12px 20px;
+    z-index: 999;
+}
+
+.time-slider-container {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.time-nav-btn,
+.time-play-btn {
+    width: 36px;
+    height: 36px;
+    border: none;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-md);
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all var(--transition-fast);
+}
+
+.time-nav-btn:hover,
+.time-play-btn:hover {
+    background: var(--orange-primary);
+    color: white;
+}
+
+.time-play-btn.playing {
+    background: var(--orange-primary);
+    color: white;
+}
+
+.time-slider-wrapper {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.time-slider {
+    width: 100%;
+    height: 6px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: var(--bg-tertiary);
+    border-radius: 3px;
+    outline: none;
+    cursor: pointer;
+}
+
+.time-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--orange-primary);
+    cursor: pointer;
+    border: 3px solid white;
+    box-shadow: var(--shadow-md);
+    transition: transform var(--transition-fast);
+}
+
+.time-slider::-webkit-slider-thumb:hover {
+    transform: scale(1.15);
+}
+
+.time-slider::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--orange-primary);
+    cursor: pointer;
+    border: 3px solid white;
+    box-shadow: var(--shadow-md);
+}
+
+.time-slider-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.time-current {
+    font-weight: 600;
+    color: var(--orange-primary);
+    font-size: 13px;
 }
 
 @keyframes pulse {
