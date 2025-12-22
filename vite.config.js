@@ -1,9 +1,21 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  base: './', // Use relative paths for assets
+  base: './',
+  publicDir: 'public',
   build: {
-    outDir: 'dist', // Build to a dist folder in the current directory
-    emptyOutDir: true
+    outDir: 'dist',
+    emptyOutDir: true,
+    chunkSizeWarningLimit: 800,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          maplibre: ['maplibre-gl']
+        }
+      }
+    }
+  },
+  optimizeDeps: {
+    include: ['maplibre-gl']
   }
 });

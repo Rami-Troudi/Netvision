@@ -1,0 +1,353 @@
+"""
+NetVision Digital Twin - Time-Series Data Processor
+====================================================
+Processes network data with time-based organization.
+Separates observations by timestamp for time-slider functionality.
+
+Author: Network Operations Team
+Version: 4.0 - Time-Series Edition
+"""
+
+import pandas as pd
+import numpy as np
+import json
+import os
+from datetime import datetime
+from typing import List, Dict
+import warnings
+warnings.filterwarnings('ignore')
+
+# ============================================
+# CONFIGURATION
+# ============================================
+CONFIG = {
+    'PRB_CRITICAL': 90,
+    'PRB_HIGH': 80,
+    'PRB_MEDIUM': 70,
+    'PRB_LOW': 50,
+    'THROUGHPUT_CRITICAL': 1000,
+    'THROUGHPUT_LOW': 3000,
+    'CQI_CRITICAL': 4,
+    'CQI_LOW': 6,
+    'CQI_MEDIUM': 8,
+}
+
+
+def load_data(file_paths: List[str]) -> pd.DataFrame:
+    """Load and combine CSV files."""
+    dataframes = []
+    
+    for path in file_paths:
+        if not os.path.exists(path):
+            print(f"  ✗ File not found: {path}")
+            continue
+        
+        df = pd.read_csv(path, low_memory=True, na_values=['', 'NA', 'N/A', 'null'])
+        df.columns = df.columns.str.strip().str.lower()
+        dataframes.append(df)
+        print(f"  ✓ Loaded {len(df):,} records from {os.path.basename(path)}")
+    
+    if not dataframes:
+        raise ValueError("No valid data files")
+    
+    combined = pd.concat(dataframes, ignore_index=True)
+    return combined
+
+
+def analyze_cell(row: pd.Series) -> Dict:
+    """Analyze a single cell observation and determine congestion status."""
+    load = row.get('ft_physical_resource_blocks_load_dl')
+    throughput = row.get('ft_ave_4g_lte_dl_user_thrput_without_last_tti_all___kbps__kbit_')
+    cqi = row.get('ft_4g_lte_average_reported_cqi')
+    traffic = row.get('l_traffic_activeuser_dl_avg')
+    
+    # Calculate severity score (0-100)
+    severity = 0
+    issues = []
+    
+    if pd.notna(load):
+        if load >= CONFIG['PRB_CRITICAL']:
+            severity += 40
+            issues.append('Critical PRB Load')
+        elif load >= CONFIG['PRB_HIGH']:
+            severity += 25
+            issues.append('High PRB Load')
+        elif load >= CONFIG['PRB_MEDIUM']:
+            severity += 10
+    
+    if pd.notna(throughput):
+        if throughput < CONFIG['THROUGHPUT_CRITICAL']:
+            severity += 30
+            issues.append('Very Low Throughput')
+        elif throughput < CONFIG['THROUGHPUT_LOW']:
+            severity += 15
+            issues.append('Low Throughput')
+    
+    if pd.notna(cqi):
+        if cqi < CONFIG['CQI_CRITICAL']:
+            severity += 25
+            issues.append('Poor Signal Quality')
+        elif cqi < CONFIG['CQI_LOW']:
+            severity += 10
+    
+    # Determine congestion status
+    congested = severity >= 40 or (pd.notna(load) and load >= CONFIG['PRB_HIGH'])
+    
+    # Determine issue type
+    if not issues:
+        issue_type = 'Normal'
+        root_cause = 'Normal'
+    elif 'Critical PRB Load' in issues or 'High PRB Load' in issues:
+        issue_type = 'Capacity Issue'
+        root_cause = 'High Resource Utilization'
+    elif 'Very Low Throughput' in issues:
+        issue_type = 'Network Overload'
+        root_cause = 'Throughput Degradation'
+    elif 'Poor Signal Quality' in issues:
+        issue_type = 'Quality Degradation'
+        root_cause = 'Signal Quality Issues'
+    else:
+        issue_type = 'Performance Warning'
+        root_cause = ', '.join(issues)
+    
+    # Health score (inverse of severity)
+    health_score = max(0, 100 - severity)
+    
+    return {
+        'congested': congested,
+        'severity': min(100, severity),
+        'issue_type': issue_type,
+        'root_cause': root_cause,
+        'health_score': health_score
+    }
+
+
+def process_time_series_data(
+    input_files: List[str],
+    output_dir: str = '.',
+) -> Dict:
+    """
+    Process network data and organize by timestamp.
+    Outputs:
+    - baseline.json: Unique cells with static info (coordinates, azimuth, band)
+    - time_index.json: List of available timestamps
+    - data/<timestamp>.json: Cell metrics for each timestamp
+    """
+    start_time = datetime.now()
+    
+    print("=" * 70)
+    print("  NetVision Digital Twin - Time-Series Processor v4.0")
+    print("=" * 70)
+    
+    # Load data
+    print("\n📂 PHASE 1: Loading data...")
+    print("-" * 50)
+    df = load_data(input_files)
+    print(f"  → Total records: {len(df):,}")
+    
+    # Clean data
+    print("\n🧹 PHASE 2: Cleaning data...")
+    print("-" * 50)
+    df = df.dropna(subset=['longitude_sector', 'latitude_sector'])
+    df = df[(df['longitude_sector'].between(-180, 180)) & (df['latitude_sector'].between(-90, 90))]
+    print(f"  → Valid records: {len(df):,}")
+    
+    # Parse timestamps
+    print("\n⏰ PHASE 3: Analyzing time structure...")
+    print("-" * 50)
+    df['date'] = df['date'].astype(str).str.strip()
+    
+    # Get unique timestamps
+    timestamps = sorted(df['date'].unique())
+    print(f"  → Unique timestamps: {len(timestamps)}")
+    print(f"  → Time range: {timestamps[0]} to {timestamps[-1]}")
+    
+    # Get unique cells
+    unique_cells = df['cell_name'].nunique()
+    unique_sites = df['enodeb_name'].nunique()
+    print(f"  → Unique cells: {unique_cells}")
+    print(f"  → Unique sites: {unique_sites}")
+    print(f"  → Avg cells per site: {unique_cells / unique_sites:.1f}")
+    
+    # Create baseline (static cell info)
+    print("\n📍 PHASE 4: Creating cell baseline...")
+    print("-" * 50)
+    
+    # Get first occurrence of each cell for baseline
+    baseline_df = df.drop_duplicates(subset=['cell_name'], keep='first')
+    
+    baseline = {}
+    for _, row in baseline_df.iterrows():
+        cell_name = str(row['cell_name'])
+        baseline[cell_name] = {
+            'enodeb_name': str(row['enodeb_name']),
+            'longitude': float(row['longitude_sector']),
+            'latitude': float(row['latitude_sector']),
+            'azimuth': float(row['azimuth']) if pd.notna(row['azimuth']) else 0,
+            'frequency_band': int(row['frequency_band']) if pd.notna(row['frequency_band']) else None,
+            'localcell_id': int(row['localcell_id']) if pd.notna(row['localcell_id']) else None,
+        }
+    
+    print(f"  ✓ Created baseline with {len(baseline)} cells")
+    
+    # Create data directory
+    data_dir = os.path.join(output_dir, 'time_data')
+    os.makedirs(data_dir, exist_ok=True)
+    
+    # Process each timestamp
+    print("\n📊 PHASE 5: Processing time slices...")
+    print("-" * 50)
+    
+    time_index = []
+    global_stats = {
+        'total_timestamps': len(timestamps),
+        'total_cells': len(baseline),
+        'total_sites': unique_sites,
+        'frequency_bands': sorted(df['frequency_band'].dropna().unique().astype(int).tolist()),
+    }
+    
+    for i, ts in enumerate(timestamps):
+        ts_df = df[df['date'] == ts].copy()
+        
+        # Analyze each cell at this timestamp
+        observations = {}
+        congested_count = 0
+        total_load = 0
+        total_throughput = 0
+        total_cqi = 0
+        total_health = 0
+        load_count = 0
+        throughput_count = 0
+        cqi_count = 0
+        
+        for _, row in ts_df.iterrows():
+            cell_name = str(row['cell_name'])
+            analysis = analyze_cell(row)
+            
+            load = row.get('ft_physical_resource_blocks_load_dl')
+            throughput = row.get('ft_ave_4g_lte_dl_user_thrput_without_last_tti_all___kbps__kbit_')
+            cqi = row.get('ft_4g_lte_average_reported_cqi')
+            traffic = row.get('l_traffic_activeuser_dl_avg')
+            ta = row.get('ot_average_ta')
+            signal = row.get('referencesignalpwr')
+            
+            observations[cell_name] = {
+                'load': float(load) if pd.notna(load) else None,
+                'throughput': float(throughput) if pd.notna(throughput) else None,
+                'cqi': float(cqi) if pd.notna(cqi) else None,
+                'traffic': float(traffic) if pd.notna(traffic) else None,
+                'ta': float(ta) if pd.notna(ta) else None,
+                'signal_power': float(signal) if pd.notna(signal) else None,
+                'congested': analysis['congested'],
+                'severity': analysis['severity'],
+                'issue_type': analysis['issue_type'],
+                'root_cause': analysis['root_cause'],
+                'health_score': analysis['health_score'],
+            }
+            
+            if analysis['congested']:
+                congested_count += 1
+            
+            if pd.notna(load):
+                total_load += load
+                load_count += 1
+            if pd.notna(throughput):
+                total_throughput += throughput
+                throughput_count += 1
+            if pd.notna(cqi):
+                total_cqi += cqi
+                cqi_count += 1
+            total_health += analysis['health_score']
+        
+        # Calculate timestamp stats
+        ts_stats = {
+            'cells_observed': len(observations),
+            'congested': congested_count,
+            'congestion_rate': round(congested_count / len(observations) * 100, 2) if observations else 0,
+            'avg_load': round(total_load / load_count, 2) if load_count else 0,
+            'avg_throughput': round(total_throughput / throughput_count, 2) if throughput_count else 0,
+            'avg_cqi': round(total_cqi / cqi_count, 2) if cqi_count else 0,
+            'avg_health': round(total_health / len(observations), 2) if observations else 0,
+        }
+        
+        # Save timestamp data
+        ts_filename = ts.replace(' ', '_').replace(':', '-').replace('/', '-') + '.json'
+        ts_path = os.path.join(data_dir, ts_filename)
+        
+        with open(ts_path, 'w', encoding='utf-8') as f:
+            json.dump({
+                'timestamp': ts,
+                'stats': ts_stats,
+                'observations': observations
+            }, f, ensure_ascii=False)
+        
+        time_index.append({
+            'timestamp': ts,
+            'filename': ts_filename,
+            'stats': ts_stats
+        })
+        
+        if (i + 1) % 50 == 0 or i == len(timestamps) - 1:
+            print(f"  → Processed {i + 1}/{len(timestamps)} timestamps")
+    
+    # Save baseline
+    print("\n💾 PHASE 6: Saving output files...")
+    print("-" * 50)
+    
+    baseline_path = os.path.join(output_dir, 'baseline.json')
+    with open(baseline_path, 'w', encoding='utf-8') as f:
+        json.dump(baseline, f, indent=2, ensure_ascii=False)
+    print(f"  ✓ Saved baseline ({len(baseline)} cells) to baseline.json")
+    
+    # Save time index
+    time_index_path = os.path.join(output_dir, 'time_index.json')
+    with open(time_index_path, 'w', encoding='utf-8') as f:
+        json.dump({
+            'total_timestamps': len(time_index),
+            'start_time': timestamps[0],
+            'end_time': timestamps[-1],
+            'timestamps': time_index
+        }, f, indent=2, ensure_ascii=False)
+    print(f"  ✓ Saved time index ({len(time_index)} entries) to time_index.json")
+    
+    # Save global stats
+    stats_path = os.path.join(output_dir, 'stats.json')
+    with open(stats_path, 'w', encoding='utf-8') as f:
+        json.dump(global_stats, f, indent=2, ensure_ascii=False)
+    print(f"  ✓ Saved global stats to stats.json")
+    
+    elapsed = (datetime.now() - start_time).total_seconds()
+    
+    print("\n" + "=" * 70)
+    print("  PROCESSING COMPLETE")
+    print("=" * 70)
+    print(f"""
+    📡 Network Baseline:
+       • Unique Cells:      {len(baseline):,}
+       • Unique Sites:      {unique_sites}
+       • Frequency Bands:   {global_stats['frequency_bands']}
+    
+    ⏰ Time Series:
+       • Time Slices:       {len(timestamps)}
+       • Time Range:        {timestamps[0]} → {timestamps[-1]}
+    
+    ⏱️  Processing Time:    {elapsed:.2f} seconds
+    """)
+    print("=" * 70 + "\n")
+    
+    return global_stats
+
+
+if __name__ == "__main__":
+    input_files = [
+        'data_set_radio_1.csv',
+        'data_set_radio_all_hour.csv'
+    ]
+    
+    try:
+        stats = process_time_series_data(input_files, output_dir='.')
+    except Exception as e:
+        print(f"\n❌ Error: {e}")
+        import traceback
+        traceback.print_exc()
+        raise
