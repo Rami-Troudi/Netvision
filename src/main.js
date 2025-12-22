@@ -1,5 +1,3 @@
-import './style.css';
-import 'maplibre-gl/dist/maplibre-gl.css';
 import maplibregl from 'maplibre-gl';
 
 // ============================================
@@ -78,6 +76,8 @@ const state = {
         heatmap: false
     }
 };
+
+let hasInitialized = false;
 
 // --- Utility Functions ---
 function createSectorPolygon(center, radiusMeters, azimuth, beamwidth) {
@@ -265,6 +265,9 @@ function updateMapData() {
     
     if (state.map.getSource('cells')) {
         state.map.getSource('cells').setData(pointsGeojson);
+    }
+    if (state.map.getSource('cells-heatmap-source')) {
+        state.map.getSource('cells-heatmap-source').setData(pointsGeojson);
     }
     if (state.map.getSource('sectors')) {
         state.map.getSource('sectors').setData(sectorsGeojson);
@@ -469,6 +472,12 @@ function addMapLayers(map, sites) {
         }
     });
     
+    // Separate source for heatmap (no clustering)
+    map.addSource('cells-heatmap-source', {
+        type: 'geojson',
+        data: pointsGeojson
+    });
+    
     // Points source with clustering
     map.addSource('cells', {
         type: 'geojson',
@@ -482,14 +491,14 @@ function addMapLayers(map, sites) {
     map.addLayer({
         id: 'cells-heatmap',
         type: 'heatmap',
-        source: 'cells',
+        source: 'cells-heatmap-source',
         maxzoom: 24,
         layout: { 'visibility': 'none' },
         paint: {
             'heatmap-weight': ['interpolate', ['linear'], ['coalesce', ['get', 'load'], 50], 0, 0, 50, 0.5, 100, 1],
-            'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 0, 0.5, 8, 1, 12, 2, 16, 3],
-            'heatmap-radius': ['interpolate', ['exponential', 1.5], ['zoom'], 0, 5, 6, 30, 10, 80, 14, 150, 18, 250],
-            'heatmap-opacity': ['interpolate', ['linear'], ['zoom'], 0, 0.9, 12, 0.8, 18, 0.7],
+            'heatmap-intensity': 1,
+            'heatmap-radius': 25,
+            'heatmap-opacity': 0.8,
             'heatmap-color': [
                 'interpolate', ['linear'], ['heatmap-density'],
                 0, 'rgba(0,0,0,0)',
@@ -507,7 +516,7 @@ function addMapLayers(map, sites) {
         }
     });
     
-    // Cluster circles
+    // Cluster circles - Scaled by zoom
     map.addLayer({
         id: 'cells-clusters',
         type: 'circle',
@@ -515,14 +524,31 @@ function addMapLayers(map, sites) {
         filter: ['has', 'point_count'],
         paint: {
             'circle-color': [
-                'step', ['get', 'point_count'],
-                CONFIG.COLORS.HEALTHY, 20,
-                CONFIG.COLORS.LOW_LOAD, 50,
-                CONFIG.COLORS.MEDIUM_LOAD, 100,
-                CONFIG.COLORS.HIGH_LOAD, 200,
-                CONFIG.COLORS.CONGESTED
+                'step', 
+                ['get', 'point_count'],
+                CONFIG.COLORS.HEALTHY, 
+                20, CONFIG.COLORS.LOW_LOAD,
+                50, CONFIG.COLORS.MEDIUM_LOAD,
+                100, CONFIG.COLORS.HIGH_LOAD,
+                200, CONFIG.COLORS.CONGESTED
             ],
-            'circle-radius': ['step', ['get', 'point_count'], 18, 20, 22, 50, 28, 100, 35],
+            'circle-radius': [
+                '*',
+                [
+                    'interpolate', ['linear'], ['zoom'],
+                    10, 0.6,
+                    13, 0.8,
+                    16, 1.2
+                ],
+                [
+                    'step',
+                    ['get', 'point_count'],
+                    15,   // 0-19 points: 15px
+                    20, 18,   // 20-49 points: 18px
+                    50, 22,   // 50-99 points: 22px
+                    100, 26   // 100+ points: 26px
+                ]
+            ],
             'circle-stroke-color': '#ffffff',
             'circle-stroke-width': 2
         }
@@ -537,7 +563,12 @@ function addMapLayers(map, sites) {
         layout: {
             'text-field': ['get', 'point_count_abbreviated'],
             'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
-            'text-size': 13,
+            'text-size': [
+                'interpolate', ['linear'], ['zoom'],
+                10, 9,
+                13, 12,
+                16, 14
+            ],
             'text-allow-overlap': true
         },
         paint: {
@@ -547,14 +578,19 @@ function addMapLayers(map, sites) {
         }
     });
     
-    // Individual points
+    // Individual points - Scaled by zoom
     map.addLayer({
         id: 'cells-points',
         type: 'circle',
         source: 'cells',
         filter: ['!', ['has', 'point_count']],
         paint: {
-            'circle-radius': ['interpolate', ['linear'], ['zoom'], 8, 4, 12, 6, 16, 10],
+            'circle-radius': [
+                'interpolate', ['linear'], ['zoom'],
+                10, 2,
+                13, 5,
+                16, 8
+            ],
             'circle-color': ['get', 'color'],
             'circle-opacity': 0.8,
             'circle-stroke-color': '#ffffff',
@@ -562,17 +598,22 @@ function addMapLayers(map, sites) {
         }
     });
     
-    // Congested ring
+    // Congested ring - Scaled by zoom
     map.addLayer({
         id: 'cells-congested-ring',
         type: 'circle',
         source: 'cells',
         filter: ['all', ['!', ['has', 'point_count']], ['==', ['get', 'congested'], true]],
         paint: {
-            'circle-radius': ['interpolate', ['linear'], ['zoom'], 8, 6, 12, 9, 16, 14],
+            'circle-radius': [
+                'interpolate', ['linear'], ['zoom'],
+                10, 3,
+                13, 8,
+                16, 12
+            ],
             'circle-color': 'rgba(0,0,0,0)',
             'circle-stroke-color': CONFIG.COLORS.CONGESTED,
-            'circle-stroke-width': 3
+            'circle-stroke-width': 2.5
         }
     });
     
@@ -589,12 +630,18 @@ function addMapLayers(map, sites) {
     
     map.addSource('sites', { type: 'geojson', data: sitesGeojson });
     
+    // Site markers - Scaled by zoom
     map.addLayer({
         id: 'sites-circle',
         type: 'circle',
         source: 'sites',
         paint: {
-            'circle-radius': ['interpolate', ['linear'], ['zoom'], 8, 5, 14, 10],
+            'circle-radius': [
+                'interpolate', ['linear'], ['zoom'],
+                10, 3,
+                13, 6,
+                16, 10
+            ],
             'circle-color': CONFIG.COLORS.SITE_MARKER,
             'circle-stroke-color': '#ffffff',
             'circle-stroke-width': 2
@@ -701,6 +748,8 @@ function setLoading(isLoading, progress = '') {
 
 // --- Main Initialization ---
 async function init() {
+    if (hasInitialized) return;
+    hasInitialized = true;
     try {
         setLoading(true, 'Loading baseline...');
         
@@ -755,7 +804,12 @@ async function init() {
         console.error('Initialization failed:', err);
         setLoading(false);
     }
+document.addEventListener('DOMContentLoaded', init);
 }
 
 // Start
-document.addEventListener('DOMContentLoaded', init);
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+} else {
+    init();
+}
