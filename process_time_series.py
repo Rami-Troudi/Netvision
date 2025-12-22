@@ -158,7 +158,10 @@ def process_time_series_data(
     df['date'] = df['date'].astype(str).str.strip()
     
     # Get unique timestamps
-    timestamps = sorted(df['date'].unique())
+    timestamps = sorted(
+        df['date'].unique(),
+        key=lambda x: datetime.strptime(x, '%d-%m-%Y %H:%M')
+    )
     print(f"  → Unique timestamps: {len(timestamps)}")
     print(f"  → Time range: {timestamps[0]} to {timestamps[-1]}")
     

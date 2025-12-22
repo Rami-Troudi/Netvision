@@ -113,6 +113,15 @@ const state = {
 
 let hasInitialized = false;
 const geometryCache = {};
+const MAX_GEOMETRY_CACHE_ENTRIES = 10000;
+
+function pruneGeometryCache() {
+    const keys = Object.keys(geometryCache);
+    if (keys.length > MAX_GEOMETRY_CACHE_ENTRIES) {
+        // Simple reset strategy to avoid unbounded growth; keeps cache logic cheap.
+        Object.keys(geometryCache).forEach(k => delete geometryCache[k]);
+    }
+}
 
 // --- Utility Functions ---
 function debounce(fn, wait) {
@@ -307,6 +316,7 @@ function buildFeaturesForTime(observations) {
         const cacheKey = `${cellName}_${radius}`;
         const geometry = geometryCache[cacheKey] || createSectorPolygon(center, radius, azimuth, CONFIG.DEFAULT_BEAMWIDTH);
         geometryCache[cacheKey] = geometry;
+        pruneGeometryCache();
         
         sectorFeatures.push({
             type: 'Feature',
