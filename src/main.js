@@ -2627,12 +2627,25 @@ function showNotification(message, type = 'info') {
 function switchTimeMode(mode) {
     if (mode === forecastState.mode) return;
     
+    // Stop any playing animation
+    if (state.isPlaying) {
+        state.isPlaying = false;
+        clearInterval(state.playInterval);
+        const playBtn = document.getElementById('time-play');
+        if (playBtn) {
+            playBtn.classList.remove('playing');
+            const icon = playBtn.querySelector('.material-symbols-outlined');
+            if (icon) icon.textContent = 'play_arrow';
+        }
+    }
+    
     forecastState.mode = mode;
     
     const historicalBtn = document.getElementById('mode-historical');
     const forecastBtn = document.getElementById('mode-forecast');
     const generateBtn = document.getElementById('btn-generate-forecast');
     const indicator = document.getElementById('forecast-indicator');
+    const modeIndicator = document.querySelector('.time-mode-indicator span:last-child');
     
     historicalBtn?.classList.toggle('active', mode === 'historical');
     forecastBtn?.classList.toggle('active', mode === 'forecast');
@@ -2641,6 +2654,7 @@ function switchTimeMode(mode) {
         generateBtn?.classList.remove('hidden');
         indicator?.classList.remove('hidden');
         document.body.classList.add('forecast-mode');
+        if (modeIndicator) modeIndicator.textContent = 'FORECAST';
         
         // Load forecast data
         if (forecastState.forecastIndex.length > 0) {
@@ -2649,9 +2663,11 @@ function switchTimeMode(mode) {
         } else {
             // Check if forecast is available
             checkForecastAvailability().then(data => {
-                if (data.available) {
+                if (data.available && forecastState.forecastIndex.length > 0) {
                     updateForecastSlider();
                     loadForecastSlice(0);
+                } else {
+                    showNotification('No forecast data available. Click Generate to create forecast.', 'info');
                 }
             });
         }
@@ -2659,6 +2675,7 @@ function switchTimeMode(mode) {
         generateBtn?.classList.add('hidden');
         indicator?.classList.add('hidden');
         document.body.classList.remove('forecast-mode');
+        if (modeIndicator) modeIndicator.textContent = 'HISTORICAL';
         
         // Restore historical data
         updateHistoricalSlider();
@@ -2710,15 +2727,16 @@ async function loadForecastSlice(index) {
         const res = await fetch(`/forecast_data/${forecastEntry.filename}?t=${Date.now()}`);
         const data = await res.json();
         
-        state.currentObservations = data.observations;
-        state.currentStats = data.stats;
+        state.currentObservations = data.observations || {};
+        state.currentStats = data.stats || forecastEntry.stats;
         
-        const { pointFeatures, sectorFeatures } = buildFeaturesForTime(data.observations);
+        const { pointFeatures, sectorFeatures } = buildFeaturesForTime(data.observations || {});
         
-        // Mark features as forecast
+        // Mark features as forecast with confidence
+        const confidence = data.confidence || forecastEntry.confidence || 0.75;
         pointFeatures.forEach(f => {
             f.properties.is_forecast = true;
-            f.properties.confidence = data.confidence || 0.75;
+            f.properties.confidence = confidence;
         });
         sectorFeatures.forEach(f => {
             f.properties.is_forecast = true;
@@ -2729,16 +2747,21 @@ async function loadForecastSlice(index) {
         state.features = pointFeatures;
         applyFilters();
         
+        // Update UI elements
         updateTimeSliderUI();
-        updateStatsUI(data.stats);
+        updateStatsUI(data.stats || forecastEntry.stats);
         updateAlertsUI(state.filteredPointFeatures);
         
         // Update confidence indicator
         const confidenceEl = document.getElementById('forecast-confidence');
         if (confidenceEl) {
-            const conf = Math.round((data.confidence || 0.75) * 100);
+            const conf = Math.round(confidence * 100);
             confidenceEl.textContent = `${conf}% confidence`;
         }
+        
+        // Update slider position
+        const slider = document.getElementById('time-slider');
+        if (slider) slider.value = index;
         
         if (state.selectedSite) {
             showSiteInfoPanel(state.selectedSite);
@@ -2746,6 +2769,7 @@ async function loadForecastSlice(index) {
         
     } catch (err) {
         console.error('Failed to load forecast slice:', err);
+        showNotification('Failed to load forecast data', 'error');
     }
 }
 
@@ -2756,35 +2780,79 @@ function setupForecastControls() {
     const slider = document.getElementById('time-slider');
     const prevBtn = document.getElementById('time-prev');
     const nextBtn = document.getElementById('time-next');
+    const playBtn = document.getElementById('time-play');
     
     historicalBtn?.addEventListener('click', () => switchTimeMode('historical'));
     forecastBtn?.addEventListener('click', () => switchTimeMode('forecast'));
     generateBtn?.addEventListener('click', generateForecast);
     
-    // Override slider behavior based on mode
-    const originalSliderHandler = slider?._inputHandler;
+    // Debounced slider handler for forecast mode
+    const debouncedForecastLoad = debounce((val) => loadForecastSlice(val), 120);
     
+    // Override slider behavior based on mode
     slider?.addEventListener('input', (e) => {
         if (forecastState.mode === 'forecast') {
             const val = parseInt(e.target.value, 10);
-            loadForecastSlice(val);
+            debouncedForecastLoad(val);
         }
     });
     
-    // Override nav buttons
-    prevBtn?.addEventListener('click', () => {
+    // Override nav buttons for forecast mode
+    const originalPrevHandler = prevBtn?._forecastHandler;
+    if (originalPrevHandler) prevBtn.removeEventListener('click', originalPrevHandler);
+    
+    const forecastPrevHandler = () => {
         if (forecastState.mode === 'forecast') {
             if (forecastState.forecastTimeIndex > 0) {
                 loadForecastSlice(forecastState.forecastTimeIndex - 1);
             }
         }
-    });
+    };
+    prevBtn?._forecastHandler = forecastPrevHandler;
+    prevBtn?.addEventListener('click', forecastPrevHandler);
     
-    nextBtn?.addEventListener('click', () => {
+    const originalNextHandler = nextBtn?._forecastHandler;
+    if (originalNextHandler) nextBtn.removeEventListener('click', originalNextHandler);
+    
+    const forecastNextHandler = () => {
         if (forecastState.mode === 'forecast') {
             if (forecastState.forecastTimeIndex < forecastState.forecastIndex.length - 1) {
                 loadForecastSlice(forecastState.forecastTimeIndex + 1);
             }
+        }
+    };
+    nextBtn?._forecastHandler = forecastNextHandler;
+    nextBtn?.addEventListener('click', forecastNextHandler);
+    
+    // Override play button for forecast mode
+    const forecastPlayHandler = () => {
+        if (forecastState.mode !== 'forecast') return;
+        
+        state.isPlaying = !state.isPlaying;
+        const icon = playBtn?.querySelector('.material-symbols-outlined');
+        
+        if (state.isPlaying) {
+            playBtn?.classList.add('playing');
+            if (icon) icon.textContent = 'pause';
+            const interval = CONFIG.PLAY_INTERVAL_MS / Math.max(0.25, state.playSpeed);
+            state.playInterval = setInterval(() => {
+                if (forecastState.forecastTimeIndex < forecastState.forecastIndex.length - 1) {
+                    loadForecastSlice(forecastState.forecastTimeIndex + 1);
+                } else {
+                    loadForecastSlice(0);  // Loop back to start
+                }
+            }, interval);
+        } else {
+            playBtn?.classList.remove('playing');
+            if (icon) icon.textContent = 'play_arrow';
+            clearInterval(state.playInterval);
+        }
+    };
+    
+    playBtn?.addEventListener('click', (e) => {
+        if (forecastState.mode === 'forecast') {
+            e.stopPropagation();
+            forecastPlayHandler();
         }
     });
     
@@ -2846,12 +2914,35 @@ function updateTimeSliderUI() {
     const slider = document.getElementById('time-slider');
     const currentLabel = document.getElementById('time-current-label');
     const timestampEl = document.getElementById('timestamp');
+    const modeIndicator = document.querySelector('.time-mode-indicator span:last-child');
     
-    if (slider) slider.value = state.currentTimeIndex;
-    
-    const currentTime = state.timeIndex[state.currentTimeIndex]?.timestamp || '--';
-    if (currentLabel) currentLabel.textContent = currentTime;
-    if (timestampEl) timestampEl.textContent = currentTime;
+    // Check if we're in forecast mode
+    if (forecastState.mode === 'forecast') {
+        const index = forecastState.forecastTimeIndex;
+        const forecastEntry = forecastState.forecastIndex[index];
+        
+        if (slider) slider.value = index;
+        
+        const currentTime = forecastEntry?.timestamp || '--';
+        if (currentLabel) currentLabel.textContent = currentTime;
+        if (timestampEl) timestampEl.textContent = currentTime;
+        if (modeIndicator) modeIndicator.textContent = 'FORECAST';
+        
+        // Update confidence display
+        const confidenceEl = document.getElementById('forecast-confidence');
+        if (confidenceEl && forecastEntry) {
+            const conf = Math.round((forecastEntry.confidence || 0.75) * 100);
+            confidenceEl.textContent = `${conf}% confidence`;
+        }
+    } else {
+        // Historical mode
+        if (slider) slider.value = state.currentTimeIndex;
+        
+        const currentTime = state.timeIndex[state.currentTimeIndex]?.timestamp || '--';
+        if (currentLabel) currentLabel.textContent = currentTime;
+        if (timestampEl) timestampEl.textContent = currentTime;
+        if (modeIndicator) modeIndicator.textContent = 'HISTORICAL';
+    }
 }
 
 function setupTimeControls() {
