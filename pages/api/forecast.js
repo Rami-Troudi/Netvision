@@ -9,6 +9,25 @@ export const config = {
   },
 }
 
+function clearForecastData(projectRoot) {
+  // Clear old forecast data on each generate
+  const forecastDir = path.join(projectRoot, 'public', 'forecast_data')
+  const forecastIndex = path.join(projectRoot, 'public', 'forecast_index.json')
+  
+  // Remove forecast_index.json
+  if (fs.existsSync(forecastIndex)) {
+    fs.unlinkSync(forecastIndex)
+  }
+  
+  // Remove forecast_data directory contents
+  if (fs.existsSync(forecastDir)) {
+    const files = fs.readdirSync(forecastDir)
+    for (const file of files) {
+      fs.unlinkSync(path.join(forecastDir, file))
+    }
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method === 'GET') {
     // Return existing forecast data
@@ -43,21 +62,32 @@ export default async function handler(req, res) {
   
   if (req.method === 'POST') {
     // Generate new forecast
-    const { days = 6, start_date = null } = req.body || {}
+    const { days = 7, start_date = null } = req.body || {}
     
-    // Validate days
-    if (days < 1 || days > 14) {
-      return res.status(400).json({ error: 'Days must be between 1 and 14' })
-    }
+    // Validate days (1-30) while preserving explicit values
+    const parsedDays = Number.parseInt(days, 10)
+    const validDays = Number.isFinite(parsedDays)
+      ? Math.min(30, Math.max(1, parsedDays))
+      : 7
     
     const projectRoot = process.cwd()
-    const scriptPath = path.join(projectRoot, 'scripts', 'forecast.py')
+    
+    // Clear old forecast data first
+    clearForecastData(projectRoot)
+    
+    // Use the new HuggingFace-based forecast script (fixes Windows encoding issues)
+    let scriptPath = path.join(projectRoot, 'scripts', 'forecast_hf.py')
+    
+    // Fallback to original if new script doesn't exist
+    if (!fs.existsSync(scriptPath)) {
+      scriptPath = path.join(projectRoot, 'scripts', 'forecast.py')
+    }
     
     if (!fs.existsSync(scriptPath)) {
       return res.status(500).json({ error: 'Forecast script not found' })
     }
     
-    const args = ['python', scriptPath, '--days', String(days)]
+    const args = [scriptPath, '--days', String(validDays)]
     
     if (start_date) {
       args.push('--start-date', start_date)
@@ -65,10 +95,11 @@ export default async function handler(req, res) {
     
     try {
       const result = await new Promise((resolve, reject) => {
-        const python = spawn('python', [scriptPath, '--days', String(days)], {
+        const python = spawn('python', args, {
           cwd: projectRoot,
           timeout: 120000,  // 2 minute timeout for forecast generation
-          shell: false
+          shell: false,
+          env: { ...process.env, PYTHONIOENCODING: 'utf-8' }  // Fix Windows encoding
         })
         
         let stdout = ''
@@ -127,6 +158,13 @@ export default async function handler(req, res) {
         detail: err.message
       })
     }
+  }
+  
+  // DELETE method - clear forecast data
+  if (req.method === 'DELETE') {
+    const projectRoot = process.cwd()
+    clearForecastData(projectRoot)
+    return res.status(200).json({ success: true, message: 'Forecast data cleared' })
   }
   
   return res.status(405).json({ error: 'Method not allowed' })

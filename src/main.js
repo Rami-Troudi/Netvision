@@ -2533,27 +2533,226 @@ function setupExploreModal() {
     document.getElementById('explore-metric')?.addEventListener('change', renderExploreCharts);
 }
 
-// --- Forecast Mode ---
+// --- Forecast Mode (Unified Timeline) ---
 const forecastState = {
-    mode: 'historical',  // 'historical' or 'forecast'
     forecastIndex: [],
-    forecastTimeIndex: 0,
     isGenerating: false,
     available: false
 };
 
+// Unified timeline state
+const unifiedTimeline = {
+    historicalCount: 0,
+    forecastCount: 0,
+    totalCount: 0,
+    currentIndex: 0,
+    dividerIndex: 0  // Where historical ends and forecast begins
+};
+
 async function checkForecastAvailability() {
+    // Don't load old forecast data on startup - user must generate fresh
+    // This is called after generate to load the new forecast
     try {
         const res = await fetch('/api/forecast');
         const data = await res.json();
         forecastState.available = data.available;
         if (data.available && data.forecasts) {
             forecastState.forecastIndex = data.forecasts;
+            updateUnifiedTimeline();
+        } else {
+            forecastState.forecastIndex = [];
+            updateUnifiedTimeline();
         }
         return data;
     } catch (err) {
         console.warn('Could not check forecast availability:', err);
+        forecastState.forecastIndex = [];
         return { available: false };
+    }
+}
+
+async function clearForecastOnStartup() {
+    // Clear any leftover forecast data when app starts
+    try {
+        await fetch('/api/forecast', { method: 'DELETE' });
+        forecastState.forecastIndex = [];
+        unifiedTimeline.currentIndex = Math.min(
+            unifiedTimeline.currentIndex,
+            Math.max(0, state.timeIndex.length - 1)
+        );
+    } catch (err) {
+        // Ignore errors
+    }
+}
+
+function updateUnifiedTimeline() {
+    unifiedTimeline.historicalCount = state.timeIndex.length;
+    unifiedTimeline.forecastCount = forecastState.forecastIndex.length;
+    unifiedTimeline.totalCount = unifiedTimeline.historicalCount + unifiedTimeline.forecastCount;
+    unifiedTimeline.dividerIndex = unifiedTimeline.historicalCount;
+    unifiedTimeline.currentIndex = Math.min(
+        unifiedTimeline.currentIndex,
+        Math.max(0, unifiedTimeline.totalCount - 1)
+    );
+    
+    // Update slider
+    const slider = document.getElementById('time-slider');
+    if (slider && unifiedTimeline.totalCount > 0) {
+        slider.max = unifiedTimeline.totalCount - 1;
+    }
+    
+    // Update track colors (historical vs forecast)
+    updateSliderTrack();
+    
+    // Update labels
+    updateTimelineLabels();
+}
+
+function updateSliderTrack() {
+    const trackHistorical = document.getElementById('track-historical');
+    const trackForecast = document.getElementById('track-forecast');
+    
+    if (!trackHistorical || !trackForecast) return;
+    
+    const total = unifiedTimeline.totalCount || 1;
+    const historicalPct = (unifiedTimeline.historicalCount / total) * 100;
+    const forecastPct = (unifiedTimeline.forecastCount / total) * 100;
+    
+    trackHistorical.style.width = `${historicalPct}%`;
+    trackForecast.style.width = `${forecastPct}%`;
+    
+    // Show/hide forecast track
+    if (unifiedTimeline.forecastCount > 0) {
+        trackForecast.classList.add('visible');
+    } else {
+        trackForecast.classList.remove('visible');
+    }
+}
+
+function updateTimelineLabels() {
+    const startLabel = document.getElementById('time-start-label');
+    const endLabel = document.getElementById('time-end-label');
+    
+    // Start label from historical
+    if (startLabel && state.timeIndex.length > 0) {
+        startLabel.textContent = state.timeIndex[0]?.timestamp || '--';
+    }
+    
+    // End label from forecast (if available) or historical
+    if (endLabel) {
+        if (forecastState.forecastIndex.length > 0) {
+            endLabel.textContent = forecastState.forecastIndex[forecastState.forecastIndex.length - 1]?.timestamp || '--';
+        } else if (state.timeIndex.length > 0) {
+            endLabel.textContent = state.timeIndex[state.timeIndex.length - 1]?.timestamp || '--';
+        }
+    }
+}
+
+function isInForecastRange(index) {
+    return index >= unifiedTimeline.dividerIndex;
+}
+
+function getDataForIndex(index) {
+    if (isInForecastRange(index)) {
+        const forecastIndex = index - unifiedTimeline.dividerIndex;
+        return {
+            type: 'forecast',
+            entry: forecastState.forecastIndex[forecastIndex],
+            localIndex: forecastIndex
+        };
+    } else {
+        return {
+            type: 'historical',
+            entry: state.timeIndex[index],
+            localIndex: index
+        };
+    }
+}
+
+async function loadUnifiedTimeSlice(index) {
+    if (index < 0 || index >= unifiedTimeline.totalCount) return;
+    
+    unifiedTimeline.currentIndex = index;
+    const data = getDataForIndex(index);
+    
+    if (data.type === 'forecast') {
+        await loadForecastSliceInternal(data.entry, data.localIndex);
+    } else {
+        await loadHistoricalSliceInternal(data.entry, data.localIndex);
+    }
+    
+    // Update slider position
+    const slider = document.getElementById('time-slider');
+    if (slider) slider.value = index;
+}
+
+async function loadHistoricalSliceInternal(timeEntry, localIndex) {
+    if (!timeEntry) return;
+    
+    state.currentTimeIndex = localIndex;
+    
+    try {
+        const res = await fetch(`/time_data/${timeEntry.filename}?t=${Date.now()}`);
+        const sliceData = await res.json();
+        
+        state.currentObservations = sliceData.observations;
+        state.currentStats = sliceData.stats;
+        
+        const { pointFeatures, sectorFeatures } = buildFeaturesForTime(sliceData.observations);
+        state.pointFeatures = pointFeatures;
+        state.sectorFeatures = sectorFeatures;
+        state.features = pointFeatures;
+        applyFilters();
+        
+        updateTimeSliderUI();
+        updateStatsUI(sliceData.stats);
+        updateAlertsUI(state.filteredPointFeatures);
+        
+        if (state.selectedSite) {
+            showSiteInfoPanel(state.selectedSite);
+        }
+    } catch (err) {
+        console.error('Failed to load historical slice:', err);
+    }
+}
+
+async function loadForecastSliceInternal(forecastEntry, localIndex) {
+    if (!forecastEntry) return;
+    
+    try {
+        const res = await fetch(`/forecast_data/${forecastEntry.filename}?t=${Date.now()}`);
+        const sliceData = await res.json();
+        
+        state.currentObservations = sliceData.observations || {};
+        state.currentStats = sliceData.stats || forecastEntry.stats;
+        
+        const { pointFeatures, sectorFeatures } = buildFeaturesForTime(sliceData.observations || {});
+        
+        // Mark features as forecast
+        const confidence = sliceData.confidence || forecastEntry.confidence || 0.75;
+        pointFeatures.forEach(f => {
+            f.properties.is_forecast = true;
+            f.properties.confidence = confidence;
+        });
+        sectorFeatures.forEach(f => {
+            f.properties.is_forecast = true;
+        });
+        
+        state.pointFeatures = pointFeatures;
+        state.sectorFeatures = sectorFeatures;
+        state.features = pointFeatures;
+        applyFilters();
+        
+        updateTimeSliderUI();
+        updateStatsUI(sliceData.stats || forecastEntry.stats);
+        updateAlertsUI(state.filteredPointFeatures);
+        
+        if (state.selectedSite) {
+            showSiteInfoPanel(state.selectedSite);
+        }
+    } catch (err) {
+        console.error('Failed to load forecast slice:', err);
+        showNotification('Failed to load forecast data', 'error');
     }
 }
 
@@ -2561,34 +2760,45 @@ async function generateForecast() {
     if (forecastState.isGenerating) return;
     
     const btn = document.getElementById('btn-generate-forecast');
+    const daysInput = document.getElementById('forecast-days');
+    const days = daysInput ? parseInt(daysInput.value, 10) : 7;
     const originalHtml = btn?.innerHTML;
+    
+    // If days is 0 or less, clear the forecast
+    if (days <= 0) {
+        try {
+            await fetch('/api/forecast', { method: 'DELETE' });
+            forecastState.forecastIndex = [];
+            updateUnifiedTimeline();
+            const slider = document.getElementById('time-slider');
+            if (slider) slider.value = Math.min(unifiedTimeline.currentIndex, unifiedTimeline.totalCount - 1);
+            showNotification('Forecast cleared', 'success');
+        } catch (err) {
+            showNotification('Failed to clear forecast', 'error');
+        }
+        return;
+    }
     
     try {
         forecastState.isGenerating = true;
         if (btn) {
             btn.disabled = true;
-            btn.innerHTML = '<span class="material-symbols-outlined spinning">sync</span><span>Generating...</span>';
+            btn.classList.add('generating');
+            btn.innerHTML = '<span class="material-symbols-outlined">sync</span> Generating...';
         }
         
         const res = await fetch('/api/forecast', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ days: 6 })
+            body: JSON.stringify({ days: days })
         });
         
         const data = await res.json();
         
         if (data.success) {
-            // Reload forecast data
+            // Reload forecast data and update unified timeline
             await checkForecastAvailability();
-            
-            // Update UI
-            if (forecastState.forecastIndex.length > 0) {
-                updateForecastSlider();
-                loadForecastSlice(0);
-            }
-            
-            showNotification('Forecast generated successfully!', 'success');
+            showNotification(`Forecast for ${days} days generated! Slide right to view.`, 'success');
         } else {
             showNotification('Forecast generation failed: ' + (data.error || 'Unknown error'), 'error');
         }
@@ -2599,13 +2809,13 @@ async function generateForecast() {
         forecastState.isGenerating = false;
         if (btn) {
             btn.disabled = false;
-            btn.innerHTML = originalHtml || '<span class="material-symbols-outlined">auto_awesome</span><span>Generate</span>';
+            btn.classList.remove('generating');
+            btn.innerHTML = originalHtml || '<span class="material-symbols-outlined">model_training</span> Generate';
         }
     }
 }
 
 function showNotification(message, type = 'info') {
-    // Simple notification - can be enhanced
     const existing = document.querySelector('.notification-toast');
     if (existing) existing.remove();
     
@@ -2624,276 +2834,71 @@ function showNotification(message, type = 'info') {
     }, 4000);
 }
 
-function switchTimeMode(mode) {
-    if (mode === forecastState.mode) return;
-    
-    // Stop any playing animation
-    if (state.isPlaying) {
-        state.isPlaying = false;
-        clearInterval(state.playInterval);
-        const playBtn = document.getElementById('time-play');
-        if (playBtn) {
-            playBtn.classList.remove('playing');
-            const icon = playBtn.querySelector('.material-symbols-outlined');
-            if (icon) icon.textContent = 'play_arrow';
-        }
-    }
-    
-    forecastState.mode = mode;
-    
-    const historicalBtn = document.getElementById('mode-historical');
-    const forecastBtn = document.getElementById('mode-forecast');
-    const generateBtn = document.getElementById('btn-generate-forecast');
-    const indicator = document.getElementById('forecast-indicator');
-    const modeIndicator = document.querySelector('.time-mode-indicator span:last-child');
-    
-    historicalBtn?.classList.toggle('active', mode === 'historical');
-    forecastBtn?.classList.toggle('active', mode === 'forecast');
-    
-    if (mode === 'forecast') {
-        generateBtn?.classList.remove('hidden');
-        indicator?.classList.remove('hidden');
-        document.body.classList.add('forecast-mode');
-        if (modeIndicator) modeIndicator.textContent = 'FORECAST';
-        
-        // Load forecast data
-        if (forecastState.forecastIndex.length > 0) {
-            updateForecastSlider();
-            loadForecastSlice(0);
-        } else {
-            // Check if forecast is available
-            checkForecastAvailability().then(data => {
-                if (data.available && forecastState.forecastIndex.length > 0) {
-                    updateForecastSlider();
-                    loadForecastSlice(0);
-                } else {
-                    showNotification('No forecast data available. Click Generate to create forecast.', 'info');
-                }
-            });
-        }
-    } else {
-        generateBtn?.classList.add('hidden');
-        indicator?.classList.add('hidden');
-        document.body.classList.remove('forecast-mode');
-        if (modeIndicator) modeIndicator.textContent = 'HISTORICAL';
-        
-        // Restore historical data
-        updateHistoricalSlider();
-        loadTimeSlice(state.currentTimeIndex);
-    }
-}
-
-function updateForecastSlider() {
-    const slider = document.getElementById('time-slider');
-    const startLabel = document.getElementById('time-start-label');
-    const endLabel = document.getElementById('time-end-label');
-    
-    if (!forecastState.forecastIndex.length) return;
-    
-    if (slider) {
-        slider.min = 0;
-        slider.max = forecastState.forecastIndex.length - 1;
-        slider.value = 0;
-    }
-    
-    if (startLabel) startLabel.textContent = forecastState.forecastIndex[0]?.timestamp || '--';
-    if (endLabel) endLabel.textContent = forecastState.forecastIndex[forecastState.forecastIndex.length - 1]?.timestamp || '--';
-}
-
-function updateHistoricalSlider() {
-    const slider = document.getElementById('time-slider');
-    const startLabel = document.getElementById('time-start-label');
-    const endLabel = document.getElementById('time-end-label');
-    
-    if (!state.timeIndex.length) return;
-    
-    if (slider) {
-        slider.min = 0;
-        slider.max = state.timeIndex.length - 1;
-        slider.value = state.currentTimeIndex;
-    }
-    
-    if (startLabel) startLabel.textContent = state.timeIndex[0]?.timestamp || '--';
-    if (endLabel) endLabel.textContent = state.timeIndex[state.timeIndex.length - 1]?.timestamp || '--';
-}
-
-async function loadForecastSlice(index) {
-    if (index < 0 || index >= forecastState.forecastIndex.length) return;
-    
-    const forecastEntry = forecastState.forecastIndex[index];
-    forecastState.forecastTimeIndex = index;
-    
-    try {
-        const res = await fetch(`/forecast_data/${forecastEntry.filename}?t=${Date.now()}`);
-        const data = await res.json();
-        
-        state.currentObservations = data.observations || {};
-        state.currentStats = data.stats || forecastEntry.stats;
-        
-        const { pointFeatures, sectorFeatures } = buildFeaturesForTime(data.observations || {});
-        
-        // Mark features as forecast with confidence
-        const confidence = data.confidence || forecastEntry.confidence || 0.75;
-        pointFeatures.forEach(f => {
-            f.properties.is_forecast = true;
-            f.properties.confidence = confidence;
-        });
-        sectorFeatures.forEach(f => {
-            f.properties.is_forecast = true;
-        });
-        
-        state.pointFeatures = pointFeatures;
-        state.sectorFeatures = sectorFeatures;
-        state.features = pointFeatures;
-        applyFilters();
-        
-        // Update UI elements
-        updateTimeSliderUI();
-        updateStatsUI(data.stats || forecastEntry.stats);
-        updateAlertsUI(state.filteredPointFeatures);
-        
-        // Update confidence indicator
-        const confidenceEl = document.getElementById('forecast-confidence');
-        if (confidenceEl) {
-            const conf = Math.round(confidence * 100);
-            confidenceEl.textContent = `${conf}% confidence`;
-        }
-        
-        // Update slider position
-        const slider = document.getElementById('time-slider');
-        if (slider) slider.value = index;
-        
-        if (state.selectedSite) {
-            showSiteInfoPanel(state.selectedSite);
-        }
-        
-    } catch (err) {
-        console.error('Failed to load forecast slice:', err);
-        showNotification('Failed to load forecast data', 'error');
-    }
-}
-
-function setupForecastControls() {
-    const historicalBtn = document.getElementById('mode-historical');
-    const forecastBtn = document.getElementById('mode-forecast');
-    const generateBtn = document.getElementById('btn-generate-forecast');
+function setupUnifiedTimelineControls() {
     const slider = document.getElementById('time-slider');
     const prevBtn = document.getElementById('time-prev');
     const nextBtn = document.getElementById('time-next');
     const playBtn = document.getElementById('time-play');
+    const generateBtn = document.getElementById('btn-generate-forecast');
     
-    historicalBtn?.addEventListener('click', () => switchTimeMode('historical'));
-    forecastBtn?.addEventListener('click', () => switchTimeMode('forecast'));
-    generateBtn?.addEventListener('click', generateForecast);
+    // Unified slider handler
+    const debouncedLoad = debounce((val) => loadUnifiedTimeSlice(val), 100);
     
-    // Debounced slider handler for forecast mode
-    const debouncedForecastLoad = debounce((val) => loadForecastSlice(val), 120);
-    
-    // Override slider behavior based on mode
     slider?.addEventListener('input', (e) => {
-        if (forecastState.mode === 'forecast') {
-            const val = parseInt(e.target.value, 10);
-            debouncedForecastLoad(val);
+        const val = parseInt(e.target.value, 10);
+        debouncedLoad(val);
+    });
+    
+    // Prev/Next buttons
+    prevBtn?.addEventListener('click', () => {
+        if (unifiedTimeline.currentIndex > 0) {
+            loadUnifiedTimeSlice(unifiedTimeline.currentIndex - 1);
         }
     });
     
-    // Override nav buttons for forecast mode
-    const originalPrevHandler = prevBtn?._forecastHandler;
-    if (originalPrevHandler) prevBtn.removeEventListener('click', originalPrevHandler);
-    
-    const forecastPrevHandler = () => {
-        if (forecastState.mode === 'forecast') {
-            if (forecastState.forecastTimeIndex > 0) {
-                loadForecastSlice(forecastState.forecastTimeIndex - 1);
-            }
+    nextBtn?.addEventListener('click', () => {
+        if (unifiedTimeline.currentIndex < unifiedTimeline.totalCount - 1) {
+            loadUnifiedTimeSlice(unifiedTimeline.currentIndex + 1);
         }
-    };
-    prevBtn?._forecastHandler = forecastPrevHandler;
-    prevBtn?.addEventListener('click', forecastPrevHandler);
+    });
     
-    const originalNextHandler = nextBtn?._forecastHandler;
-    if (originalNextHandler) nextBtn.removeEventListener('click', originalNextHandler);
-    
-    const forecastNextHandler = () => {
-        if (forecastState.mode === 'forecast') {
-            if (forecastState.forecastTimeIndex < forecastState.forecastIndex.length - 1) {
-                loadForecastSlice(forecastState.forecastTimeIndex + 1);
-            }
-        }
-    };
-    nextBtn?._forecastHandler = forecastNextHandler;
-    nextBtn?.addEventListener('click', forecastNextHandler);
-    
-    // Override play button for forecast mode
-    const forecastPlayHandler = () => {
-        if (forecastState.mode !== 'forecast') return;
-        
+    // Play button
+    playBtn?.addEventListener('click', () => {
         state.isPlaying = !state.isPlaying;
-        const icon = playBtn?.querySelector('.material-symbols-outlined');
+        const icon = playBtn.querySelector('.material-symbols-outlined');
         
         if (state.isPlaying) {
-            playBtn?.classList.add('playing');
+            playBtn.classList.add('playing');
             if (icon) icon.textContent = 'pause';
             const interval = CONFIG.PLAY_INTERVAL_MS / Math.max(0.25, state.playSpeed);
             state.playInterval = setInterval(() => {
-                if (forecastState.forecastTimeIndex < forecastState.forecastIndex.length - 1) {
-                    loadForecastSlice(forecastState.forecastTimeIndex + 1);
+                if (unifiedTimeline.currentIndex < unifiedTimeline.totalCount - 1) {
+                    loadUnifiedTimeSlice(unifiedTimeline.currentIndex + 1);
                 } else {
-                    loadForecastSlice(0);  // Loop back to start
+                    loadUnifiedTimeSlice(0);  // Loop back
                 }
             }, interval);
         } else {
-            playBtn?.classList.remove('playing');
+            playBtn.classList.remove('playing');
             if (icon) icon.textContent = 'play_arrow';
             clearInterval(state.playInterval);
         }
-    };
-    
-    playBtn?.addEventListener('click', (e) => {
-        if (forecastState.mode === 'forecast') {
-            e.stopPropagation();
-            forecastPlayHandler();
-        }
     });
     
-    // Check forecast availability on load
-    checkForecastAvailability();
+    // Generate button
+    generateBtn?.addEventListener('click', generateForecast);
+    
+    // Clear old forecast data on startup, then initialize on real data only
+    clearForecastOnStartup().then(async () => {
+        updateUnifiedTimeline();
+        await loadUnifiedTimeSlice(Math.min(unifiedTimeline.currentIndex, unifiedTimeline.totalCount - 1));
+    });
 }
 
 // --- Time Navigation ---
 async function loadTimeSlice(index) {
-    if (index < 0 || index >= state.timeIndex.length) return;
-    
-    const timeEntry = state.timeIndex[index];
-    state.currentTimeIndex = index;
-    
-    try {
-        const res = await fetch(`/time_data/${timeEntry.filename}?t=${Date.now()}`);
-        const data = await res.json();
-        
-        state.currentObservations = data.observations;
-        state.currentStats = data.stats;
-        
-        const { pointFeatures, sectorFeatures } = buildFeaturesForTime(data.observations);
-        state.pointFeatures = pointFeatures;
-        state.sectorFeatures = sectorFeatures;
-        state.features = pointFeatures;
-        applyFilters();
-        
-        updateStatsUI(data.stats);
-        updateAlertsUI(pointFeatures);
-        updateTimeSliderUI();
-
-        const issueTypes = collectIssueTypesFromCurrent();
-        populateIssueFilters(issueTypes);
-
-        if (state.selectedSite) {
-            showSiteInfoPanel(state.selectedSite);
-        }
-        
-    } catch (err) {
-        console.error('Failed to load time slice:', err);
-    }
+    // Use unified timeline instead
+    loadUnifiedTimeSlice(index);
 }
 
 function updateMapData() {
@@ -2911,101 +2916,36 @@ function updateMapData() {
 }
 
 function updateTimeSliderUI() {
-    const slider = document.getElementById('time-slider');
-    const currentLabel = document.getElementById('time-current-label');
-    const timestampEl = document.getElementById('timestamp');
-    const modeIndicator = document.querySelector('.time-mode-indicator span:last-child');
+    // Update the current time label in the slider
+    const data = getDataForIndex(unifiedTimeline.currentIndex);
+    const isForecast = data.type === 'forecast';
     
-    // Check if we're in forecast mode
-    if (forecastState.mode === 'forecast') {
-        const index = forecastState.forecastTimeIndex;
-        const forecastEntry = forecastState.forecastIndex[index];
-        
-        if (slider) slider.value = index;
-        
-        const currentTime = forecastEntry?.timestamp || '--';
-        if (currentLabel) currentLabel.textContent = currentTime;
-        if (timestampEl) timestampEl.textContent = currentTime;
-        if (modeIndicator) modeIndicator.textContent = 'FORECAST';
-        
-        // Update confidence display
-        const confidenceEl = document.getElementById('forecast-confidence');
-        if (confidenceEl && forecastEntry) {
-            const conf = Math.round((forecastEntry.confidence || 0.75) * 100);
-            confidenceEl.textContent = `${conf}% confidence`;
-        }
-    } else {
-        // Historical mode
-        if (slider) slider.value = state.currentTimeIndex;
-        
-        const currentTime = state.timeIndex[state.currentTimeIndex]?.timestamp || '--';
-        if (currentLabel) currentLabel.textContent = currentTime;
-        if (timestampEl) timestampEl.textContent = currentTime;
-        if (modeIndicator) modeIndicator.textContent = 'HISTORICAL';
+    const currentLabel = document.getElementById('time-current-label');
+    if (currentLabel && data.entry) {
+        const label = isForecast 
+            ? `${data.entry.timestamp} (Forecast)` 
+            : data.entry.timestamp;
+        currentLabel.textContent = label || '--';
+    }
+    
+    const timestampEl = document.getElementById('timestamp');
+    if (timestampEl && data.entry) {
+        timestampEl.textContent = data.entry.timestamp || '--';
     }
 }
 
 function setupTimeControls() {
-    const slider = document.getElementById('time-slider');
-    const prevBtn = document.getElementById('time-prev');
-    const nextBtn = document.getElementById('time-next');
-    const playBtn = document.getElementById('time-play');
-    const speedSelect = document.getElementById('time-speed-select');
+    // Time controls are now handled by setupUnifiedTimelineControls
+    // This function just initializes labels
     const startLabel = document.getElementById('time-start-label');
     const endLabel = document.getElementById('time-end-label');
     
-    if (slider && state.timeIndex.length > 0) {
-        slider.min = 0;
-        slider.max = state.timeIndex.length - 1;
-        slider.value = 0;
-
-        const debouncedLoad = debounce((val) => loadTimeSlice(val), 120);
-        slider.addEventListener('input', (e) => {
-            debouncedLoad(parseInt(e.target.value, 10));
-        });
+    if (startLabel && state.timeIndex.length > 0) {
+        startLabel.textContent = state.timeIndex[0]?.timestamp || '--';
     }
-    
-    if (startLabel && state.timeIndex.length > 0) startLabel.textContent = state.timeIndex[0]?.timestamp || '--';
-    if (endLabel && state.timeIndex.length > 0) endLabel.textContent = state.timeIndex[state.timeIndex.length - 1]?.timestamp || '--';
-    
-    prevBtn?.addEventListener('click', () => {
-        if (state.currentTimeIndex > 0) loadTimeSlice(state.currentTimeIndex - 1);
-    });
-    
-    nextBtn?.addEventListener('click', () => {
-        if (state.currentTimeIndex < state.timeIndex.length - 1) loadTimeSlice(state.currentTimeIndex + 1);
-    });
-    
-    playBtn?.addEventListener('click', () => {
-        state.isPlaying = !state.isPlaying;
-        const icon = playBtn.querySelector('.material-symbols-outlined');
-        
-        if (state.isPlaying) {
-            playBtn.classList.add('playing');
-            icon.textContent = 'pause';
-            const interval = CONFIG.PLAY_INTERVAL_MS / Math.max(0.25, state.playSpeed);
-            state.playInterval = setInterval(() => {
-                if (state.currentTimeIndex < state.timeIndex.length - 1) {
-                    loadTimeSlice(state.currentTimeIndex + 1);
-                } else {
-                    loadTimeSlice(0);
-                }
-            }, interval);
-        } else {
-            playBtn.classList.remove('playing');
-            icon.textContent = 'play_arrow';
-            clearInterval(state.playInterval);
-        }
-    });
-
-    speedSelect?.addEventListener('change', (e) => {
-        const val = Number(e.target.value);
-        state.playSpeed = isNaN(val) ? 1 : val;
-        if (state.isPlaying) {
-            document.getElementById('time-play')?.click();
-            document.getElementById('time-play')?.click();
-        }
-    });
+    if (endLabel && state.timeIndex.length > 0) {
+        endLabel.textContent = state.timeIndex[state.timeIndex.length - 1]?.timestamp || '--';
+    }
 }
 
 // --- UI Updates ---
@@ -3605,15 +3545,14 @@ function setupEventHandlers() {
             case 'a': e.preventDefault(); toggleModal('analytics-modal', true); break;
             case 'd': e.preventDefault(); toggleModal('explore-modal', true); renderExploreCharts(); break;
             case 'e': e.preventDefault(); toggleModal('export-modal', true); break;
-            case 'f': if (!e.shiftKey) { e.preventDefault(); switchTimeMode(forecastState.mode === 'forecast' ? 'historical' : 'forecast'); } break;
         }
     });
 
     // Data Exploration Modal
     setupExploreModal();
     
-    // Forecast Mode Controls
-    setupForecastControls();
+    // Unified Timeline Controls
+    setupUnifiedTimelineControls();
 }
 
 function setLoading(isLoading, progress = '') {
@@ -3647,9 +3586,15 @@ async function init() {
         
         console.log(`Loaded ${Object.keys(state.baseline).length} cells, ${state.timeIndex.length} time slices`);
         
+        // Initialize unified timeline with historical data first
+        unifiedTimeline.historicalCount = state.timeIndex.length;
+        unifiedTimeline.totalCount = state.timeIndex.length;
+        unifiedTimeline.dividerIndex = state.timeIndex.length;
+        
         setLoading(true, 'Loading initial time slice...');
         
-        await loadTimeSlice(0);
+        // Load first slice using unified system
+        await loadUnifiedTimeSlice(0);
         
         setLoading(true, 'Initializing map...');
         

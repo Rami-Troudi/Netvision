@@ -12,10 +12,6 @@ const pageMarkup = `
                 <span class="header-subtitle">Digital Twin - Network Operations Center</span>
             </div>
             <div class="header-center">
-                <div class="time-mode-indicator">
-                    <span class="material-symbols-outlined">history</span>
-                    <span>HISTORICAL</span>
-                </div>
                 <div class="timestamp" id="timestamp"></div>
             </div>
             <div class="header-right">
@@ -40,25 +36,18 @@ const pageMarkup = `
             </div>
         </header>
 
-        <!-- Time Slider Bar -->
+        <!-- Time Slider Bar - Unified Timeline -->
         <div class="time-slider-bar" id="time-slider-bar">
             <div class="time-slider-container">
-                <!-- Mode Toggle: Historical / Forecast -->
-                <div class="time-mode-toggle">
-                    <button class="time-mode-btn active" id="mode-historical" title="Historical Data">
-                        <span class="material-symbols-outlined">history</span>
-                        <span class="mode-label">Historical</span>
-                    </button>
-                    <button class="time-mode-btn" id="mode-forecast" title="6-Day Forecast">
-                        <span class="material-symbols-outlined">trending_up</span>
-                        <span class="mode-label">Forecast</span>
-                    </button>
-                </div>
-                
-                <button class="time-nav-btn" id="time-prev" title="Previous hour">
+                <button class="time-nav-btn" id="time-prev" title="Previous (←)">
                     <span class="material-symbols-outlined">chevron_left</span>
                 </button>
+                
                 <div class="time-slider-wrapper">
+                    <div class="slider-track" id="slider-track">
+                        <div class="track-historical" id="track-historical"></div>
+                        <div class="track-forecast" id="track-forecast"></div>
+                    </div>
                     <input type="range" id="time-slider" class="time-slider" min="0" max="100" value="0">
                     <div class="time-slider-labels">
                         <span id="time-start-label">--</span>
@@ -66,25 +55,22 @@ const pageMarkup = `
                         <span id="time-end-label">--</span>
                     </div>
                 </div>
-                <button class="time-nav-btn" id="time-next" title="Next hour">
+                
+                <button class="time-nav-btn" id="time-next" title="Next (→)">
                     <span class="material-symbols-outlined">chevron_right</span>
                 </button>
-                <button class="time-play-btn" id="time-play" title="Play/Pause">
+                
+                <button class="time-play-btn" id="time-play" title="Play/Pause (Space)">
                     <span class="material-symbols-outlined">play_arrow</span>
                 </button>
                 
-                <!-- Forecast Generate Button (visible in forecast mode) -->
-                <button class="forecast-generate-btn hidden" id="btn-generate-forecast" title="Generate 6-Day Forecast">
-                    <span class="material-symbols-outlined">auto_awesome</span>
-                    <span>Generate</span>
-                </button>
-            </div>
-            
-            <!-- Forecast indicator badge -->
-            <div class="forecast-indicator hidden" id="forecast-indicator">
-                <span class="material-symbols-outlined">auto_awesome</span>
-                <span>Forecast Mode</span>
-                <span class="forecast-confidence" id="forecast-confidence">85% confidence</span>
+                <div class="forecast-controls">
+                    <input type="number" id="forecast-days" class="forecast-days-input" min="0" max="30" value="7" title="Days to forecast (0 to clear)">
+                    <button class="generate-btn" id="btn-generate-forecast" title="Generate forecast (0 days = clear)">
+                        <span class="material-symbols-outlined">model_training</span>
+                        Generate
+                    </button>
+                </div>
             </div>
         </div>
 
