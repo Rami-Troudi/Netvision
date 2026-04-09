@@ -94,9 +94,14 @@ async function readParquetObservations(filePath) {
     }
     return observations
   } finally {
-    await reader.close()
+    try {
+      await reader.close()
+    } catch (ignore) {
+      // Ignore errors on close
+    }
   }
 }
+
 
 function normalizeObservationValue(key, value) {
   if (value === null || value === undefined) return null
@@ -179,10 +184,13 @@ export default async function handler(req, res) {
   try {
     const info = await stat(filePath)
     if (!info.isFile()) {
-      return res.status(404).json({ error: 'Data file not found' })
+      return res.status(404).json({ error: 'Data file not found (not a file)' })
     }
-  } catch {
-    return res.status(404).json({ error: 'Data file not found' })
+  } catch (err) {
+    if (path.basename(filePath).includes('forecast')) {
+      return res.status(404).json({ error: 'Forecast data unavailable currently', code: 'FORECAST_NOT_READY' })
+    }
+    return res.status(404).json({ error: 'Data file not found on disk' })
   }
 
   res.setHeader('Content-Type', 'application/json; charset=utf-8')

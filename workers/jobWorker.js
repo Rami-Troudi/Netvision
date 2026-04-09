@@ -244,10 +244,7 @@ async function clearForecastData() {
   }
 
   if (await fileExists(FORECAST_DIR)) {
-    const entries = await fsPromises.readdir(FORECAST_DIR)
-    await Promise.all(
-      entries.map((entry) => fsPromises.unlink(path.join(FORECAST_DIR, entry)))
-    )
+    await fsPromises.rm(FORECAST_DIR, { recursive: true, force: true })
   }
 }
 
