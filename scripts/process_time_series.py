@@ -10,13 +10,19 @@ Version: 4.0 - Time-Series Edition
 
 import pandas as pd
 import numpy as np
+import duckdb
 import json
 import os
+import sys
 import argparse
 from datetime import datetime
-from typing import List, Dict
+from typing import List, Dict, Any
 import warnings
 warnings.filterwarnings('ignore')
+
+if sys.platform == 'win32':
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
 
 # ============================================
 # CONFIGURATION - Orange Network KPI Thresholds
@@ -43,6 +49,17 @@ CONFIG = {
     'CQI_LOW': 7,                # Poor quality
     'CQI_MEDIUM': 9,             # Acceptable quality
 }
+
+
+def write_parquet_slice(df: pd.DataFrame, output_path: str) -> None:
+    """Write a dataframe to parquet using DuckDB (no pyarrow dependency)."""
+    con = duckdb.connect()
+    try:
+        con.register("slice_df", df)
+        escaped_path = output_path.replace("'", "''")
+        con.execute(f"COPY slice_df TO '{escaped_path}' (FORMAT PARQUET)")
+    finally:
+        con.close()
 
 
 def load_data(file_paths: List[str]) -> pd.DataFrame:
@@ -203,7 +220,7 @@ def process_time_series_data(
     Outputs:
     - baseline.json: Unique cells with static info (coordinates, azimuth, band)
     - time_index.json: List of available timestamps
-    - data/<timestamp>.json: Cell metrics for each timestamp
+    - time_data/<timestamp>.parquet: Cell metrics for each timestamp
     """
     start_time = datetime.now()
     
@@ -286,6 +303,7 @@ def process_time_series_data(
         
         # Analyze each cell at this timestamp
         observations = {}
+        observation_rows: List[Dict[str, Any]] = []
         congested_count = 0
         total_load = 0
         total_throughput = 0
@@ -306,7 +324,7 @@ def process_time_series_data(
             ta = row.get('ot_average_ta')
             signal = row.get('referencesignalpwr')
             
-            observations[cell_name] = {
+            observation = {
                 'load': float(load) if pd.notna(load) else None,
                 'throughput': float(throughput) if pd.notna(throughput) else None,
                 'cqi': float(cqi) if pd.notna(cqi) else None,
@@ -319,6 +337,11 @@ def process_time_series_data(
                 'root_cause': analysis['root_cause'],
                 'health_score': analysis['health_score'],
             }
+            observations[cell_name] = observation
+            observation_rows.append({
+                'cell_name': cell_name,
+                **observation,
+            })
             
             if analysis['congested']:
                 congested_count += 1
@@ -346,15 +369,10 @@ def process_time_series_data(
         }
         
         # Save timestamp data
-        ts_filename = ts.replace(' ', '_').replace(':', '-').replace('/', '-') + '.json'
+        ts_filename = ts.replace(' ', '_').replace(':', '-').replace('/', '-') + '.parquet'
         ts_path = os.path.join(data_dir, ts_filename)
-        
-        with open(ts_path, 'w', encoding='utf-8') as f:
-            json.dump({
-                'timestamp': ts,
-                'stats': ts_stats,
-                'observations': observations
-            }, f, ensure_ascii=False)
+        ts_slice_df = pd.DataFrame.from_records(observation_rows)
+        write_parquet_slice(ts_slice_df, ts_path)
         
         time_index.append({
             'timestamp': ts,
@@ -381,6 +399,7 @@ def process_time_series_data(
             'total_timestamps': len(time_index),
             'start_time': timestamps[0],
             'end_time': timestamps[-1],
+            'storage_format': 'parquet',
             'timestamps': time_index
         }, f, indent=2, ensure_ascii=False)
     print(f"  ✓ Saved time index ({len(time_index)} entries) to time_index.json")

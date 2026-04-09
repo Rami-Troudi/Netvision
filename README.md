@@ -11,15 +11,23 @@ Real-time radio network monitoring, analytics, and action simulation for Orange 
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-# Data (recommended, time-series pipeline)
+# Python data pipeline deps (Parquet I/O via DuckDB)
+python -m pip install duckdb pandas numpy
+# Data (recommended, parquet time-series pipeline)
 python scripts/process_time_series.py \
   --input cleaned_data.csv data_set_radio_1.csv \
   --output .
 ```
 
+If legacy CSV files are no longer in the working tree, restore them from git history and convert in one step:
+
+```bash
+python scripts/restore_and_convert_historical.py --output .
+```
+
 ## Data Pipelines
 - **Time-series (recommended)**: `scripts/process_time_series.py`
-  - Outputs: `baseline.json`, `time_index.json`, `stats.json`, `time_data/*.json`
+  - Outputs: `baseline.json`, `time_index.json`, `stats.json`, `time_data/*.parquet`
   - Powers the time slider, alerts, and analytics in `src/main.js`
 - **Legacy single-snapshot**: `scripts/detect_congestion.py`
   - Outputs: `data.json`, `stats.json`
@@ -33,6 +41,7 @@ python scripts/process_time_series.py \
 - `POST /api/simulate` supports actions: `tilt`, `add_carrier`, `redistribute` (fast mode only)
 - `time_entry.filename` must exist in `time_index.json` (whitelisted at the API layer)
 - Heavy routes (`/api/simulate`, `/api/forecast`, `/api/data/*`) require auth token via `Authorization: Bearer <token>`
+- Data contract rule: storage/processing uses Parquet, API responses remain JSON for browser consumption
 
 ## Project Structure (key paths)
 ```
