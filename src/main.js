@@ -281,6 +281,90 @@ function buildDataUrl(...segments) {
     return `/api/data/${pathSegments.join('/')}`;
 }
 
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function enqueueJob(jobType, payload) {
+    const body = { ...(payload || {}), job_type: jobType };
+    const res = await fetchWithAuth('/api/jobs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+    });
+
+    let data = null;
+    try {
+        data = await res.json();
+    } catch {
+        data = null;
+    }
+
+    if (!res.ok) {
+        const message = data?.error || `Failed to enqueue ${jobType} job`;
+        throw new Error(message);
+    }
+
+    const jobId = data?.jobId;
+    if (typeof jobId !== 'string' || !jobId.trim()) {
+        throw new Error('Invalid job response: missing jobId');
+    }
+
+    return { jobId, status: data?.status || 'pending' };
+}
+
+async function fetchJobStatus(jobId) {
+    const res = await fetchWithAuth(`/api/jobs/${encodeURIComponent(jobId)}`);
+    let payload = null;
+    try {
+        payload = await res.json();
+    } catch {
+        payload = null;
+    }
+
+    if (!res.ok) {
+        const message = payload?.error || `Failed to fetch job status (${res.status})`;
+        throw new Error(message);
+    }
+
+    return payload || {};
+}
+
+function toJobStatusLabel(status) {
+    const normalized = String(status || '').toLowerCase();
+    if (normalized === 'running') return 'running';
+    if (normalized === 'done') return 'done';
+    if (normalized === 'failed') return 'failed';
+    return 'queued';
+}
+
+async function waitForJobResult(jobId, options = {}) {
+    const pollIntervalMs = Number.isFinite(options.pollIntervalMs) ? options.pollIntervalMs : 2000;
+    const timeoutMs = Number.isFinite(options.timeoutMs) ? options.timeoutMs : 180000;
+    const onStatus = typeof options.onStatus === 'function' ? options.onStatus : null;
+    const startedAt = Date.now();
+
+    while (Date.now() - startedAt <= timeoutMs) {
+        const statusPayload = await fetchJobStatus(jobId);
+        const status = String(statusPayload?.status || '').toLowerCase();
+
+        if (onStatus) {
+            onStatus(toJobStatusLabel(status));
+        }
+
+        if (status === 'done') {
+            return statusPayload;
+        }
+        if (status === 'failed') {
+            throw new Error(statusPayload?.error || 'Job execution failed');
+        }
+
+        await sleep(pollIntervalMs);
+    }
+
+    throw new Error('Job polling timed out');
+}
+
 function warnIfObservationSchemaMismatch(observations, sourceLabel = 'observation payload') {
     if (hasObservationSchemaWarning) return;
     const sample = Object.values(observations || {}).find(v => v && typeof v === 'object' && !Array.isArray(v));
@@ -2181,19 +2265,45 @@ async function runSimulation(cellName, action) {
 
     try {
         // Update UI for loading state (fast only)
-        const loadingMsg = '<div class="action-hint">⚡ Simulating...</div>';
+        const loadingMsg = '<div class="action-hint">⚡ Simulating... (queued)</div>';
         if (resultEl) resultEl.innerHTML = loadingMsg;
         if (runBtn) {
             runBtn.disabled = true;
             runBtn.innerHTML = '<span class="material-symbols-outlined">hourglass_top</span> Running...';
         }
 
-        const res = await fetchWithAuth('/api/simulate', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ cell_name: cellName, action, params, time_entry: timeEntry, mode })
-        });
-        const payload = await res.json();
+        const requestBody = { cell_name: cellName, action, params, time_entry: timeEntry, mode };
+        let payload = null;
+
+        try {
+            const queued = await enqueueJob('simulate', requestBody);
+            const statusPayload = await waitForJobResult(queued.jobId, {
+                pollIntervalMs: 2000,
+                timeoutMs: 120000,
+                onStatus: (statusLabel) => {
+                    if (resultEl) {
+                        resultEl.innerHTML = `<div class="action-hint">⚡ Simulating... (${escapeHtml(statusLabel)})</div>`;
+                    }
+                }
+            });
+            payload = statusPayload?.result || null;
+        } catch (queueErr) {
+            console.warn('Queue-based simulation failed; falling back to /api/simulate:', queueErr);
+            const fallbackRes = await fetchWithAuth('/api/simulate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestBody)
+            });
+            payload = await fallbackRes.json();
+            if (!fallbackRes.ok) {
+                throw new Error(payload?.error || 'Simulation failed');
+            }
+        }
+
+        if (!payload || typeof payload !== 'object') {
+            throw new Error('Simulation returned invalid payload');
+        }
+
         displaySimulationResults(payload);
     } catch (err) {
         if (resultEl) resultEl.innerHTML = `<div class="action-error">Simulation failed: ${escapeHtml(err.message)}</div>`;
@@ -2975,23 +3085,41 @@ async function generateForecast() {
         if (btn) {
             btn.disabled = true;
             btn.classList.add('generating');
-            btn.innerHTML = '<span class="material-symbols-outlined">sync</span> Generating...';
+            btn.innerHTML = '<span class="material-symbols-outlined">sync</span> Generating... (queued)';
         }
-        
-        const res = await fetchWithAuth('/api/forecast', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ days: days })
-        });
-        
-        const data = await res.json();
-        
-        if (data.success) {
+
+        let data = null;
+        try {
+            const queued = await enqueueJob('forecast', { days });
+            const statusPayload = await waitForJobResult(queued.jobId, {
+                pollIntervalMs: 2000,
+                timeoutMs: 180000,
+                onStatus: (statusLabel) => {
+                    if (btn) {
+                        btn.innerHTML = `<span class="material-symbols-outlined">sync</span> Generating... (${escapeHtml(statusLabel)})`;
+                    }
+                }
+            });
+            data = statusPayload?.result || null;
+        } catch (queueErr) {
+            console.warn('Queue-based forecast failed; falling back to /api/forecast:', queueErr);
+            const fallbackRes = await fetchWithAuth('/api/forecast', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ days: days })
+            });
+            data = await fallbackRes.json();
+            if (!fallbackRes.ok) {
+                throw new Error(data?.error || 'Forecast generation failed');
+            }
+        }
+
+        if (data?.success) {
             // Reload forecast data and update unified timeline
             await checkForecastAvailability();
             showNotification(`Forecast for ${days} days generated! Slide right to view.`, 'success');
         } else {
-            showNotification('Forecast generation failed: ' + (data.error || 'Unknown error'), 'error');
+            showNotification('Forecast generation failed: ' + (data?.error || 'Unknown error'), 'error');
         }
     } catch (err) {
         console.error('Forecast generation error:', err);

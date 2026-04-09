@@ -33,6 +33,7 @@ yarn-debug.log*
 yarn-error.log*
 
 # Generated data (keep out of git history)
+.runtime/
 public/baseline.json
 /.next-dev
 /.next-dev/

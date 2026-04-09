@@ -11,6 +11,7 @@ Real-time radio network monitoring, analytics, and action simulation for Orange 
 ```bash
 npm install
 npm run dev        # http://localhost:3000
+npm run worker     # BullMQ worker (requires Redis)
 # Python data pipeline deps (Parquet I/O via DuckDB)
 python -m pip install duckdb pandas numpy
 # Data (recommended, parquet time-series pipeline)
@@ -29,12 +30,16 @@ python scripts/restore_and_convert_historical.py --output .
 - **Time-series (recommended)**: `scripts/process_time_series.py`
   - Outputs: `baseline.json`, `time_index.json`, `stats.json`, `time_data/*.parquet`
   - Powers the time slider, alerts, and analytics in `src/main.js`
+- **Model evaluation + threshold calibration**: `scripts/evaluate_and_calibrate.py`
+  - Inputs: `val_predictions.parquet`, `features_engineered.parquet`
+  - Outputs: `features_with_score.parquet`, `cell_congestion_profile.parquet`, `thresholds.json`
 - **Legacy single-snapshot**: `scripts/detect_congestion.py`
   - Outputs: `data.json`, `stats.json`
   - Keep only if you need the legacy static view; thresholds differ from the time-series pipeline.
 
 ## Running
 - Dev: `npm run dev` → http://localhost:3000
+- Worker: `npm run worker` (needs Redis, default `redis://127.0.0.1:6379`)
 - Prod build: `npm run build` then `npm start`
 
 ## API
@@ -42,12 +47,16 @@ python scripts/restore_and_convert_historical.py --output .
 - `time_entry.filename` must exist in `time_index.json` (whitelisted at the API layer)
 - Heavy routes (`/api/simulate`, `/api/forecast`, `/api/data/*`) require auth token via `Authorization: Bearer <token>`
 - Data contract rule: storage/processing uses Parquet, API responses remain JSON for browser consumption
+- Queue API (Phase 4):
+  - `POST /api/jobs` → enqueue simulation/forecast work, returns `{ jobId }`
+  - `GET /api/jobs/:id` → poll status/result (`pending | running | done | failed`)
+  - Legacy synchronous `/api/simulate` and `/api/forecast` are kept as fallback routes
 
 ## Project Structure (key paths)
 ```
 pages/           # Next.js pages (index, api/simulate, site-planning)
 public/          # static frontend assets only
-scripts/         # process_time_series.py (primary), detect_congestion.py (legacy)
+scripts/         # process_time_series.py, evaluate_and_calibrate.py, detect_congestion.py
 simulation/      # simulator.py (fast estimator)
 src/             # main.js (UI logic), style.css
 ```
