@@ -3,6 +3,10 @@ import path from 'path'
 import { readFile, stat } from 'fs/promises'
 import { requireAuthenticatedRequest } from '../_lib/security'
 
+if (!BigInt.prototype.toJSON) {
+  BigInt.prototype.toJSON = function () { return Number(this) }
+}
+
 const ALLOWED_ROOT_FILES = new Set([
   'baseline.json',
   'time_index.json',
@@ -89,6 +93,7 @@ async function readParquetRows(filePath) {
 function normalizeObservationValue(key, value) {
   if (value === null || value === undefined) return null
   if (typeof value === 'number' && Number.isNaN(value)) return null
+  if (typeof value === 'bigint') return Number(value)
 
   if (OBSERVATION_BOOLEAN_KEYS.has(key)) {
     if (typeof value === 'string') {

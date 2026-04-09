@@ -420,6 +420,7 @@ function buildSiteHierarchy() {
 
 // --- Data Processing ---
 function buildFeaturesForTime(observations) {
+    if (!observations) observations = {};
     const pointFeatures = [];
     const sectorFeatures = [];
     const sites = new Map();
@@ -3000,6 +3001,9 @@ async function loadHistoricalSliceInternal(timeEntry, localIndex, requestContext
     try {
         const res = await fetchWithAuth(`${buildDataUrl('time_data', timeEntry.filename)}?t=${Date.now()}`, { signal });
         const sliceData = await res.json();
+        if (!res.ok) {
+            throw new Error(sliceData.error || `HTTP error ${res.status}`);
+        }
         if (signal?.aborted || requestId !== activeSliceRequestId) return;
         
         state.currentTimeIndex = localIndex;
@@ -3033,6 +3037,9 @@ async function loadForecastSliceInternal(forecastEntry, localIndex, requestConte
     try {
         const res = await fetchWithAuth(`${buildDataUrl('forecast_data', forecastEntry.filename)}?t=${Date.now()}`, { signal });
         const sliceData = await res.json();
+        if (!res.ok) {
+            throw new Error(sliceData.error || `HTTP error ${res.status}`);
+        }
         if (signal?.aborted || requestId !== activeSliceRequestId) return;
         
         warnIfObservationSchemaMismatch(sliceData.observations || {}, `forecast slice ${forecastEntry.timestamp || forecastEntry.filename}`);
