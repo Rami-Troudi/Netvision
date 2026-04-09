@@ -9,12 +9,13 @@ Fixes Windows encoding issues by avoiding emoji characters.
 
 import argparse
 import json
-import os
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 import random
 import math
+import pandas as pd
+import duckdb
 
 # Force UTF-8 output on Windows
 if sys.platform == 'win32':
@@ -23,12 +24,28 @@ if sys.platform == 'win32':
 
 # Configuration
 BASE_DIR = Path(__file__).resolve().parent.parent
-PUBLIC_DIR = BASE_DIR / "public"
-TIME_DATA_DIR = PUBLIC_DIR / "time_data"
-FORECAST_DATA_DIR = PUBLIC_DIR / "forecast_data"
-BASELINE_PATH = PUBLIC_DIR / "baseline.json"
-TIME_INDEX_PATH = PUBLIC_DIR / "time_index.json"
-FORECAST_INDEX_PATH = PUBLIC_DIR / "forecast_index.json"
+DATA_DIR = BASE_DIR
+TIME_DATA_DIR = DATA_DIR / "time_data"
+FORECAST_DATA_DIR = DATA_DIR / "forecast_data"
+BASELINE_PATH = DATA_DIR / "baseline.json"
+TIME_INDEX_PATH = DATA_DIR / "time_index.json"
+FORECAST_INDEX_PATH = DATA_DIR / "forecast_index.json"
+
+OBSERVATION_FIELDS = [
+    "load",
+    "throughput",
+    "cqi",
+    "traffic",
+    "ta",
+    "signal_power",
+    "congested",
+    "severity",
+    "issue_type",
+    "root_cause",
+    "health_score",
+    "confidence",
+    "is_forecast",
+]
 
 
 def log(msg, level="INFO"):
@@ -49,6 +66,79 @@ def save_json(path, data):
         json.dump(data, f, indent=2, ensure_ascii=False)
 
 
+def normalize_observation_value(key, value):
+    """Convert parquet scalar values to JSON-compatible observation values."""
+    if pd.isna(value):
+        return None
+    if key in {"congested", "is_forecast"}:
+        if isinstance(value, str):
+            return value.strip().lower() in {"1", "true", "yes"}
+        return bool(value)
+    return value
+
+
+def dataframe_to_observations(df):
+    """Convert a parquet dataframe back to the observation object map."""
+    observations = {}
+    if df.empty:
+        return observations
+
+    for row in df.to_dict(orient="records"):
+        cell_name = str(row.get("cell_name", "")).strip()
+        if not cell_name:
+            continue
+        observations[cell_name] = {
+            field: normalize_observation_value(field, row.get(field))
+            for field in OBSERVATION_FIELDS
+            if field in row
+        }
+    return observations
+
+
+def observations_to_dataframe(observations):
+    """Convert observation object map to a parquet-ready dataframe."""
+    rows = []
+    for cell_name, values in (observations or {}).items():
+        row = {"cell_name": cell_name}
+        for field in OBSERVATION_FIELDS:
+            row[field] = values.get(field)
+        rows.append(row)
+    return pd.DataFrame.from_records(rows, columns=["cell_name", *OBSERVATION_FIELDS])
+
+
+def load_observations_file(path):
+    """Load observations from parquet (preferred) or legacy JSON slices."""
+    suffix = path.suffix.lower()
+    if suffix == ".parquet":
+        df = read_parquet_dataframe(path)
+        return dataframe_to_observations(df)
+    if suffix == ".json":
+        payload = load_json(path)
+        return payload.get("observations", {})
+    raise ValueError(f"Unsupported slice format: {path.name}")
+
+
+def read_parquet_dataframe(path):
+    """Read parquet file into dataframe via DuckDB."""
+    con = duckdb.connect()
+    try:
+        escaped_path = str(path).replace("'", "''")
+        return con.execute(f"SELECT * FROM read_parquet('{escaped_path}')").fetchdf()
+    finally:
+        con.close()
+
+
+def write_parquet_dataframe(df, path):
+    """Write dataframe to parquet via DuckDB."""
+    con = duckdb.connect()
+    try:
+        con.register("slice_df", df)
+        escaped_path = str(path).replace("'", "''")
+        con.execute(f"COPY slice_df TO '{escaped_path}' (FORMAT PARQUET)")
+    finally:
+        con.close()
+
+
 def parse_timestamp(ts_str):
     """Parse DD-MM-YYYY HH:MM format"""
     return datetime.strptime(ts_str, "%d-%m-%Y %H:%M")
@@ -60,8 +150,8 @@ def format_timestamp(dt):
 
 
 def format_filename(dt):
-    """Format to DD-MM-YYYY_HH-MM.json"""
-    return dt.strftime("%d-%m-%Y_%H-%M.json")
+    """Format to DD-MM-YYYY_HH-MM.parquet"""
+    return dt.strftime("%d-%m-%Y_%H-%M.parquet")
 
 
 def load_historical_data(limit=168):
@@ -84,14 +174,16 @@ def load_historical_data(limit=168):
     data = []
     for entry in recent:
         filename = entry.get("filename")
+        if not filename:
+            continue
         filepath = TIME_DATA_DIR / filename
         if filepath.exists():
             try:
-                slice_data = load_json(filepath)
+                observations = load_observations_file(filepath)
                 data.append({
                     "timestamp": entry.get("timestamp"),
                     "stats": entry.get("stats", {}),
-                    "observations": slice_data.get("observations", {})
+                    "observations": observations
                 })
             except Exception as e:
                 log(f"Failed to load {filename}: {e}", "WARN")
@@ -399,15 +491,8 @@ def run_forecast_pipeline(days=6, start_date=None):
     for fc in forecasts:
         filename = fc["filename"]
         filepath = FORECAST_DATA_DIR / filename
-        
-        # Save the slice
-        slice_data = {
-            "timestamp": fc["timestamp"],
-            "stats": fc["stats"],
-            "observations": fc["observations"],
-            "confidence": fc["confidence"]
-        }
-        save_json(filepath, slice_data)
+        observations_df = observations_to_dataframe(fc["observations"])
+        write_parquet_dataframe(observations_df, filepath)
         
         # Add to index
         forecast_index.append({

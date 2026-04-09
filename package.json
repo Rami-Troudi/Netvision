@@ -1,18 +1,25 @@
 {
-  "name": "odc-tsyp-viz",
+  "name": "odc-viz",
   "private": true,
   "version": "1.0.0",
+  "engines": {
+    "node": ">=22.5.0"
+  },
   "scripts": {
     "dev": "next dev",
+    "worker": "node workers/jobWorker.js",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
   },
   "dependencies": {
     "@turf/turf": "^7.3.1",
+    "bullmq": "^5.73.3",
     "chart.js": "^4.5.1",
+    "ioredis": "^5.10.1",
     "maplibre-gl": "^5.15.0",
     "next": "^15.5.9",
+    "parquetjs-lite": "^0.8.7",
     "react": "latest",
     "react-dom": "latest"
   }

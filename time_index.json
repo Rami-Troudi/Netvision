@@ -2,10 +2,11 @@
   "total_timestamps": 716,
   "start_time": "15-11-2025 00:00",
   "end_time": "14-12-2025 23:00",
+  "storage_format": "parquet",
   "timestamps": [
     {
       "timestamp": "15-11-2025 00:00",
-      "filename": "15-11-2025_00-00.json",
+      "filename": "15-11-2025_00-00.parquet",
       "stats": {
         "cells_observed": 132,
         "congested": 3,
@@ -18,7 +19,7 @@
     },
     {
       "timestamp": "15-11-2025 01:00",
-      "filename": "15-11-2025_01-00.json",
+      "filename": "15-11-2025_01-00.parquet",
       "stats": {
         "cells_observed": 12,
         "congested": 2,
@@ -31,7 +32,7 @@
     },
     {
       "timestamp": "15-11-2025 02:00",
-      "filename": "15-11-2025_02-00.json",
+      "filename": "15-11-2025_02-00.parquet",
       "stats": {
         "cells_observed": 6,
         "congested": 0,
@@ -44,7 +45,7 @@
     },
     {
       "timestamp": "15-11-2025 03:00",
-      "filename": "15-11-2025_03-00.json",
+      "filename": "15-11-2025_03-00.parquet",
       "stats": {
         "cells_observed": 4,
         "congested": 0,
@@ -57,7 +58,7 @@
     },
     {
       "timestamp": "15-11-2025 04:00",
-      "filename": "15-11-2025_04-00.json",
+      "filename": "15-11-2025_04-00.parquet",
       "stats": {
         "cells_observed": 3,
         "congested": 0,
@@ -70,7 +71,7 @@
     },
     {
       "timestamp": "15-11-2025 05:00",
-      "filename": "15-11-2025_05-00.json",
+      "filename": "15-11-2025_05-00.parquet",
       "stats": {
         "cells_observed": 4,
         "congested": 0,
@@ -83,7 +84,7 @@
     },
     {
       "timestamp": "15-11-2025 06:00",
-      "filename": "15-11-2025_06-00.json",
+      "filename": "15-11-2025_06-00.parquet",
       "stats": {
         "cells_observed": 4,
         "congested": 0,
@@ -96,7 +97,7 @@
     },
     {
       "timestamp": "15-11-2025 07:00",
-      "filename": "15-11-2025_07-00.json",
+      "filename": "15-11-2025_07-00.parquet",
       "stats": {
         "cells_observed": 7,
         "congested": 1,
@@ -109,7 +110,7 @@
     },
     {
       "timestamp": "15-11-2025 08:00",
-      "filename": "15-11-2025_08-00.json",
+      "filename": "15-11-2025_08-00.parquet",
       "stats": {
         "cells_observed": 17,
         "congested": 4,
@@ -122,7 +123,7 @@
     },
     {
       "timestamp": "15-11-2025 09:00",
-      "filename": "15-11-2025_09-00.json",
+      "filename": "15-11-2025_09-00.parquet",
       "stats": {
         "cells_observed": 23,
         "congested": 2,
@@ -135,7 +136,7 @@
     },
     {
       "timestamp": "15-11-2025 10:00",
-      "filename": "15-11-2025_10-00.json",
+      "filename": "15-11-2025_10-00.parquet",
       "stats": {
         "cells_observed": 44,
         "congested": 11,
@@ -148,7 +149,7 @@
     },
     {
       "timestamp": "15-11-2025 11:00",
-      "filename": "15-11-2025_11-00.json",
+      "filename": "15-11-2025_11-00.parquet",
       "stats": {
         "cells_observed": 42,
         "congested": 7,
@@ -161,7 +162,7 @@
     },
     {
       "timestamp": "15-11-2025 12:00",
-      "filename": "15-11-2025_12-00.json",
+      "filename": "15-11-2025_12-00.parquet",
       "stats": {
         "cells_observed": 41,
         "congested": 9,
@@ -174,7 +175,7 @@
     },
     {
       "timestamp": "15-11-2025 13:00",
-      "filename": "15-11-2025_13-00.json",
+      "filename": "15-11-2025_13-00.parquet",
       "stats": {
         "cells_observed": 59,
         "congested": 17,
@@ -187,7 +188,7 @@
     },
     {
       "timestamp": "15-11-2025 14:00",
-      "filename": "15-11-2025_14-00.json",
+      "filename": "15-11-2025_14-00.parquet",
       "stats": {
         "cells_observed": 56,
         "congested": 15,
@@ -200,7 +201,7 @@
     },
     {
       "timestamp": "15-11-2025 15:00",
-      "filename": "15-11-2025_15-00.json",
+      "filename": "15-11-2025_15-00.parquet",
       "stats": {
         "cells_observed": 68,
         "congested": 15,
@@ -213,7 +214,7 @@
     },
     {
       "timestamp": "15-11-2025 16:00",
-      "filename": "15-11-2025_16-00.json",
+      "filename": "15-11-2025_16-00.parquet",
       "stats": {
         "cells_observed": 55,
         "congested": 16,
@@ -226,7 +227,7 @@
     },
     {
       "timestamp": "15-11-2025 17:00",
-      "filename": "15-11-2025_17-00.json",
+      "filename": "15-11-2025_17-00.parquet",
       "stats": {
         "cells_observed": 36,
         "congested": 10,
@@ -239,7 +240,7 @@
     },
     {
       "timestamp": "15-11-2025 18:00",
-      "filename": "15-11-2025_18-00.json",
+      "filename": "15-11-2025_18-00.parquet",
       "stats": {
         "cells_observed": 82,
         "congested": 23,
@@ -252,7 +253,7 @@
     },
     {
       "timestamp": "15-11-2025 19:00",
-      "filename": "15-11-2025_19-00.json",
+      "filename": "15-11-2025_19-00.parquet",
       "stats": {
         "cells_observed": 106,
         "congested": 37,
@@ -265,7 +266,7 @@
     },
     {
       "timestamp": "15-11-2025 20:00",
-      "filename": "15-11-2025_20-00.json",
+      "filename": "15-11-2025_20-00.parquet",
       "stats": {
         "cells_observed": 223,
         "congested": 93,
@@ -278,7 +279,7 @@
     },
     {
       "timestamp": "15-11-2025 21:00",
-      "filename": "15-11-2025_21-00.json",
+      "filename": "15-11-2025_21-00.parquet",
       "stats": {
         "cells_observed": 200,
         "congested": 97,
@@ -291,7 +292,7 @@
     },
     {
       "timestamp": "15-11-2025 22:00",
-      "filename": "15-11-2025_22-00.json",
+      "filename": "15-11-2025_22-00.parquet",
       "stats": {
         "cells_observed": 220,
         "congested": 100,
@@ -304,7 +305,7 @@
     },
     {
       "timestamp": "15-11-2025 23:00",
-      "filename": "15-11-2025_23-00.json",
+      "filename": "15-11-2025_23-00.parquet",
       "stats": {
         "cells_observed": 97,
         "congested": 29,
@@ -317,7 +318,7 @@
     },
     {
       "timestamp": "16-11-2025 00:00",
-      "filename": "16-11-2025_00-00.json",
+      "filename": "16-11-2025_00-00.parquet",
       "stats": {
         "cells_observed": 145,
         "congested": 16,
@@ -330,7 +331,7 @@
     },
     {
       "timestamp": "16-11-2025 01:00",
-      "filename": "16-11-2025_01-00.json",
+      "filename": "16-11-2025_01-00.parquet",
       "stats": {
         "cells_observed": 16,
         "congested": 5,
@@ -343,7 +344,7 @@
     },
     {
       "timestamp": "16-11-2025 02:00",
-      "filename": "16-11-2025_02-00.json",
+      "filename": "16-11-2025_02-00.parquet",
       "stats": {
         "cells_observed": 3,
         "congested": 0,
@@ -356,7 +357,7 @@
     },
     {
       "timestamp": "16-11-2025 03:00",
-      "filename": "16-11-2025_03-00.json",
+      "filename": "16-11-2025_03-00.parquet",
       "stats": {
         "cells_observed": 6,
         "congested": 0,
@@ -369,7 +370,7 @@
     },
     {
       "timestamp": "16-11-2025 05:00",
-      "filename": "16-11-2025_05-00.json",
+      "filename": "16-11-2025_05-00.parquet",
       "stats": {
         "cells_observed": 3,
         "congested": 0,
@@ -382,7 +383,7 @@
     },
     {
       "timestamp": "16-11-2025 06:00",
-      "filename": "16-11-2025_06-00.json",
+      "filename": "16-11-2025_06-00.parquet",
       "stats": {
         "cells_observed": 4,
         "congested": 0,
@@ -395,7 +396,7 @@
     },
     {
       "timestamp": "16-11-2025 07:00",
-      "filename": "16-11-2025_07-00.json",
+      "filename": "16-11-2025_07-00.parquet",
       "stats": {
         "cells_observed": 7,
         "congested": 0,
@@ -408,7 +409,7 @@
     },
     {
       "timestamp": "16-11-2025 08:00",
-      "filename": "16-11-2025_08-00.json",
+      "filename": "16-11-2025_08-00.parquet",
       "stats": {
         "cells_observed": 10,
         "congested": 2,
@@ -421,7 +422,7 @@
     },
     {
       "timestamp": "16-11-2025 09:00",
-      "filename": "16-11-2025_09-00.json",
+      "filename": "16-11-2025_09-00.parquet",
       "stats": {
         "cells_observed": 25,
         "congested": 5,
@@ -434,7 +435,7 @@
     },
     {
       "timestamp": "16-11-2025 10:00",
-      "filename": "16-11-2025_10-00.json",
+      "filename": "16-11-2025_10-00.parquet",
       "stats": {
         "cells_observed": 34,
         "congested": 8,
@@ -447,7 +448,7 @@
     },
     {
       "timestamp": "16-11-2025 11:00",
-      "filename": "16-11-2025_11-00.json",
+      "filename": "16-11-2025_11-00.parquet",
       "stats": {
         "cells_observed": 49,
         "congested": 13,
@@ -460,7 +461,7 @@
     },
     {
       "timestamp": "16-11-2025 12:00",
-      "filename": "16-11-2025_12-00.json",
+      "filename": "16-11-2025_12-00.parquet",
       "stats": {
         "cells_observed": 39,
         "congested": 7,
@@ -473,7 +474,7 @@
     },
     {
       "timestamp": "16-11-2025 13:00",
-      "filename": "16-11-2025_13-00.json",
+      "filename": "16-11-2025_13-00.parquet",
       "stats": {
         "cells_observed": 48,
         "congested": 15,
@@ -486,7 +487,7 @@
     },
     {
       "timestamp": "16-11-2025 14:00",
-      "filename": "16-11-2025_14-00.json",
+      "filename": "16-11-2025_14-00.parquet",
       "stats": {
         "cells_observed": 55,
         "congested": 18,
@@ -499,7 +500,7 @@
     },
     {
       "timestamp": "16-11-2025 15:00",
-      "filename": "16-11-2025_15-00.json",
+      "filename": "16-11-2025_15-00.parquet",
       "stats": {
         "cells_observed": 55,
         "congested": 11,
@@ -512,7 +513,7 @@
     },
     {
       "timestamp": "16-11-2025 16:00",
-      "filename": "16-11-2025_16-00.json",
+      "filename": "16-11-2025_16-00.parquet",
       "stats": {
         "cells_observed": 51,
         "congested": 7,
@@ -525,7 +526,7 @@
     },
     {
       "timestamp": "16-11-2025 17:00",
-      "filename": "16-11-2025_17-00.json",
+      "filename": "16-11-2025_17-00.parquet",
       "stats": {
         "cells_observed": 54,
         "congested": 14,
@@ -538,7 +539,7 @@
     },
     {
       "timestamp": "16-11-2025 18:00",
-      "filename": "16-11-2025_18-00.json",
+      "filename": "16-11-2025_18-00.parquet",
       "stats": {
         "cells_observed": 78,
         "congested": 21,
@@ -551,7 +552,7 @@
     },
     {
       "timestamp": "16-11-2025 19:00",
-      "filename": "16-11-2025_19-00.json",
+      "filename": "16-11-2025_19-00.parquet",
       "stats": {
         "cells_observed": 142,
         "congested": 56,
@@ -564,7 +565,7 @@
     },
     {
       "timestamp": "16-11-2025 20:00",
-      "filename": "16-11-2025_20-00.json",
+      "filename": "16-11-2025_20-00.parquet",
       "stats": {
         "cells_observed": 258,
         "congested": 115,
@@ -577,7 +578,7 @@
     },
     {
       "timestamp": "16-11-2025 21:00",
-      "filename": "16-11-2025_21-00.json",
+      "filename": "16-11-2025_21-00.parquet",
       "stats": {
         "cells_observed": 227,
         "congested": 88,
@@ -590,7 +591,7 @@
     },
     {
       "timestamp": "16-11-2025 22:00",
-      "filename": "16-11-2025_22-00.json",
+      "filename": "16-11-2025_22-00.parquet",
       "stats": {
         "cells_observed": 164,
         "congested": 66,
@@ -603,7 +604,7 @@
     },
     {
       "timestamp": "16-11-2025 23:00",
-      "filename": "16-11-2025_23-00.json",
+      "filename": "16-11-2025_23-00.parquet",
       "stats": {
         "cells_observed": 69,
         "congested": 22,
@@ -616,7 +617,7 @@
     },
     {
       "timestamp": "17-11-2025 00:00",
-      "filename": "17-11-2025_00-00.json",
+      "filename": "17-11-2025_00-00.parquet",
       "stats": {
         "cells_observed": 127,
         "congested": 3,
@@ -629,7 +630,7 @@
     },
     {
       "timestamp": "17-11-2025 01:00",
-      "filename": "17-11-2025_01-00.json",
+      "filename": "17-11-2025_01-00.parquet",
       "stats": {
         "cells_observed": 9,
         "congested": 0,
@@ -642,7 +643,7 @@
     },
     {
       "timestamp": "17-11-2025 02:00",
-      "filename": "17-11-2025_02-00.json",
+      "filename": "17-11-2025_02-00.parquet",
       "stats": {
         "cells_observed": 6,
         "congested": 0,
@@ -655,7 +656,7 @@
     },
     {
       "timestamp": "17-11-2025 03:00",
-      "filename": "17-11-2025_03-00.json",
+      "filename": "17-11-2025_03-00.parquet",
       "stats": {
         "cells_observed": 3,
         "congested": 1,
@@ -668,7 +669,7 @@
     },
     {
       "timestamp": "17-11-2025 04:00",
-      "filename": "17-11-2025_04-00.json",
+      "filename": "17-11-2025_04-00.parquet",
       "stats": {
         "cells_observed": 1,
         "congested": 0,
@@ -681,7 +682,7 @@
     },
     {
       "timestamp": "17-11-2025 05:00",
-      "filename": "17-11-2025_05-00.json",
+      "filename": "17-11-2025_05-00.parquet",
       "stats": {
         "cells_observed": 1,
         "congested": 0,
@@ -694,7 +695,7 @@
     },
     {
       "timestamp": "17-11-2025 06:00",
-      "filename": "17-11-2025_06-00.json",
+      "filename": "17-11-2025_06-00.parquet",
       "stats": {
         "cells_observed": 9,
         "congested": 0,
@@ -707,7 +708,7 @@
     },
     {
       "timestamp": "17-11-2025 07:00",
-      "filename": "17-11-2025_07-00.json",
+      "filename": "17-11-2025_07-00.parquet",
       "stats": {
         "cells_observed": 6,
         "congested": 0,
@@ -720,7 +721,7 @@
     },
     {
       "timestamp": "17-11-2025 08:00",
-      "filename": "17-11-2025_08-00.json",
+      "filename": "17-11-2025_08-00.parquet",
       "stats": {
         "cells_observed": 9,
         "congested": 1,
@@ -733,7 +734,7 @@
     },
     {
       "timestamp": "17-11-2025 09:00",
-      "filename": "17-11-2025_09-00.json",
+      "filename": "17-11-2025_09-00.parquet",
       "stats": {
         "cells_observed": 26,
         "congested": 5,
@@ -746,7 +747,7 @@
     },
     {
       "timestamp": "17-11-2025 10:00",
-      "filename": "17-11-2025_10-00.json",
+      "filename": "17-11-2025_10-00.parquet",
       "stats": {
         "cells_observed": 21,
         "congested": 4,
@@ -759,7 +760,7 @@
     },
     {
       "timestamp": "17-11-2025 11:00",
-      "filename": "17-11-2025_11-00.json",
+      "filename": "17-11-2025_11-00.parquet",
       "stats": {
         "cells_observed": 35,
         "congested": 11,
@@ -772,7 +773,7 @@
     },
     {
       "timestamp": "17-11-2025 12:00",
-      "filename": "17-11-2025_12-00.json",
+      "filename": "17-11-2025_12-00.parquet",
       "stats": {
         "cells_observed": 55,
         "congested": 12,
@@ -785,7 +786,7 @@
     },
     {
       "timestamp": "17-11-2025 13:00",
-      "filename": "17-11-2025_13-00.json",
+      "filename": "17-11-2025_13-00.parquet",
       "stats": {
         "cells_observed": 66,
         "congested": 16,
@@ -798,7 +799,7 @@
     },
     {
       "timestamp": "17-11-2025 14:00",
-      "filename": "17-11-2025_14-00.json",
+      "filename": "17-11-2025_14-00.parquet",
       "stats": {
         "cells_observed": 41,
         "congested": 6,
@@ -811,7 +812,7 @@
     },
     {
       "timestamp": "17-11-2025 15:00",
-      "filename": "17-11-2025_15-00.json",
+      "filename": "17-11-2025_15-00.parquet",
       "stats": {
         "cells_observed": 30,
         "congested": 4,
@@ -824,7 +825,7 @@
     },
     {
       "timestamp": "17-11-2025 16:00",
-      "filename": "17-11-2025_16-00.json",
+      "filename": "17-11-2025_16-00.parquet",
       "stats": {
         "cells_observed": 34,
         "congested": 7,
@@ -837,7 +838,7 @@
     },
     {
       "timestamp": "17-11-2025 17:00",
-      "filename": "17-11-2025_17-00.json",
+      "filename": "17-11-2025_17-00.parquet",
       "stats": {
         "cells_observed": 34,
         "congested": 4,
@@ -850,7 +851,7 @@
     },
     {
       "timestamp": "17-11-2025 18:00",
-      "filename": "17-11-2025_18-00.json",
+      "filename": "17-11-2025_18-00.parquet",
       "stats": {
         "cells_observed": 79,
         "congested": 21,
@@ -863,7 +864,7 @@
     },
     {
       "timestamp": "17-11-2025 19:00",
-      "filename": "17-11-2025_19-00.json",
+      "filename": "17-11-2025_19-00.parquet",
       "stats": {
         "cells_observed": 122,
         "congested": 49,
@@ -876,7 +877,7 @@
     },
     {
       "timestamp": "17-11-2025 20:00",
-      "filename": "17-11-2025_20-00.json",
+      "filename": "17-11-2025_20-00.parquet",
       "stats": {
         "cells_observed": 285,
         "congested": 128,
@@ -889,7 +890,7 @@
     },
     {
       "timestamp": "17-11-2025 21:00",
-      "filename": "17-11-2025_21-00.json",
+      "filename": "17-11-2025_21-00.parquet",
       "stats": {
         "cells_observed": 295,
         "congested": 138,
@@ -902,7 +903,7 @@
     },
     {
       "timestamp": "17-11-2025 22:00",
-      "filename": "17-11-2025_22-00.json",
+      "filename": "17-11-2025_22-00.parquet",
       "stats": {
         "cells_observed": 170,
         "congested": 62,
@@ -915,7 +916,7 @@
     },
     {
       "timestamp": "17-11-2025 23:00",
-      "filename": "17-11-2025_23-00.json",
+      "filename": "17-11-2025_23-00.parquet",
       "stats": {
         "cells_observed": 77,
         "congested": 23,
@@ -928,7 +929,7 @@
     },
     {
       "timestamp": "18-11-2025 00:00",
-      "filename": "18-11-2025_00-00.json",
+      "filename": "18-11-2025_00-00.parquet",
       "stats": {
         "cells_observed": 121,
         "congested": 4,
@@ -941,7 +942,7 @@
     },
     {
       "timestamp": "18-11-2025 01:00",
-      "filename": "18-11-2025_01-00.json",
+      "filename": "18-11-2025_01-00.parquet",
       "stats": {
         "cells_observed": 10,
         "congested": 1,
@@ -954,7 +955,7 @@
     },
     {
       "timestamp": "18-11-2025 02:00",
-      "filename": "18-11-2025_02-00.json",
+      "filename": "18-11-2025_02-00.parquet",
       "stats": {
         "cells_observed": 5,
         "congested": 0,
@@ -967,7 +968,7 @@
     },
     {
       "timestamp": "18-11-2025 03:00",
-      "filename": "18-11-2025_03-00.json",
+      "filename": "18-11-2025_03-00.parquet",
       "stats": {
         "cells_observed": 2,
         "congested": 0,
@@ -980,7 +981,7 @@
     },
     {
       "timestamp": "18-11-2025 04:00",
-      "filename": "18-11-2025_04-00.json",
+      "filename": "18-11-2025_04-00.parquet",
       "stats": {
         "cells_observed": 3,
         "congested": 0,
@@ -993,7 +994,7 @@
     },
     {
       "timestamp": "18-11-2025 05:00",
-      "filename": "18-11-2025_05-00.json",
+      "filename": "18-11-2025_05-00.parquet",
       "stats": {
         "cells_observed": 3,
         "congested": 0,
@@ -1006,7 +1007,7 @@
     },
     {
       "timestamp": "18-11-2025 06:00",
-      "filename": "18-11-2025_06-00.json",
+      "filename": "18-11-2025_06-00.parquet",
       "stats": {
         "cells_observed": 7,
         "congested": 0,
@@ -1019,7 +1020,7 @@
     },
     {
       "timestamp": "18-11-2025 07:00",
-      "filename": "18-11-2025_07-00.json",
+      "filename": "18-11-2025_07-00.parquet",
       "stats": {
         "cells_observed": 3,
         "congested": 0,
@@ -1032,7 +1033,7 @@
     },
     {
       "timestamp": "18-11-2025 08:00",
-      "filename": "18-11-2025_08-00.json",
+      "filename": "18-11-2025_08-00.parquet",
       "stats": {
         "cells_observed": 4,
         "congested": 1,
@@ -1045,7 +1046,7 @@
     },
     {
       "timestamp": "18-11-2025 09:00",
-      "filename": "18-11-2025_09-00.json",
+      "filename": "18-11-2025_09-00.parquet",
       "stats": {
         "cells_observed": 19,
         "congested": 4,
@@ -1058,7 +1059,7 @@
     },
     {
       "timestamp": "18-11-2025 10:00",
-      "filename": "18-11-2025_10-00.json",
+      "filename": "18-11-2025_10-00.parquet",
       "stats": {
         "cells_observed": 31,
         "congested": 5,
@@ -1071,7 +1072,7 @@
     },
     {
       "timestamp": "18-11-2025 11:00",
-      "filename": "18-11-2025_11-00.json",
+      "filename": "18-11-2025_11-00.parquet",
       "stats": {
         "cells_observed": 30,
         "congested": 8,
@@ -1084,7 +1085,7 @@
     },
     {
       "timestamp": "18-11-2025 12:00",
-      "filename": "18-11-2025_12-00.json",
+      "filename": "18-11-2025_12-00.parquet",
       "stats": {
         "cells_observed": 47,
         "congested": 12,
@@ -1097,7 +1098,7 @@
     },
     {
       "timestamp": "18-11-2025 13:00",
-      "filename": "18-11-2025_13-00.json",
+      "filename": "18-11-2025_13-00.parquet",
       "stats": {
         "cells_observed": 44,
         "congested": 12,
@@ -1110,7 +1111,7 @@
     },
     {
       "timestamp": "18-11-2025 14:00",
-      "filename": "18-11-2025_14-00.json",
+      "filename": "18-11-2025_14-00.parquet",
       "stats": {
         "cells_observed": 28,
         "congested": 7,
@@ -1123,7 +1124,7 @@
     },
     {
       "timestamp": "18-11-2025 15:00",
-      "filename": "18-11-2025_15-00.json",
+      "filename": "18-11-2025_15-00.parquet",
       "stats": {
         "cells_observed": 37,
         "congested": 9,
@@ -1136,7 +1137,7 @@
     },
     {
       "timestamp": "18-11-2025 16:00",
-      "filename": "18-11-2025_16-00.json",
+      "filename": "18-11-2025_16-00.parquet",
       "stats": {
         "cells_observed": 38,
         "congested": 13,
@@ -1149,7 +1150,7 @@
     },
     {
       "timestamp": "18-11-2025 17:00",
-      "filename": "18-11-2025_17-00.json",
+      "filename": "18-11-2025_17-00.parquet",
       "stats": {
         "cells_observed": 25,
         "congested": 4,
@@ -1162,7 +1163,7 @@
     },
     {
       "timestamp": "18-11-2025 18:00",
-      "filename": "18-11-2025_18-00.json",
+      "filename": "18-11-2025_18-00.parquet",
       "stats": {
         "cells_observed": 61,
         "congested": 21,
@@ -1175,7 +1176,7 @@
     },
     {
       "timestamp": "18-11-2025 19:00",
-      "filename": "18-11-2025_19-00.json",
+      "filename": "18-11-2025_19-00.parquet",
       "stats": {
         "cells_observed": 97,
         "congested": 45,
@@ -1188,7 +1189,7 @@
     },
     {
       "timestamp": "18-11-2025 20:00",
-      "filename": "18-11-2025_20-00.json",
+      "filename": "18-11-2025_20-00.parquet",
       "stats": {
         "cells_observed": 229,
         "congested": 106,
@@ -1201,7 +1202,7 @@
     },
     {
       "timestamp": "18-11-2025 21:00",
-      "filename": "18-11-2025_21-00.json",
+      "filename": "18-11-2025_21-00.parquet",
       "stats": {
         "cells_observed": 445,
         "congested": 210,
@@ -1214,7 +1215,7 @@
     },
     {
       "timestamp": "18-11-2025 22:00",
-      "filename": "18-11-2025_22-00.json",
+      "filename": "18-11-2025_22-00.parquet",
       "stats": {
         "cells_observed": 180,
         "congested": 76,
@@ -1227,7 +1228,7 @@
     },
     {
       "timestamp": "18-11-2025 23:00",
-      "filename": "18-11-2025_23-00.json",
+      "filename": "18-11-2025_23-00.parquet",
       "stats": {
         "cells_observed": 74,
         "congested": 25,
@@ -1240,7 +1241,7 @@
     },
     {
       "timestamp": "19-11-2025 00:00",
-      "filename": "19-11-2025_00-00.json",
+      "filename": "19-11-2025_00-00.parquet",
       "stats": {
         "cells_observed": 141,
         "congested": 4,
@@ -1253,7 +1254,7 @@
     },
     {
       "timestamp": "19-11-2025 01:00",
-      "filename": "19-11-2025_01-00.json",
+      "filename": "19-11-2025_01-00.parquet",
       "stats": {
         "cells_observed": 16,
         "congested": 0,
@@ -1266,7 +1267,7 @@
     },
     {
       "timestamp": "19-11-2025 02:00",
-      "filename": "19-11-2025_02-00.json",
+      "filename": "19-11-2025_02-00.parquet",
       "stats": {
         "cells_observed": 7,
         "congested": 0,
@@ -1279,7 +1280,7 @@
     },
     {
       "timestamp": "19-11-2025 03:00",
-      "filename": "19-11-2025_03-00.json",
+      "filename": "19-11-2025_03-00.parquet",
       "stats": {
         "cells_observed": 4,
         "congested": 0,
@@ -1292,7 +1293,7 @@
     },
     {
       "timestamp": "19-11-2025 04:00",
-      "filename": "19-11-2025_04-00.json",
+      "filename": "19-11-2025_04-00.parquet",
       "stats": {
         "cells_observed": 2,
         "congested": 0,
@@ -1305,7 +1306,7 @@
     },
     {
       "timestamp": "19-11-2025 05:00",
-      "filename": "19-11-2025_05-00.json",
+      "filename": "19-11-2025_05-00.parquet",
       "stats": {
         "cells_observed": 1,
         "congested": 0,
@@ -1318,7 +1319,7 @@
     },
     {
       "timestamp": "19-11-2025 06:00",
-      "filename": "19-11-2025_06-00.json",
+      "filename": "19-11-2025_06-00.parquet",
       "stats": {
         "cells_observed": 6,
         "congested": 0,
@@ -1331,7 +1332,7 @@
     },
     {
       "timestamp": "19-11-2025 07:00",
-      "filename": "19-11-2025_07-00.json",
+      "filename": "19-11-2025_07-00.parquet",
       "stats": {
         "cells_observed": 11,
         "congested": 3,
@@ -1344,7 +1345,7 @@
     },
     {
       "timestamp": "19-11-2025 08:00",
-      "filename": "19-11-2025_08-00.json",
+      "filename": "19-11-2025_08-00.parquet",
       "stats": {
         "cells_observed": 14,
         "congested": 2,
@@ -1357,7 +1358,7 @@
     },
     {
       "timestamp": "19-11-2025 09:00",
-      "filename": "19-11-2025_09-00.json",
+      "filename": "19-11-2025_09-00.parquet",
       "stats": {
         "cells_observed": 31,
         "congested": 7,
@@ -1370,7 +1371,7 @@
     },
     {
       "timestamp": "19-11-2025 10:00",
-      "filename": "19-11-2025_10-00.json",
+      "filename": "19-11-2025_10-00.parquet",
       "stats": {
         "cells_observed": 22,
         "congested": 3,
@@ -1383,7 +1384,7 @@
     },
     {
       "timestamp": "19-11-2025 11:00",
-      "filename": "19-11-2025_11-00.json",
+      "filename": "19-11-2025_11-00.parquet",
       "stats": {
         "cells_observed": 39,
         "congested": 10,
@@ -1396,7 +1397,7 @@
     },
     {
       "timestamp": "19-11-2025 12:00",
-      "filename": "19-11-2025_12-00.json",
+      "filename": "19-11-2025_12-00.parquet",
       "stats": {
         "cells_observed": 57,
         "congested": 13,
@@ -1409,7 +1410,7 @@
     },
     {
       "timestamp": "19-11-2025 13:00",
-      "filename": "19-11-2025_13-00.json",
+      "filename": "19-11-2025_13-00.parquet",
       "stats": {
         "cells_observed": 66,
         "congested": 14,
@@ -1422,7 +1423,7 @@
     },
     {
       "timestamp": "19-11-2025 14:00",
-      "filename": "19-11-2025_14-00.json",
+      "filename": "19-11-2025_14-00.parquet",
       "stats": {
         "cells_observed": 42,
         "congested": 10,
@@ -1435,7 +1436,7 @@
     },
     {
       "timestamp": "19-11-2025 15:00",
-      "filename": "19-11-2025_15-00.json",
+      "filename": "19-11-2025_15-00.parquet",
       "stats": {
         "cells_observed": 43,
         "congested": 9,
@@ -1448,7 +1449,7 @@
     },
     {
       "timestamp": "19-11-2025 16:00",
-      "filename": "19-11-2025_16-00.json",
+      "filename": "19-11-2025_16-00.parquet",
       "stats": {
         "cells_observed": 30,
         "congested": 6,
@@ -1461,7 +1462,7 @@
     },
     {
       "timestamp": "19-11-2025 17:00",
-      "filename": "19-11-2025_17-00.json",
+      "filename": "19-11-2025_17-00.parquet",
       "stats": {
         "cells_observed": 31,
         "congested": 4,
@@ -1474,7 +1475,7 @@
     },
     {
       "timestamp": "19-11-2025 18:00",
-      "filename": "19-11-2025_18-00.json",
+      "filename": "19-11-2025_18-00.parquet",
       "stats": {
         "cells_observed": 63,
         "congested": 23,
@@ -1487,7 +1488,7 @@
     },
     {
       "timestamp": "19-11-2025 19:00",
-      "filename": "19-11-2025_19-00.json",
+      "filename": "19-11-2025_19-00.parquet",
       "stats": {
         "cells_observed": 113,
         "congested": 41,
@@ -1500,7 +1501,7 @@
     },
     {
       "timestamp": "19-11-2025 20:00",
-      "filename": "19-11-2025_20-00.json",
+      "filename": "19-11-2025_20-00.parquet",
       "stats": {
         "cells_observed": 252,
         "congested": 117,
@@ -1513,7 +1514,7 @@
     },
     {
       "timestamp": "19-11-2025 21:00",
-      "filename": "19-11-2025_21-00.json",
+      "filename": "19-11-2025_21-00.parquet",
       "stats": {
         "cells_observed": 297,
         "congested": 130,
@@ -1526,7 +1527,7 @@
     },
     {
       "timestamp": "19-11-2025 22:00",
-      "filename": "19-11-2025_22-00.json",
+      "filename": "19-11-2025_22-00.parquet",
       "stats": {
         "cells_observed": 196,
         "congested": 83,
@@ -1539,7 +1540,7 @@
     },
     {
       "timestamp": "19-11-2025 23:00",
-      "filename": "19-11-2025_23-00.json",
+      "filename": "19-11-2025_23-00.parquet",
       "stats": {
         "cells_observed": 66,
         "congested": 18,
@@ -1552,7 +1553,7 @@
     },
     {
       "timestamp": "20-11-2025 00:00",
-      "filename": "20-11-2025_00-00.json",
+      "filename": "20-11-2025_00-00.parquet",
       "stats": {
         "cells_observed": 139,
         "congested": 3,
@@ -1565,7 +1566,7 @@
     },
     {
       "timestamp": "20-11-2025 01:00",
-      "filename": "20-11-2025_01-00.json",
+      "filename": "20-11-2025_01-00.parquet",
       "stats": {
         "cells_observed": 13,
         "congested": 0,
@@ -1578,7 +1579,7 @@
     },
     {
       "timestamp": "20-11-2025 02:00",
-      "filename": "20-11-2025_02-00.json",
+      "filename": "20-11-2025_02-00.parquet",
       "stats": {
         "cells_observed": 7,
         "congested": 0,
@@ -1591,7 +1592,7 @@
     },
     {
       "timestamp": "20-11-2025 03:00",
-      "filename": "20-11-2025_03-00.json",
+      "filename": "20-11-2025_03-00.parquet",
       "stats": {
         "cells_observed": 4,
         "congested": 0,
@@ -1604,7 +1605,7 @@
     },
     {
       "timestamp": "20-11-2025 04:00",
-      "filename": "20-11-2025_04-00.json",
+      "filename": "20-11-2025_04-00.parquet",
       "stats": {
         "cells_observed": 1,
         "congested": 0,
@@ -1617,7 +1618,7 @@
     },
     {
       "timestamp": "20-11-2025 05:00",
-      "filename": "20-11-2025_05-00.json",
+      "filename": "20-11-2025_05-00.parquet",
       "stats": {
         "cells_observed": 3,
         "congested": 0,
@@ -1630,7 +1631,7 @@
     },
     {
       "timestamp": "20-11-2025 06:00",
-      "filename": "20-11-2025_06-00.json",
+      "filename": "20-11-2025_06-00.parquet",
       "stats": {
         "cells_observed": 4,
         "congested": 0,
@@ -1643,7 +1644,7 @@
     },
     {
       "timestamp": "20-11-2025 07:00",
-      "filename": "20-11-2025_07-00.json",
+      "filename": "20-11-2025_07-00.parquet",
       "stats": {
         "cells_observed": 8,
         "congested": 2,
@@ -1656,7 +1657,7 @@
     },
     {
       "timestamp": "20-11-2025 08:00",
-      "filename": "20-11-2025_08-00.json",
+      "filename": "20-11-2025_08-00.parquet",
       "stats": {
         "cells_observed": 14,
         "congested": 1,
@@ -1669,7 +1670,7 @@
     },
     {
       "timestamp": "20-11-2025 09:00",
-      "filename": "20-11-2025_09-00.json",
+      "filename": "20-11-2025_09-00.parquet",
       "stats": {
         "cells_observed": 16,
         "congested": 2,
@@ -1682,7 +1683,7 @@
     },
     {
       "timestamp": "20-11-2025 10:00",
-      "filename": "20-11-2025_10-00.json",
+      "filename": "20-11-2025_10-00.parquet",
       "stats": {
         "cells_observed": 27,
         "congested": 3,
@@ -1695,7 +1696,7 @@
     },
     {
       "timestamp": "20-11-2025 11:00",
-      "filename": "20-11-2025_11-00.json",
+      "filename": "20-11-2025_11-00.parquet",
       "stats": {
         "cells_observed": 34,
         "congested": 7,
@@ -1708,7 +1709,7 @@
     },
     {
       "timestamp": "20-11-2025 12:00",
-      "filename": "20-11-2025_12-00.json",
+      "filename": "20-11-2025_12-00.parquet",
       "stats": {
         "cells_observed": 58,
         "congested": 10,
@@ -1721,7 +1722,7 @@
     },
     {
       "timestamp": "20-11-2025 13:00",
-      "filename": "20-11-2025_13-00.json",
+      "filename": "20-11-2025_13-00.parquet",
       "stats": {
         "cells_observed": 52,
         "congested": 18,
@@ -1734,7 +1735,7 @@
     },
     {
       "timestamp": "20-11-2025 14:00",
-      "filename": "20-11-2025_14-00.json",
+      "filename": "20-11-2025_14-00.parquet",
       "stats": {
         "cells_observed": 36,
         "congested": 7,
@@ -1747,7 +1748,7 @@
     },
     {
       "timestamp": "20-11-2025 15:00",
-      "filename": "20-11-2025_15-00.json",
+      "filename": "20-11-2025_15-00.parquet",
       "stats": {
         "cells_observed": 39,
         "congested": 7,
@@ -1760,7 +1761,7 @@
     },
     {
       "timestamp": "20-11-2025 16:00",
-      "filename": "20-11-2025_16-00.json",
+      "filename": "20-11-2025_16-00.parquet",
       "stats": {
         "cells_observed": 31,
         "congested": 6,
@@ -1773,7 +1774,7 @@
     },
     {
       "timestamp": "20-11-2025 17:00",
-      "filename": "20-11-2025_17-00.json",
+      "filename": "20-11-2025_17-00.parquet",
       "stats": {
         "cells_observed": 26,
         "congested": 7,
@@ -1786,7 +1787,7 @@
     },
     {
       "timestamp": "20-11-2025 18:00",
-      "filename": "20-11-2025_18-00.json",
+      "filename": "20-11-2025_18-00.parquet",
       "stats": {
         "cells_observed": 85,
         "congested": 19,
@@ -1799,7 +1800,7 @@
     },
     {
       "timestamp": "20-11-2025 19:00",
-      "filename": "20-11-2025_19-00.json",
+      "filename": "20-11-2025_19-00.parquet",
       "stats": {
         "cells_observed": 148,
         "congested": 67,
@@ -1812,7 +1813,7 @@
     },
     {
       "timestamp": "20-11-2025 20:00",
-      "filename": "20-11-2025_20-00.json",
+      "filename": "20-11-2025_20-00.parquet",
       "stats": {
         "cells_observed": 288,
         "congested": 121,
@@ -1825,7 +1826,7 @@
     },
     {
       "timestamp": "20-11-2025 21:00",
-      "filename": "20-11-2025_21-00.json",
+      "filename": "20-11-2025_21-00.parquet",
       "stats": {
         "cells_observed": 299,
         "congested": 138,
@@ -1838,7 +1839,7 @@
     },
     {
       "timestamp": "20-11-2025 22:00",
-      "filename": "20-11-2025_22-00.json",
+      "filename": "20-11-2025_22-00.parquet",
       "stats": {
         "cells_observed": 155,
         "congested": 66,
@@ -1851,7 +1852,7 @@
     },
     {
       "timestamp": "20-11-2025 23:00",
-      "filename": "20-11-2025_23-00.json",
+      "filename": "20-11-2025_23-00.parquet",
       "stats": {
         "cells_observed": 62,
         "congested": 15,
@@ -1864,7 +1865,7 @@
     },
     {
       "timestamp": "21-11-2025 00:00",
-      "filename": "21-11-2025_00-00.json",
+      "filename": "21-11-2025_00-00.parquet",
       "stats": {
         "cells_observed": 144,
         "congested": 5,
@@ -1877,7 +1878,7 @@
     },
     {
       "timestamp": "21-11-2025 01:00",
-      "filename": "21-11-2025_01-00.json",
+      "filename": "21-11-2025_01-00.parquet",
       "stats": {
         "cells_observed": 8,
         "congested": 0,
@@ -1890,7 +1891,7 @@
     },
     {
       "timestamp": "21-11-2025 02:00",
-      "filename": "21-11-2025_02-00.json",
+      "filename": "21-11-2025_02-00.parquet",
       "stats": {
         "cells_observed": 5,
         "congested": 0,
@@ -1903,7 +1904,7 @@
     },
     {
       "timestamp": "21-11-2025 03:00",
-      "filename": "21-11-2025_03-00.json",
+      "filename": "21-11-2025_03-00.parquet",
       "stats": {
         "cells_observed": 3,
         "congested": 0,
@@ -1916,7 +1917,7 @@
     },
     {
       "timestamp": "21-11-2025 04:00",
-      "filename": "21-11-2025_04-00.json",
+      "filename": "21-11-2025_04-00.parquet",
       "stats": {
         "cells_observed": 4,
         "congested": 0,
@@ -1929,7 +1930,7 @@
     },
     {
       "timestamp": "21-11-2025 05:00",
-      "filename": "21-11-2025_05-00.json",
+      "filename": "21-11-2025_05-00.parquet",
       "stats": {
         "cells_observed": 3,
         "congested": 0,
@@ -1942,7 +1943,7 @@
     },
     {
       "timestamp": "21-11-2025 06:00",
-      "filename": "21-11-2025_06-00.json",
+      "filename": "21-11-2025_06-00.parquet",
       "stats": {
         "cells_observed": 6,
         "congested": 1,
@@ -1955,7 +1956,7 @@
     },
     {
       "timestamp": "21-11-2025 07:00",
-      "filename": "21-11-2025_07-00.json",
+      "filename": "21-11-2025_07-00.parquet",
       "stats": {
         "cells_observed": 4,
         "congested": 1,
@@ -1968,7 +1969,7 @@
     },
     {
       "timestamp": "21-11-2025 08:00",
-      "filename": "21-11-2025_08-00.json",
+      "filename": "21-11-2025_08-00.parquet",
       "stats": {
         "cells_observed": 10,
         "congested": 3,
@@ -1981,7 +1982,7 @@
     },
     {
       "timestamp": "21-11-2025 09:00",
-      "filename": "21-11-2025_09-00.json",
+      "filename": "21-11-2025_09-00.parquet",
       "stats": {
         "cells_observed": 20,
         "congested": 5,
@@ -1994,7 +1995,7 @@
     },
     {
       "timestamp": "21-11-2025 10:00",
-      "filename": "21-11-2025_10-00.json",
+      "filename": "21-11-2025_10-00.parquet",
       "stats": {
         "cells_observed": 28,
         "congested": 4,
@@ -2007,7 +2008,7 @@
     },
     {
       "timestamp": "21-11-2025 11:00",
-      "filename": "21-11-2025_11-00.json",
+      "filename": "21-11-2025_11-00.parquet",
       "stats": {
         "cells_observed": 42,
         "congested": 4,
@@ -2020,7 +2021,7 @@
     },
     {
       "timestamp": "21-11-2025 12:00",
-      "filename": "21-11-2025_12-00.json",
+      "filename": "21-11-2025_12-00.parquet",
       "stats": {
         "cells_observed": 41,
         "congested": 8,
@@ -2033,7 +2034,7 @@
     },
     {
       "timestamp": "21-11-2025 13:00",
-      "filename": "21-11-2025_13-00.json",
+      "filename": "21-11-2025_13-00.parquet",
       "stats": {
         "cells_observed": 47,
         "congested": 12,
@@ -2046,7 +2047,7 @@
     },
     {
       "timestamp": "21-11-2025 14:00",
-      "filename": "21-11-2025_14-00.json",
+      "filename": "21-11-2025_14-00.parquet",
       "stats": {
         "cells_observed": 40,
         "congested": 13,
@@ -2059,7 +2060,7 @@
     },
     {
       "timestamp": "21-11-2025 15:00",
-      "filename": "21-11-2025_15-00.json",
+      "filename": "21-11-2025_15-00.parquet",
       "stats": {
         "cells_observed": 48,
         "congested": 11,
@@ -2072,7 +2073,7 @@
     },
     {
       "timestamp": "21-11-2025 16:00",
-      "filename": "21-11-2025_16-00.json",
+      "filename": "21-11-2025_16-00.parquet",
       "stats": {
         "cells_observed": 46,
         "congested": 10,
@@ -2085,7 +2086,7 @@
     },
     {
       "timestamp": "21-11-2025 17:00",
-      "filename": "21-11-2025_17-00.json",
+      "filename": "21-11-2025_17-00.parquet",
       "stats": {
         "cells_observed": 40,
         "congested": 7,
@@ -2098,7 +2099,7 @@
     },
     {
       "timestamp": "21-11-2025 18:00",
-      "filename": "21-11-2025_18-00.json",
+      "filename": "21-11-2025_18-00.parquet",
       "stats": {
         "cells_observed": 84,
         "congested": 27,
@@ -2111,7 +2112,7 @@
     },
     {
       "timestamp": "21-11-2025 19:00",
-      "filename": "21-11-2025_19-00.json",
+      "filename": "21-11-2025_19-00.parquet",
       "stats": {
         "cells_observed": 115,
         "congested": 56,
@@ -2124,7 +2125,7 @@
     },
     {
       "timestamp": "21-11-2025 20:00",
-      "filename": "21-11-2025_20-00.json",
+      "filename": "21-11-2025_20-00.parquet",
       "stats": {
         "cells_observed": 306,
         "congested": 132,
@@ -2137,7 +2138,7 @@
     },
     {
       "timestamp": "21-11-2025 21:00",
-      "filename": "21-11-2025_21-00.json",
+      "filename": "21-11-2025_21-00.parquet",
       "stats": {
         "cells_observed": 268,
         "congested": 119,
@@ -2150,7 +2151,7 @@
     },
     {
       "timestamp": "21-11-2025 22:00",
-      "filename": "21-11-2025_22-00.json",
+      "filename": "21-11-2025_22-00.parquet",
       "stats": {
         "cells_observed": 163,
         "congested": 71,
@@ -2163,7 +2164,7 @@
     },
     {
       "timestamp": "21-11-2025 23:00",
-      "filename": "21-11-2025_23-00.json",
+      "filename": "21-11-2025_23-00.parquet",
       "stats": {
         "cells_observed": 76,
         "congested": 22,
@@ -2176,7 +2177,7 @@
     },
     {
       "timestamp": "22-11-2025 00:00",
-      "filename": "22-11-2025_00-00.json",
+      "filename": "22-11-2025_00-00.parquet",
       "stats": {
         "cells_observed": 133,
         "congested": 3,
@@ -2189,7 +2190,7 @@
     },
     {
       "timestamp": "22-11-2025 01:00",
-      "filename": "22-11-2025_01-00.json",
+      "filename": "22-11-2025_01-00.parquet",
       "stats": {
         "cells_observed": 11,
         "congested": 0,
@@ -2202,7 +2203,7 @@
     },
     {
       "timestamp": "22-11-2025 02:00",
-      "filename": "22-11-2025_02-00.json",
+      "filename": "22-11-2025_02-00.parquet",
       "stats": {
         "cells_observed": 14,
         "congested": 1,
@@ -2215,7 +2216,7 @@
     },
     {
       "timestamp": "22-11-2025 03:00",
-      "filename": "22-11-2025_03-00.json",
+      "filename": "22-11-2025_03-00.parquet",
       "stats": {
         "cells_observed": 5,
         "congested": 0,
@@ -2228,7 +2229,7 @@
     },
     {
       "timestamp": "22-11-2025 04:00",
-      "filename": "22-11-2025_04-00.json",
+      "filename": "22-11-2025_04-00.parquet",
       "stats": {
         "cells_observed": 1,
         "congested": 0,
@@ -2241,7 +2242,7 @@
     },
     {
       "timestamp": "22-11-2025 05:00",
-      "filename": "22-11-2025_05-00.json",
+      "filename": "22-11-2025_05-00.parquet",
       "stats": {
         "cells_observed": 3,
         "congested": 0,
@@ -2254,7 +2255,7 @@
     },
     {
       "timestamp": "22-11-2025 06:00",
-      "filename": "22-11-2025_06-00.json",
+      "filename": "22-11-2025_06-00.parquet",
       "stats": {
         "cells_observed": 4,
         "congested": 1,
@@ -2267,7 +2268,7 @@
     },
     {
       "timestamp": "22-11-2025 07:00",
-      "filename": "22-11-2025_07-00.json",
+      "filename": "22-11-2025_07-00.parquet",
       "stats": {
         "cells_observed": 5,
         "congested": 2,
@@ -2280,7 +2281,7 @@
     },
     {
       "timestamp": "22-11-2025 08:00",
-      "filename": "22-11-2025_08-00.json",
+      "filename": "22-11-2025_08-00.parquet",
       "stats": {
         "cells_observed": 15,
         "congested": 3,
@@ -2293,7 +2294,7 @@
     },
     {
       "timestamp": "22-11-2025 09:00",
-      "filename": "22-11-2025_09-00.json",
+      "filename": "22-11-2025_09-00.parquet",
       "stats": {
         "cells_observed": 19,
         "congested": 4,
@@ -2306,7 +2307,7 @@
     },
     {
       "timestamp": "22-11-2025 10:00",
-      "filename": "22-11-2025_10-00.json",
+      "filename": "22-11-2025_10-00.parquet",
       "stats": {
         "cells_observed": 30,
         "congested": 3,
@@ -2319,7 +2320,7 @@
     },
     {
       "timestamp": "22-11-2025 11:00",
-      "filename": "22-11-2025_11-00.json",
+      "filename": "22-11-2025_11-00.parquet",
       "stats": {
         "cells_observed": 32,
         "congested": 7,
@@ -2332,7 +2333,7 @@
     },
     {
       "timestamp": "22-11-2025 12:00",
-      "filename": "22-11-2025_12-00.json",
+      "filename": "22-11-2025_12-00.parquet",
       "stats": {
         "cells_observed": 39,
         "congested": 10,
@@ -2345,7 +2346,7 @@
     },
     {
       "timestamp": "22-11-2025 13:00",
-      "filename": "22-11-2025_13-00.json",
+      "filename": "22-11-2025_13-00.parquet",
       "stats": {
         "cells_observed": 52,
         "congested": 13,
@@ -2358,7 +2359,7 @@
     },
     {
       "timestamp": "22-11-2025 14:00",
-      "filename": "22-11-2025_14-00.json",
+      "filename": "22-11-2025_14-00.parquet",
       "stats": {
         "cells_observed": 47,
         "congested": 9,
@@ -2371,7 +2372,7 @@
     },
     {
       "timestamp": "22-11-2025 15:00",
-      "filename": "22-11-2025_15-00.json",
+      "filename": "22-11-2025_15-00.parquet",
       "stats": {
         "cells_observed": 46,
         "congested": 15,
@@ -2384,7 +2385,7 @@
     },
     {
       "timestamp": "22-11-2025 16:00",
-      "filename": "22-11-2025_16-00.json",
+      "filename": "22-11-2025_16-00.parquet",
       "stats": {
         "cells_observed": 63,
         "congested": 15,
@@ -2397,7 +2398,7 @@
     },
     {
       "timestamp": "22-11-2025 17:00",
-      "filename": "22-11-2025_17-00.json",
+      "filename": "22-11-2025_17-00.parquet",
       "stats": {
         "cells_observed": 73,
         "congested": 31,
@@ -2410,7 +2411,7 @@
     },
     {
       "timestamp": "22-11-2025 18:00",
-      "filename": "22-11-2025_18-00.json",
+      "filename": "22-11-2025_18-00.parquet",
       "stats": {
         "cells_observed": 96,
         "congested": 27,
@@ -2423,7 +2424,7 @@
     },
     {
       "timestamp": "22-11-2025 19:00",
-      "filename": "22-11-2025_19-00.json",
+      "filename": "22-11-2025_19-00.parquet",
       "stats": {
         "cells_observed": 146,
         "congested": 53,
@@ -2436,7 +2437,7 @@
     },
     {
       "timestamp": "22-11-2025 20:00",
-      "filename": "22-11-2025_20-00.json",
+      "filename": "22-11-2025_20-00.parquet",
       "stats": {
         "cells_observed": 224,
         "congested": 98,
@@ -2449,7 +2450,7 @@
     },
     {
       "timestamp": "22-11-2025 21:00",
-      "filename": "22-11-2025_21-00.json",
+      "filename": "22-11-2025_21-00.parquet",
       "stats": {
         "cells_observed": 247,
         "congested": 101,
@@ -2462,7 +2463,7 @@
     },
     {
       "timestamp": "22-11-2025 22:00",
-      "filename": "22-11-2025_22-00.json",
+      "filename": "22-11-2025_22-00.parquet",
       "stats": {
         "cells_observed": 171,
         "congested": 83,
@@ -2475,7 +2476,7 @@
     },
     {
       "timestamp": "22-11-2025 23:00",
-      "filename": "22-11-2025_23-00.json",
+      "filename": "22-11-2025_23-00.parquet",
       "stats": {
         "cells_observed": 74,
         "congested": 24,
@@ -2488,7 +2489,7 @@
     },
     {
       "timestamp": "23-11-2025 00:00",
-      "filename": "23-11-2025_00-00.json",
+      "filename": "23-11-2025_00-00.parquet",
       "stats": {
         "cells_observed": 139,
         "congested": 7,
@@ -2501,7 +2502,7 @@
     },
     {
       "timestamp": "23-11-2025 01:00",
-      "filename": "23-11-2025_01-00.json",
+      "filename": "23-11-2025_01-00.parquet",
       "stats": {
         "cells_observed": 20,
         "congested": 0,
@@ -2514,7 +2515,7 @@
     },
     {
       "timestamp": "23-11-2025 02:00",
-      "filename": "23-11-2025_02-00.json",
+      "filename": "23-11-2025_02-00.parquet",
       "stats": {
         "cells_observed": 11,
         "congested": 1,
@@ -2527,7 +2528,7 @@
     },
     {
       "timestamp": "23-11-2025 03:00",
-      "filename": "23-11-2025_03-00.json",
+      "filename": "23-11-2025_03-00.parquet",
       "stats": {
         "cells_observed": 9,
         "congested": 0,
@@ -2540,7 +2541,7 @@
     },
     {
       "timestamp": "23-11-2025 04:00",
-      "filename": "23-11-2025_04-00.json",
+      "filename": "23-11-2025_04-00.parquet",
       "stats": {
         "cells_observed": 5,
         "congested": 0,
@@ -2553,7 +2554,7 @@
     },
     {
       "timestamp": "23-11-2025 06:00",
-      "filename": "23-11-2025_06-00.json",
+      "filename": "23-11-2025_06-00.parquet",
       "stats": {
         "cells_observed": 3,
         "congested": 0,
@@ -2566,7 +2567,7 @@
     },
     {
       "timestamp": "23-11-2025 07:00",
-      "filename": "23-11-2025_07-00.json",
+      "filename": "23-11-2025_07-00.parquet",
       "stats": {
         "cells_observed": 8,
         "congested": 1,
@@ -2579,7 +2580,7 @@
     },
     {
       "timestamp": "23-11-2025 08:00",
-      "filename": "23-11-2025_08-00.json",
+      "filename": "23-11-2025_08-00.parquet",
       "stats": {
         "cells_observed": 15,
         "congested": 7,
@@ -2592,7 +2593,7 @@
     },
     {
       "timestamp": "23-11-2025 09:00",
-      "filename": "23-11-2025_09-00.json",
+      "filename": "23-11-2025_09-00.parquet",
       "stats": {
         "cells_observed": 22,
         "congested": 5,
@@ -2605,7 +2606,7 @@
     },
     {
       "timestamp": "23-11-2025 10:00",
-      "filename": "23-11-2025_10-00.json",
+      "filename": "23-11-2025_10-00.parquet",
       "stats": {
         "cells_observed": 32,
         "congested": 7,
@@ -2618,7 +2619,7 @@
     },
     {
       "timestamp": "23-11-2025 11:00",
-      "filename": "23-11-2025_11-00.json",
+      "filename": "23-11-2025_11-00.parquet",
       "stats": {
         "cells_observed": 46,
         "congested": 9,
@@ -2631,7 +2632,7 @@
     },
     {
       "timestamp": "23-11-2025 12:00",
-      "filename": "23-11-2025_12-00.json",
+      "filename": "23-11-2025_12-00.parquet",
       "stats": {
         "cells_observed": 42,
         "congested": 8,
@@ -2644,7 +2645,7 @@
     },
     {
       "timestamp": "23-11-2025 13:00",
-      "filename": "23-11-2025_13-00.json",
+      "filename": "23-11-2025_13-00.parquet",
       "stats": {
         "cells_observed": 52,
         "congested": 17,
@@ -2657,7 +2658,7 @@
     },
     {
       "timestamp": "23-11-2025 14:00",
-      "filename": "23-11-2025_14-00.json",
+      "filename": "23-11-2025_14-00.parquet",
       "stats": {
         "cells_observed": 60,
         "congested": 17,
@@ -2670,7 +2671,7 @@
     },
     {
       "timestamp": "23-11-2025 15:00",
-      "filename": "23-11-2025_15-00.json",
+      "filename": "23-11-2025_15-00.parquet",
       "stats": {
         "cells_observed": 62,
         "congested": 16,
@@ -2683,7 +2684,7 @@
     },
     {
       "timestamp": "23-11-2025 16:00",
-      "filename": "23-11-2025_16-00.json",
+      "filename": "23-11-2025_16-00.parquet",
       "stats": {
         "cells_observed": 56,
         "congested": 11,
@@ -2696,7 +2697,7 @@
     },
     {
       "timestamp": "23-11-2025 17:00",
-      "filename": "23-11-2025_17-00.json",
+      "filename": "23-11-2025_17-00.parquet",
       "stats": {
         "cells_observed": 52,
         "congested": 12,
@@ -2709,7 +2710,7 @@
     },
     {
       "timestamp": "23-11-2025 18:00",
-      "filename": "23-11-2025_18-00.json",
+      "filename": "23-11-2025_18-00.parquet",
       "stats": {
         "cells_observed": 78,
         "congested": 28,
@@ -2722,7 +2723,7 @@
     },
     {
       "timestamp": "23-11-2025 19:00",
-      "filename": "23-11-2025_19-00.json",
+      "filename": "23-11-2025_19-00.parquet",
       "stats": {
         "cells_observed": 136,
         "congested": 47,
@@ -2735,7 +2736,7 @@
     },
     {
       "timestamp": "23-11-2025 20:00",
-      "filename": "23-11-2025_20-00.json",
+      "filename": "23-11-2025_20-00.parquet",
       "stats": {
         "cells_observed": 237,
         "congested": 103,
@@ -2748,7 +2749,7 @@
     },
     {
       "timestamp": "23-11-2025 21:00",
-      "filename": "23-11-2025_21-00.json",
+      "filename": "23-11-2025_21-00.parquet",
       "stats": {
         "cells_observed": 259,
         "congested": 111,
@@ -2761,7 +2762,7 @@
     },
     {
       "timestamp": "23-11-2025 22:00",
-      "filename": "23-11-2025_22-00.json",
+      "filename": "23-11-2025_22-00.parquet",
       "stats": {
         "cells_observed": 162,
         "congested": 67,
@@ -2774,7 +2775,7 @@
     },
     {
       "timestamp": "23-11-2025 23:00",
-      "filename": "23-11-2025_23-00.json",
+      "filename": "23-11-2025_23-00.parquet",
       "stats": {
         "cells_observed": 44,
         "congested": 14,
@@ -2787,7 +2788,7 @@
     },
     {
       "timestamp": "24-11-2025 00:00",
-      "filename": "24-11-2025_00-00.json",
+      "filename": "24-11-2025_00-00.parquet",
       "stats": {
         "cells_observed": 128,
         "congested": 2,
@@ -2800,7 +2801,7 @@
     },
     {
       "timestamp": "24-11-2025 01:00",
-      "filename": "24-11-2025_01-00.json",
+      "filename": "24-11-2025_01-00.parquet",
       "stats": {
         "cells_observed": 11,
         "congested": 0,
@@ -2813,7 +2814,7 @@
     },
     {
       "timestamp": "24-11-2025 02:00",
-      "filename": "24-11-2025_02-00.json",
+      "filename": "24-11-2025_02-00.parquet",
       "stats": {
         "cells_observed": 4,
         "congested": 1,
@@ -2826,7 +2827,7 @@
     },
     {
       "timestamp": "24-11-2025 03:00",
-      "filename": "24-11-2025_03-00.json",
+      "filename": "24-11-2025_03-00.parquet",
       "stats": {
         "cells_observed": 2,
         "congested": 0,
@@ -2839,7 +2840,7 @@
     },
     {
       "timestamp": "24-11-2025 04:00",
-      "filename": "24-11-2025_04-00.json",
+      "filename": "24-11-2025_04-00.parquet",
       "stats": {
         "cells_observed": 2,
         "congested": 0,
@@ -2852,7 +2853,7 @@
     },
     {
       "timestamp": "24-11-2025 05:00",
-      "filename": "24-11-2025_05-00.json",
+      "filename": "24-11-2025_05-00.parquet",
       "stats": {
         "cells_observed": 2,
         "congested": 0,
@@ -2865,7 +2866,7 @@
     },
     {
       "timestamp": "24-11-2025 06:00",
-      "filename": "24-11-2025_06-00.json",
+      "filename": "24-11-2025_06-00.parquet",
       "stats": {
         "cells_observed": 2,
         "congested": 0,
@@ -2878,7 +2879,7 @@
     },
     {
       "timestamp": "24-11-2025 07:00",
-      "filename": "24-11-2025_07-00.json",
+      "filename": "24-11-2025_07-00.parquet",
       "stats": {
         "cells_observed": 4,
         "congested": 0,
@@ -2891,7 +2892,7 @@
     },
     {
       "timestamp": "24-11-2025 08:00",
-      "filename": "24-11-2025_08-00.json",
+      "filename": "24-11-2025_08-00.parquet",
       "stats": {
         "cells_observed": 16,
         "congested": 0,
@@ -2904,7 +2905,7 @@
     },
     {
       "timestamp": "24-11-2025 09:00",
-      "filename": "24-11-2025_09-00.json",
+      "filename": "24-11-2025_09-00.parquet",
       "stats": {
         "cells_observed": 22,
         "congested": 2,
@@ -2917,7 +2918,7 @@
     },
     {
       "timestamp": "24-11-2025 10:00",
-      "filename": "24-11-2025_10-00.json",
+      "filename": "24-11-2025_10-00.parquet",
       "stats": {
         "cells_observed": 30,
         "congested": 4,
@@ -2930,7 +2931,7 @@
     },
     {
       "timestamp": "24-11-2025 11:00",
-      "filename": "24-11-2025_11-00.json",
+      "filename": "24-11-2025_11-00.parquet",
       "stats": {
         "cells_observed": 46,
         "congested": 6,
@@ -2943,7 +2944,7 @@
     },
     {
       "timestamp": "24-11-2025 12:00",
-      "filename": "24-11-2025_12-00.json",
+      "filename": "24-11-2025_12-00.parquet",
       "stats": {
         "cells_observed": 49,
         "congested": 11,
@@ -2956,7 +2957,7 @@
     },
     {
       "timestamp": "24-11-2025 13:00",
-      "filename": "24-11-2025_13-00.json",
+      "filename": "24-11-2025_13-00.parquet",
       "stats": {
         "cells_observed": 46,
         "congested": 12,
@@ -2969,7 +2970,7 @@
     },
     {
       "timestamp": "24-11-2025 14:00",
-      "filename": "24-11-2025_14-00.json",
+      "filename": "24-11-2025_14-00.parquet",
       "stats": {
         "cells_observed": 36,
         "congested": 11,
@@ -2982,7 +2983,7 @@
     },
     {
       "timestamp": "24-11-2025 15:00",
-      "filename": "24-11-2025_15-00.json",
+      "filename": "24-11-2025_15-00.parquet",
       "stats": {
         "cells_observed": 29,
         "congested": 6,
@@ -2995,7 +2996,7 @@
     },
     {
       "timestamp": "24-11-2025 16:00",
-      "filename": "24-11-2025_16-00.json",
+      "filename": "24-11-2025_16-00.parquet",
       "stats": {
         "cells_observed": 34,
         "congested": 6,
@@ -3008,7 +3009,7 @@
     },
     {
       "timestamp": "24-11-2025 17:00",
-      "filename": "24-11-2025_17-00.json",
+      "filename": "24-11-2025_17-00.parquet",
       "stats": {
         "cells_observed": 27,
         "congested": 4,
@@ -3021,7 +3022,7 @@
     },
     {
       "timestamp": "24-11-2025 18:00",
-      "filename": "24-11-2025_18-00.json",
+      "filename": "24-11-2025_18-00.parquet",
       "stats": {
         "cells_observed": 83,
         "congested": 17,
@@ -3034,7 +3035,7 @@
     },
     {
       "timestamp": "24-11-2025 19:00",
-      "filename": "24-11-2025_19-00.json",
+      "filename": "24-11-2025_19-00.parquet",
       "stats": {
         "cells_observed": 169,
         "congested": 61,
@@ -3047,7 +3048,7 @@
     },
     {
       "timestamp": "24-11-2025 20:00",
-      "filename": "24-11-2025_20-00.json",
+      "filename": "24-11-2025_20-00.parquet",
       "stats": {
         "cells_observed": 282,
         "congested": 124,
@@ -3060,7 +3061,7 @@
     },
     {
       "timestamp": "24-11-2025 21:00",
-      "filename": "24-11-2025_21-00.json",
+      "filename": "24-11-2025_21-00.parquet",
       "stats": {
         "cells_observed": 302,
         "congested": 125,
@@ -3073,7 +3074,7 @@
     },
     {
       "timestamp": "24-11-2025 22:00",
-      "filename": "24-11-2025_22-00.json",
+      "filename": "24-11-2025_22-00.parquet",
       "stats": {
         "cells_observed": 170,
         "congested": 56,
@@ -3086,7 +3087,7 @@
     },
     {
       "timestamp": "24-11-2025 23:00",
-      "filename": "24-11-2025_23-00.json",
+      "filename": "24-11-2025_23-00.parquet",
       "stats": {
         "cells_observed": 55,
         "congested": 13,
@@ -3099,7 +3100,7 @@
     },
     {
       "timestamp": "25-11-2025 00:00",
-      "filename": "25-11-2025_00-00.json",
+      "filename": "25-11-2025_00-00.parquet",
       "stats": {
         "cells_observed": 118,
         "congested": 2,
@@ -3112,7 +3113,7 @@
     },
     {
       "timestamp": "25-11-2025 01:00",
-      "filename": "25-11-2025_01-00.json",
+      "filename": "25-11-2025_01-00.parquet",
       "stats": {
         "cells_observed": 13,
         "congested": 0,
@@ -3125,7 +3126,7 @@
     },
     {
       "timestamp": "25-11-2025 02:00",
-      "filename": "25-11-2025_02-00.json",
+      "filename": "25-11-2025_02-00.parquet",
       "stats": {
         "cells_observed": 7,
         "congested": 0,
@@ -3138,7 +3139,7 @@
     },
     {
       "timestamp": "25-11-2025 03:00",
-      "filename": "25-11-2025_03-00.json",
+      "filename": "25-11-2025_03-00.parquet",
       "stats": {
         "cells_observed": 3,
         "congested": 1,
@@ -3151,7 +3152,7 @@
     },
     {
       "timestamp": "25-11-2025 04:00",
-      "filename": "25-11-2025_04-00.json",
+      "filename": "25-11-2025_04-00.parquet",
       "stats": {
         "cells_observed": 6,
         "congested": 1,
@@ -3164,7 +3165,7 @@
     },
     {
       "timestamp": "25-11-2025 05:00",
-      "filename": "25-11-2025_05-00.json",
+      "filename": "25-11-2025_05-00.parquet",
       "stats": {
         "cells_observed": 3,
         "congested": 0,
@@ -3177,7 +3178,7 @@
     },
     {
       "timestamp": "25-11-2025 06:00",
-      "filename": "25-11-2025_06-00.json",
+      "filename": "25-11-2025_06-00.parquet",
       "stats": {
         "cells_observed": 4,
         "congested": 0,
@@ -3190,7 +3191,7 @@
     },
     {
       "timestamp": "25-11-2025 07:00",
-      "filename": "25-11-2025_07-00.json",
+      "filename": "25-11-2025_07-00.parquet",
       "stats": {
         "cells_observed": 4,
         "congested": 0,
@@ -3203,7 +3204,7 @@
     },
     {
       "timestamp": "25-11-2025 08:00",
-      "filename": "25-11-2025_08-00.json",
+      "filename": "25-11-2025_08-00.parquet",
       "stats": {
         "cells_observed": 8,
         "congested": 0,
@@ -3216,7 +3217,7 @@
     },
     {
       "timestamp": "25-11-2025 09:00",
-      "filename": "25-11-2025_09-00.json",
+      "filename": "25-11-2025_09-00.parquet",
       "stats": {
         "cells_observed": 23,
         "congested": 3,
@@ -3229,7 +3230,7 @@
     },
     {
       "timestamp": "25-11-2025 10:00",
-      "filename": "25-11-2025_10-00.json",
+      "filename": "25-11-2025_10-00.parquet",
       "stats": {
         "cells_observed": 20,
         "congested": 0,
@@ -3242,7 +3243,7 @@
     },
     {
       "timestamp": "25-11-2025 11:00",
-      "filename": "25-11-2025_11-00.json",
+      "filename": "25-11-2025_11-00.parquet",
       "stats": {
         "cells_observed": 39,
         "congested": 10,
@@ -3255,7 +3256,7 @@
     },
     {
       "timestamp": "25-11-2025 12:00",
-      "filename": "25-11-2025_12-00.json",
+      "filename": "25-11-2025_12-00.parquet",
       "stats": {
         "cells_observed": 45,
         "congested": 15,
@@ -3268,7 +3269,7 @@
     },
     {
       "timestamp": "25-11-2025 13:00",
-      "filename": "25-11-2025_13-00.json",
+      "filename": "25-11-2025_13-00.parquet",
       "stats": {
         "cells_observed": 52,
         "congested": 13,
@@ -3281,7 +3282,7 @@
     },
     {
       "timestamp": "25-11-2025 14:00",
-      "filename": "25-11-2025_14-00.json",
+      "filename": "25-11-2025_14-00.parquet",
       "stats": {
         "cells_observed": 36,
         "congested": 8,
@@ -3294,7 +3295,7 @@
     },
     {
       "timestamp": "25-11-2025 15:00",
-      "filename": "25-11-2025_15-00.json",
+      "filename": "25-11-2025_15-00.parquet",
       "stats": {
         "cells_observed": 40,
         "congested": 7,
@@ -3307,7 +3308,7 @@
     },
     {
       "timestamp": "25-11-2025 16:00",
-      "filename": "25-11-2025_16-00.json",
+      "filename": "25-11-2025_16-00.parquet",
       "stats": {
         "cells_observed": 30,
         "congested": 6,
@@ -3320,7 +3321,7 @@
     },
     {
       "timestamp": "25-11-2025 17:00",
-      "filename": "25-11-2025_17-00.json",
+      "filename": "25-11-2025_17-00.parquet",
       "stats": {
         "cells_observed": 34,
         "congested": 5,
@@ -3333,7 +3334,7 @@
     },
     {
       "timestamp": "25-11-2025 18:00",
-      "filename": "25-11-2025_18-00.json",
+      "filename": "25-11-2025_18-00.parquet",
       "stats": {
         "cells_observed": 51,
         "congested": 20,
@@ -3346,7 +3347,7 @@
     },
     {
       "timestamp": "25-11-2025 19:00",
-      "filename": "25-11-2025_19-00.json",
+      "filename": "25-11-2025_19-00.parquet",
       "stats": {
         "cells_observed": 135,
         "congested": 43,
@@ -3359,7 +3360,7 @@
     },
     {
       "timestamp": "25-11-2025 20:00",
-      "filename": "25-11-2025_20-00.json",
+      "filename": "25-11-2025_20-00.parquet",
       "stats": {
         "cells_observed": 277,
         "congested": 119,
@@ -3372,7 +3373,7 @@
     },
     {
       "timestamp": "25-11-2025 21:00",
-      "filename": "25-11-2025_21-00.json",
+      "filename": "25-11-2025_21-00.parquet",
       "stats": {
         "cells_observed": 351,
         "congested": 157,
@@ -3385,7 +3386,7 @@
     },
     {
       "timestamp": "25-11-2025 22:00",
-      "filename": "25-11-2025_22-00.json",
+      "filename": "25-11-2025_22-00.parquet",
       "stats": {
         "cells_observed": 191,
         "congested": 79,
@@ -3398,7 +3399,7 @@
     },
     {
       "timestamp": "25-11-2025 23:00",
-      "filename": "25-11-2025_23-00.json",
+      "filename": "25-11-2025_23-00.parquet",
       "stats": {
         "cells_observed": 61,
         "congested": 18,
@@ -3411,7 +3412,7 @@
     },
     {
       "timestamp": "26-11-2025 00:00",
-      "filename": "26-11-2025_00-00.json",
+      "filename": "26-11-2025_00-00.parquet",
       "stats": {
         "cells_observed": 132,
         "congested": 4,
@@ -3424,7 +3425,7 @@
     },
     {
       "timestamp": "26-11-2025 01:00",
-      "filename": "26-11-2025_01-00.json",
+      "filename": "26-11-2025_01-00.parquet",
       "stats": {
         "cells_observed": 13,
         "congested": 1,
@@ -3437,7 +3438,7 @@
     },
     {
       "timestamp": "26-11-2025 02:00",
-      "filename": "26-11-2025_02-00.json",
+      "filename": "26-11-2025_02-00.parquet",
       "stats": {
         "cells_observed": 6,
         "congested": 0,
@@ -3450,7 +3451,7 @@
     },
     {
       "timestamp": "26-11-2025 03:00",
-      "filename": "26-11-2025_03-00.json",
+      "filename": "26-11-2025_03-00.parquet",
       "stats": {
         "cells_observed": 3,
         "congested": 0,
@@ -3463,7 +3464,7 @@
     },
     {
       "timestamp": "26-11-2025 04:00",
-      "filename": "26-11-2025_04-00.json",
+      "filename": "26-11-2025_04-00.parquet",
       "stats": {
         "cells_observed": 3,
         "congested": 0,
@@ -3476,7 +3477,7 @@
     },
     {
       "timestamp": "26-11-2025 05:00",
-      "filename": "26-11-2025_05-00.json",
+      "filename": "26-11-2025_05-00.parquet",
       "stats": {
         "cells_observed": 1,
         "congested": 0,
@@ -3489,7 +3490,7 @@
     },
     {
       "timestamp": "26-11-2025 06:00",
-      "filename": "26-11-2025_06-00.json",
+      "filename": "26-11-2025_06-00.parquet",
       "stats": {
         "cells_observed": 8,
         "congested": 0,
@@ -3502,7 +3503,7 @@
     },
     {
       "timestamp": "26-11-2025 07:00",
-      "filename": "26-11-2025_07-00.json",
+      "filename": "26-11-2025_07-00.parquet",
       "stats": {
         "cells_observed": 3,
         "congested": 0,
@@ -3515,7 +3516,7 @@
     },
     {
       "timestamp": "26-11-2025 08:00",
-      "filename": "26-11-2025_08-00.json",
+      "filename": "26-11-2025_08-00.parquet",
       "stats": {
         "cells_observed": 9,
         "congested": 1,
@@ -3528,7 +3529,7 @@
     },
     {
       "timestamp": "26-11-2025 09:00",
-      "filename": "26-11-2025_09-00.json",
+      "filename": "26-11-2025_09-00.parquet",
       "stats": {
         "cells_observed": 17,
         "congested": 4,
@@ -3541,7 +3542,7 @@
     },
     {
       "timestamp": "26-11-2025 10:00",
-      "filename": "26-11-2025_10-00.json",
+      "filename": "26-11-2025_10-00.parquet",
       "stats": {
         "cells_observed": 32,
         "congested": 4,
@@ -3554,7 +3555,7 @@
     },
     {
       "timestamp": "26-11-2025 11:00",
-      "filename": "26-11-2025_11-00.json",
+      "filename": "26-11-2025_11-00.parquet",
       "stats": {
         "cells_observed": 43,
         "congested": 8,
@@ -3567,7 +3568,7 @@
     },
     {
       "timestamp": "26-11-2025 12:00",
-      "filename": "26-11-2025_12-00.json",
+      "filename": "26-11-2025_12-00.parquet",
       "stats": {
         "cells_observed": 41,
         "congested": 4,
@@ -3580,7 +3581,7 @@
     },
     {
       "timestamp": "26-11-2025 13:00",
-      "filename": "26-11-2025_13-00.json",
+      "filename": "26-11-2025_13-00.parquet",
       "stats": {
         "cells_observed": 48,
         "congested": 13,
@@ -3593,7 +3594,7 @@
     },
     {
       "timestamp": "26-11-2025 14:00",
-      "filename": "26-11-2025_14-00.json",
+      "filename": "26-11-2025_14-00.parquet",
       "stats": {
         "cells_observed": 35,
         "congested": 5,
@@ -3606,7 +3607,7 @@
     },
     {
       "timestamp": "26-11-2025 15:00",
-      "filename": "26-11-2025_15-00.json",
+      "filename": "26-11-2025_15-00.parquet",
       "stats": {
         "cells_observed": 34,
         "congested": 3,
@@ -3619,7 +3620,7 @@
     },
     {
       "timestamp": "26-11-2025 16:00",
-      "filename": "26-11-2025_16-00.json",
+      "filename": "26-11-2025_16-00.parquet",
       "stats": {
         "cells_observed": 33,
         "congested": 8,
@@ -3632,7 +3633,7 @@
     },
     {
       "timestamp": "26-11-2025 17:00",
-      "filename": "26-11-2025_17-00.json",
+      "filename": "26-11-2025_17-00.parquet",
       "stats": {
         "cells_observed": 41,
         "congested": 5,
@@ -3645,7 +3646,7 @@
     },
     {
       "timestamp": "26-11-2025 18:00",
-      "filename": "26-11-2025_18-00.json",
+      "filename": "26-11-2025_18-00.parquet",
       "stats": {
         "cells_observed": 61,
         "congested": 15,
@@ -3658,7 +3659,7 @@
     },
     {
       "timestamp": "26-11-2025 19:00",
-      "filename": "26-11-2025_19-00.json",
+      "filename": "26-11-2025_19-00.parquet",
       "stats": {
         "cells_observed": 148,
         "congested": 50,
@@ -3671,7 +3672,7 @@
     },
     {
       "timestamp": "26-11-2025 20:00",
-      "filename": "26-11-2025_20-00.json",
+      "filename": "26-11-2025_20-00.parquet",
       "stats": {
         "cells_observed": 281,
         "congested": 125,
@@ -3684,7 +3685,7 @@
     },
     {
       "timestamp": "26-11-2025 21:00",
-      "filename": "26-11-2025_21-00.json",
+      "filename": "26-11-2025_21-00.parquet",
       "stats": {
         "cells_observed": 319,
         "congested": 145,
@@ -3697,7 +3698,7 @@
     },
     {
       "timestamp": "26-11-2025 22:00",
-      "filename": "26-11-2025_22-00.json",
+      "filename": "26-11-2025_22-00.parquet",
       "stats": {
         "cells_observed": 193,
         "congested": 89,
@@ -3710,7 +3711,7 @@
     },
     {
       "timestamp": "26-11-2025 23:00",
-      "filename": "26-11-2025_23-00.json",
+      "filename": "26-11-2025_23-00.parquet",
       "stats": {
         "cells_observed": 54,
         "congested": 12,
@@ -3723,7 +3724,7 @@
     },
     {
       "timestamp": "27-11-2025 00:00",
-      "filename": "27-11-2025_00-00.json",
+      "filename": "27-11-2025_00-00.parquet",
       "stats": {
         "cells_observed": 128,
         "congested": 1,
@@ -3736,7 +3737,7 @@
     },
     {
       "timestamp": "27-11-2025 01:00",
-      "filename": "27-11-2025_01-00.json",
+      "filename": "27-11-2025_01-00.parquet",
       "stats": {
         "cells_observed": 6,
         "congested": 0,
@@ -3749,7 +3750,7 @@
     },
     {
       "timestamp": "27-11-2025 02:00",
-      "filename": "27-11-2025_02-00.json",
+      "filename": "27-11-2025_02-00.parquet",
       "stats": {
         "cells_observed": 3,
         "congested": 0,
@@ -3762,7 +3763,7 @@
     },
     {
       "timestamp": "27-11-2025 03:00",
-      "filename": "27-11-2025_03-00.json",
+      "filename": "27-11-2025_03-00.parquet",
       "stats": {
         "cells_observed": 3,
         "congested": 0,
@@ -3775,7 +3776,7 @@
     },
     {
       "timestamp": "27-11-2025 04:00",
-      "filename": "27-11-2025_04-00.json",
+      "filename": "27-11-2025_04-00.parquet",
       "stats": {
         "cells_observed": 3,
         "congested": 0,
@@ -3788,7 +3789,7 @@
     },
     {
       "timestamp": "27-11-2025 05:00",
-      "filename": "27-11-2025_05-00.json",
+      "filename": "27-11-2025_05-00.parquet",
       "stats": {
         "cells_observed": 1,
         "congested": 0,
@@ -3801,7 +3802,7 @@
     },
     {
       "timestamp": "27-11-2025 06:00",
-      "filename": "27-11-2025_06-00.json",
+      "filename": "27-11-2025_06-00.parquet",
       "stats": {
         "cells_observed": 5,
         "congested": 1,
@@ -3814,7 +3815,7 @@
     },
     {
       "timestamp": "27-11-2025 07:00",
-      "filename": "27-11-2025_07-00.json",
+      "filename": "27-11-2025_07-00.parquet",
       "stats": {
         "cells_observed": 2,
         "congested": 0,
@@ -3827,7 +3828,7 @@
     },
     {
       "timestamp": "27-11-2025 08:00",
-      "filename": "27-11-2025_08-00.json",
+      "filename": "27-11-2025_08-00.parquet",
       "stats": {
         "cells_observed": 9,
         "congested": 0,
@@ -3840,7 +3841,7 @@
     },
     {
       "timestamp": "27-11-2025 09:00",
-      "filename": "27-11-2025_09-00.json",
+      "filename": "27-11-2025_09-00.parquet",
       "stats": {
         "cells_observed": 17,
         "congested": 3,
@@ -3853,7 +3854,7 @@
     },
     {
       "timestamp": "27-11-2025 10:00",
-      "filename": "27-11-2025_10-00.json",
+      "filename": "27-11-2025_10-00.parquet",
       "stats": {
         "cells_observed": 27,
         "congested": 1,
@@ -3866,7 +3867,7 @@
     },
     {
       "timestamp": "27-11-2025 11:00",
-      "filename": "27-11-2025_11-00.json",
+      "filename": "27-11-2025_11-00.parquet",
       "stats": {
         "cells_observed": 36,
         "congested": 9,
@@ -3879,7 +3880,7 @@
     },
     {
       "timestamp": "27-11-2025 12:00",
-      "filename": "27-11-2025_12-00.json",
+      "filename": "27-11-2025_12-00.parquet",
       "stats": {
         "cells_observed": 55,
         "congested": 9,
@@ -3892,7 +3893,7 @@
     },
     {
       "timestamp": "27-11-2025 13:00",
-      "filename": "27-11-2025_13-00.json",
+      "filename": "27-11-2025_13-00.parquet",
       "stats": {
         "cells_observed": 54,
         "congested": 16,
@@ -3905,7 +3906,7 @@
     },
     {
       "timestamp": "27-11-2025 14:00",
-      "filename": "27-11-2025_14-00.json",
+      "filename": "27-11-2025_14-00.parquet",
       "stats": {
         "cells_observed": 54,
         "congested": 5,
@@ -3918,7 +3919,7 @@
     },
     {
       "timestamp": "27-11-2025 15:00",
-      "filename": "27-11-2025_15-00.json",
+      "filename": "27-11-2025_15-00.parquet",
       "stats": {
         "cells_observed": 46,
         "congested": 5,
@@ -3931,7 +3932,7 @@
     },
     {
       "timestamp": "27-11-2025 16:00",
-      "filename": "27-11-2025_16-00.json",
+      "filename": "27-11-2025_16-00.parquet",
       "stats": {
         "cells_observed": 43,
         "congested": 9,
@@ -3944,7 +3945,7 @@
     },
     {
       "timestamp": "27-11-2025 17:00",
-      "filename": "27-11-2025_17-00.json",
+      "filename": "27-11-2025_17-00.parquet",
       "stats": {
         "cells_observed": 34,
         "congested": 4,
@@ -3957,7 +3958,7 @@
     },
     {
       "timestamp": "27-11-2025 18:00",
-      "filename": "27-11-2025_18-00.json",
+      "filename": "27-11-2025_18-00.parquet",
       "stats": {
         "cells_observed": 69,
         "congested": 18,
@@ -3970,7 +3971,7 @@
     },
     {
       "timestamp": "27-11-2025 19:00",
-      "filename": "27-11-2025_19-00.json",
+      "filename": "27-11-2025_19-00.parquet",
       "stats": {
         "cells_observed": 142,
         "congested": 52,
@@ -3983,7 +3984,7 @@
     },
     {
       "timestamp": "27-11-2025 20:00",
-      "filename": "27-11-2025_20-00.json",
+      "filename": "27-11-2025_20-00.parquet",
       "stats": {
         "cells_observed": 317,
         "congested": 127,
@@ -3996,7 +3997,7 @@
     },
     {
       "timestamp": "27-11-2025 21:00",
-      "filename": "27-11-2025_21-00.json",
+      "filename": "27-11-2025_21-00.parquet",
       "stats": {
         "cells_observed": 304,
         "congested": 161,
@@ -4009,7 +4010,7 @@
     },
     {
       "timestamp": "27-11-2025 22:00",
-      "filename": "27-11-2025_22-00.json",
+      "filename": "27-11-2025_22-00.parquet",
       "stats": {
         "cells_observed": 140,
         "congested": 63,
@@ -4022,7 +4023,7 @@
     },
     {
       "timestamp": "27-11-2025 23:00",
-      "filename": "27-11-2025_23-00.json",
+      "filename": "27-11-2025_23-00.parquet",
       "stats": {
         "cells_observed": 61,
         "congested": 20,
@@ -4035,7 +4036,7 @@
     },
     {
       "timestamp": "28-11-2025 00:00",
-      "filename": "28-11-2025_00-00.json",
+      "filename": "28-11-2025_00-00.parquet",
       "stats": {
         "cells_observed": 133,
         "congested": 2,
@@ -4048,7 +4049,7 @@
     },
     {
       "timestamp": "28-11-2025 01:00",
-      "filename": "28-11-2025_01-00.json",
+      "filename": "28-11-2025_01-00.parquet",
       "stats": {
         "cells_observed": 7,
         "congested": 0,
@@ -4061,7 +4062,7 @@
     },
     {
       "timestamp": "28-11-2025 02:00",
-      "filename": "28-11-2025_02-00.json",
+      "filename": "28-11-2025_02-00.parquet",
       "stats": {
         "cells_observed": 4,
         "congested": 0,
@@ -4074,7 +4075,7 @@
     },
     {
       "timestamp": "28-11-2025 03:00",
-      "filename": "28-11-2025_03-00.json",
+      "filename": "28-11-2025_03-00.parquet",
       "stats": {
         "cells_observed": 5,
         "congested": 0,
@@ -4087,7 +4088,7 @@
     },
     {
       "timestamp": "28-11-2025 04:00",
-      "filename": "28-11-2025_04-00.json",
+      "filename": "28-11-2025_04-00.parquet",
       "stats": {
         "cells_observed": 3,
         "congested": 0,
@@ -4100,7 +4101,7 @@
     },
     {
       "timestamp": "28-11-2025 05:00",
-      "filename": "28-11-2025_05-00.json",
+      "filename": "28-11-2025_05-00.parquet",
       "stats": {
         "cells_observed": 2,
         "congested": 0,
@@ -4113,7 +4114,7 @@
     },
     {
       "timestamp": "28-11-2025 06:00",
-      "filename": "28-11-2025_06-00.json",
+      "filename": "28-11-2025_06-00.parquet",
       "stats": {
         "cells_observed": 6,
         "congested": 0,
@@ -4126,7 +4127,7 @@
     },
     {
       "timestamp": "28-11-2025 07:00",
-      "filename": "28-11-2025_07-00.json",
+      "filename": "28-11-2025_07-00.parquet",
       "stats": {
         "cells_observed": 3,
         "congested": 0,
@@ -4139,7 +4140,7 @@
     },
     {
       "timestamp": "28-11-2025 08:00",
-      "filename": "28-11-2025_08-00.json",
+      "filename": "28-11-2025_08-00.parquet",
       "stats": {
         "cells_observed": 8,
         "congested": 1,
@@ -4152,7 +4153,7 @@
     },
     {
       "timestamp": "28-11-2025 09:00",
-      "filename": "28-11-2025_09-00.json",
+      "filename": "28-11-2025_09-00.parquet",
       "stats": {
         "cells_observed": 16,
         "congested": 5,
@@ -4165,7 +4166,7 @@
     },
     {
       "timestamp": "28-11-2025 10:00",
-      "filename": "28-11-2025_10-00.json",
+      "filename": "28-11-2025_10-00.parquet",
       "stats": {
         "cells_observed": 34,
         "congested": 7,
@@ -4178,7 +4179,7 @@
     },
     {
       "timestamp": "28-11-2025 11:00",
-      "filename": "28-11-2025_11-00.json",
+      "filename": "28-11-2025_11-00.parquet",
       "stats": {
         "cells_observed": 37,
         "congested": 2,
@@ -4191,7 +4192,7 @@
     },
     {
       "timestamp": "28-11-2025 12:00",
-      "filename": "28-11-2025_12-00.json",
+      "filename": "28-11-2025_12-00.parquet",
       "stats": {
         "cells_observed": 40,
         "congested": 9,
@@ -4204,7 +4205,7 @@
     },
     {
       "timestamp": "28-11-2025 13:00",
-      "filename": "28-11-2025_13-00.json",
+      "filename": "28-11-2025_13-00.parquet",
       "stats": {
         "cells_observed": 52,
         "congested": 14,
@@ -4217,7 +4218,7 @@
     },
     {
       "timestamp": "28-11-2025 14:00",
-      "filename": "28-11-2025_14-00.json",
+      "filename": "28-11-2025_14-00.parquet",
       "stats": {
         "cells_observed": 49,
         "congested": 8,
@@ -4230,7 +4231,7 @@
     },
     {
       "timestamp": "28-11-2025 15:00",
-      "filename": "28-11-2025_15-00.json",
+      "filename": "28-11-2025_15-00.parquet",
       "stats": {
         "cells_observed": 47,
         "congested": 7,
@@ -4243,7 +4244,7 @@
     },
     {
       "timestamp": "28-11-2025 16:00",
-      "filename": "28-11-2025_16-00.json",
+      "filename": "28-11-2025_16-00.parquet",
       "stats": {
         "cells_observed": 50,
         "congested": 11,
@@ -4256,7 +4257,7 @@
     },
     {
       "timestamp": "28-11-2025 17:00",
-      "filename": "28-11-2025_17-00.json",
+      "filename": "28-11-2025_17-00.parquet",
       "stats": {
         "cells_observed": 48,
         "congested": 10,
@@ -4269,7 +4270,7 @@
     },
     {
       "timestamp": "28-11-2025 18:00",
-      "filename": "28-11-2025_18-00.json",
+      "filename": "28-11-2025_18-00.parquet",
       "stats": {
         "cells_observed": 74,
         "congested": 28,
@@ -4282,7 +4283,7 @@
     },
     {
       "timestamp": "28-11-2025 19:00",
-      "filename": "28-11-2025_19-00.json",
+      "filename": "28-11-2025_19-00.parquet",
       "stats": {
         "cells_observed": 132,
         "congested": 46,
@@ -4295,7 +4296,7 @@
     },
     {
       "timestamp": "28-11-2025 20:00",
-      "filename": "28-11-2025_20-00.json",
+      "filename": "28-11-2025_20-00.parquet",
       "stats": {
         "cells_observed": 285,
         "congested": 120,
@@ -4308,7 +4309,7 @@
     },
     {
       "timestamp": "28-11-2025 21:00",
-      "filename": "28-11-2025_21-00.json",
+      "filename": "28-11-2025_21-00.parquet",
       "stats": {
         "cells_observed": 288,
         "congested": 137,
@@ -4321,7 +4322,7 @@
     },
     {
       "timestamp": "28-11-2025 22:00",
-      "filename": "28-11-2025_22-00.json",
+      "filename": "28-11-2025_22-00.parquet",
       "stats": {
         "cells_observed": 176,
         "congested": 69,
@@ -4334,7 +4335,7 @@
     },
     {
       "timestamp": "28-11-2025 23:00",
-      "filename": "28-11-2025_23-00.json",
+      "filename": "28-11-2025_23-00.parquet",
       "stats": {
         "cells_observed": 61,
         "congested": 15,
@@ -4347,7 +4348,7 @@
     },
     {
       "timestamp": "29-11-2025 00:00",
-      "filename": "29-11-2025_00-00.json",
+      "filename": "29-11-2025_00-00.parquet",
       "stats": {
         "cells_observed": 135,
         "congested": 3,
@@ -4360,7 +4361,7 @@
     },
     {
       "timestamp": "29-11-2025 01:00",
-      "filename": "29-11-2025_01-00.json",
+      "filename": "29-11-2025_01-00.parquet",
       "stats": {
         "cells_observed": 12,
         "congested": 0,
@@ -4373,7 +4374,7 @@
     },
     {
       "timestamp": "29-11-2025 02:00",
-      "filename": "29-11-2025_02-00.json",
+      "filename": "29-11-2025_02-00.parquet",
       "stats": {
         "cells_observed": 8,
         "congested": 1,
@@ -4386,7 +4387,7 @@
     },
     {
       "timestamp": "29-11-2025 03:00",
-      "filename": "29-11-2025_03-00.json",
+      "filename": "29-11-2025_03-00.parquet",
       "stats": {
         "cells_observed": 3,
         "congested": 0,
@@ -4399,7 +4400,7 @@
     },
     {
       "timestamp": "29-11-2025 04:00",
-      "filename": "29-11-2025_04-00.json",
+      "filename": "29-11-2025_04-00.parquet",
       "stats": {
         "cells_observed": 5,
         "congested": 0,
@@ -4412,7 +4413,7 @@
     },
     {
       "timestamp": "29-11-2025 05:00",
-      "filename": "29-11-2025_05-00.json",
+      "filename": "29-11-2025_05-00.parquet",
       "stats": {
         "cells_observed": 4,
         "congested": 0,
@@ -4425,7 +4426,7 @@
     },
     {
       "timestamp": "29-11-2025 06:00",
-      "filename": "29-11-2025_06-00.json",
+      "filename": "29-11-2025_06-00.parquet",
       "stats": {
         "cells_observed": 4,
         "congested": 0,
@@ -4438,7 +4439,7 @@
     },
     {
       "timestamp": "29-11-2025 08:00",
-      "filename": "29-11-2025_08-00.json",
+      "filename": "29-11-2025_08-00.parquet",
       "stats": {
         "cells_observed": 10,
         "congested": 0,
@@ -4451,7 +4452,7 @@
     },
     {
       "timestamp": "29-11-2025 09:00",
-      "filename": "29-11-2025_09-00.json",
+      "filename": "29-11-2025_09-00.parquet",
       "stats": {
         "cells_observed": 15,
         "congested": 2,
@@ -4464,7 +4465,7 @@
     },
     {
       "timestamp": "29-11-2025 10:00",
-      "filename": "29-11-2025_10-00.json",
+      "filename": "29-11-2025_10-00.parquet",
       "stats": {
         "cells_observed": 31,
         "congested": 3,
@@ -4477,7 +4478,7 @@
     },
     {
       "timestamp": "29-11-2025 11:00",
-      "filename": "29-11-2025_11-00.json",
+      "filename": "29-11-2025_11-00.parquet",
       "stats": {
         "cells_observed": 45,
         "congested": 9,
@@ -4490,7 +4491,7 @@
     },
     {
       "timestamp": "29-11-2025 12:00",
-      "filename": "29-11-2025_12-00.json",
+      "filename": "29-11-2025_12-00.parquet",
       "stats": {
         "cells_observed": 29,
         "congested": 2,
@@ -4503,7 +4504,7 @@
     },
     {
       "timestamp": "29-11-2025 13:00",
-      "filename": "29-11-2025_13-00.json",
+      "filename": "29-11-2025_13-00.parquet",
       "stats": {
         "cells_observed": 42,
         "congested": 7,
@@ -4516,7 +4517,7 @@
     },
     {
       "timestamp": "29-11-2025 14:00",
-      "filename": "29-11-2025_14-00.json",
+      "filename": "29-11-2025_14-00.parquet",
       "stats": {
         "cells_observed": 41,
         "congested": 7,
@@ -4529,7 +4530,7 @@
     },
     {
       "timestamp": "29-11-2025 15:00",
-      "filename": "29-11-2025_15-00.json",
+      "filename": "29-11-2025_15-00.parquet",
       "stats": {
         "cells_observed": 41,
         "congested": 9,
@@ -4542,7 +4543,7 @@
     },
     {
       "timestamp": "29-11-2025 16:00",
-      "filename": "29-11-2025_16-00.json",
+      "filename": "29-11-2025_16-00.parquet",
       "stats": {
         "cells_observed": 48,
         "congested": 8,
@@ -4555,7 +4556,7 @@
     },
     {
       "timestamp": "29-11-2025 17:00",
-      "filename": "29-11-2025_17-00.json",
+      "filename": "29-11-2025_17-00.parquet",
       "stats": {
         "cells_observed": 53,
         "congested": 12,
@@ -4568,7 +4569,7 @@
     },
     {
       "timestamp": "29-11-2025 18:00",
-      "filename": "29-11-2025_18-00.json",
+      "filename": "29-11-2025_18-00.parquet",
       "stats": {
         "cells_observed": 107,
         "congested": 31,
@@ -4581,7 +4582,7 @@
     },
     {
       "timestamp": "29-11-2025 19:00",
-      "filename": "29-11-2025_19-00.json",
+      "filename": "29-11-2025_19-00.parquet",
       "stats": {
         "cells_observed": 129,
         "congested": 46,
@@ -4594,7 +4595,7 @@
     },
     {
       "timestamp": "29-11-2025 20:00",
-      "filename": "29-11-2025_20-00.json",
+      "filename": "29-11-2025_20-00.parquet",
       "stats": {
         "cells_observed": 220,
         "congested": 87,
@@ -4607,7 +4608,7 @@
     },
     {
       "timestamp": "29-11-2025 21:00",
-      "filename": "29-11-2025_21-00.json",
+      "filename": "29-11-2025_21-00.parquet",
       "stats": {
         "cells_observed": 292,
         "congested": 136,
@@ -4620,7 +4621,7 @@
     },
     {
       "timestamp": "29-11-2025 22:00",
-      "filename": "29-11-2025_22-00.json",
+      "filename": "29-11-2025_22-00.parquet",
       "stats": {
         "cells_observed": 200,
         "congested": 91,
@@ -4633,7 +4634,7 @@
     },
     {
       "timestamp": "29-11-2025 23:00",
-      "filename": "29-11-2025_23-00.json",
+      "filename": "29-11-2025_23-00.parquet",
       "stats": {
         "cells_observed": 85,
         "congested": 19,
@@ -4646,7 +4647,7 @@
     },
     {
       "timestamp": "30-11-2025 00:00",
-      "filename": "30-11-2025_00-00.json",
+      "filename": "30-11-2025_00-00.parquet",
       "stats": {
         "cells_observed": 149,
         "congested": 4,
@@ -4659,7 +4660,7 @@
     },
     {
       "timestamp": "30-11-2025 01:00",
-      "filename": "30-11-2025_01-00.json",
+      "filename": "30-11-2025_01-00.parquet",
       "stats": {
         "cells_observed": 12,
         "congested": 1,
@@ -4672,7 +4673,7 @@
     },
     {
       "timestamp": "30-11-2025 02:00",
-      "filename": "30-11-2025_02-00.json",
+      "filename": "30-11-2025_02-00.parquet",
       "stats": {
         "cells_observed": 4,
         "congested": 0,
@@ -4685,7 +4686,7 @@
     },
     {
       "timestamp": "30-11-2025 03:00",
-      "filename": "30-11-2025_03-00.json",
+      "filename": "30-11-2025_03-00.parquet",
       "stats": {
         "cells_observed": 7,
         "congested": 0,
@@ -4698,7 +4699,7 @@
     },
     {
       "timestamp": "30-11-2025 04:00",
-      "filename": "30-11-2025_04-00.json",
+      "filename": "30-11-2025_04-00.parquet",
       "stats": {
         "cells_observed": 2,
         "congested": 0,
@@ -4711,7 +4712,7 @@
     },
     {
       "timestamp": "30-11-2025 05:00",
-      "filename": "30-11-2025_05-00.json",
+      "filename": "30-11-2025_05-00.parquet",
       "stats": {
         "cells_observed": 5,
         "congested": 0,
@@ -4724,7 +4725,7 @@
     },
     {
       "timestamp": "30-11-2025 06:00",
-      "filename": "30-11-2025_06-00.json",
+      "filename": "30-11-2025_06-00.parquet",
       "stats": {
         "cells_observed": 6,
         "congested": 0,
@@ -4737,7 +4738,7 @@
     },
     {
       "timestamp": "30-11-2025 07:00",
-      "filename": "30-11-2025_07-00.json",
+      "filename": "30-11-2025_07-00.parquet",
       "stats": {
         "cells_observed": 6,
         "congested": 0,
@@ -4750,7 +4751,7 @@
     },
     {
       "timestamp": "30-11-2025 08:00",
-      "filename": "30-11-2025_08-00.json",
+      "filename": "30-11-2025_08-00.parquet",
       "stats": {
         "cells_observed": 13,
         "congested": 3,
@@ -4763,7 +4764,7 @@
     },
     {
       "timestamp": "30-11-2025 09:00",
-      "filename": "30-11-2025_09-00.json",
+      "filename": "30-11-2025_09-00.parquet",
       "stats": {
         "cells_observed": 10,
         "congested": 1,
@@ -4776,7 +4777,7 @@
     },
     {
       "timestamp": "30-11-2025 10:00",
-      "filename": "30-11-2025_10-00.json",
+      "filename": "30-11-2025_10-00.parquet",
       "stats": {
         "cells_observed": 18,
         "congested": 5,
@@ -4789,7 +4790,7 @@
     },
     {
       "timestamp": "30-11-2025 11:00",
-      "filename": "30-11-2025_11-00.json",
+      "filename": "30-11-2025_11-00.parquet",
       "stats": {
         "cells_observed": 32,
         "congested": 5,
@@ -4802,7 +4803,7 @@
     },
     {
       "timestamp": "30-11-2025 12:00",
-      "filename": "30-11-2025_12-00.json",
+      "filename": "30-11-2025_12-00.parquet",
       "stats": {
         "cells_observed": 21,
         "congested": 4,
@@ -4815,7 +4816,7 @@
     },
     {
       "timestamp": "30-11-2025 13:00",
-      "filename": "30-11-2025_13-00.json",
+      "filename": "30-11-2025_13-00.parquet",
       "stats": {
         "cells_observed": 54,
         "congested": 8,
@@ -4828,7 +4829,7 @@
     },
     {
       "timestamp": "30-11-2025 14:00",
-      "filename": "30-11-2025_14-00.json",
+      "filename": "30-11-2025_14-00.parquet",
       "stats": {
         "cells_observed": 52,
         "congested": 10,
@@ -4841,7 +4842,7 @@
     },
     {
       "timestamp": "30-11-2025 15:00",
-      "filename": "30-11-2025_15-00.json",
+      "filename": "30-11-2025_15-00.parquet",
       "stats": {
         "cells_observed": 53,
         "congested": 11,
@@ -4854,7 +4855,7 @@
     },
     {
       "timestamp": "30-11-2025 16:00",
-      "filename": "30-11-2025_16-00.json",
+      "filename": "30-11-2025_16-00.parquet",
       "stats": {
         "cells_observed": 63,
         "congested": 14,
@@ -4867,7 +4868,7 @@
     },
     {
       "timestamp": "30-11-2025 17:00",
-      "filename": "30-11-2025_17-00.json",
+      "filename": "30-11-2025_17-00.parquet",
       "stats": {
         "cells_observed": 69,
         "congested": 7,
@@ -4880,7 +4881,7 @@
     },
     {
       "timestamp": "30-11-2025 18:00",
-      "filename": "30-11-2025_18-00.json",
+      "filename": "30-11-2025_18-00.parquet",
       "stats": {
         "cells_observed": 105,
         "congested": 28,
@@ -4893,7 +4894,7 @@
     },
     {
       "timestamp": "30-11-2025 19:00",
-      "filename": "30-11-2025_19-00.json",
+      "filename": "30-11-2025_19-00.parquet",
       "stats": {
         "cells_observed": 139,
         "congested": 50,
@@ -4906,7 +4907,7 @@
     },
     {
       "timestamp": "30-11-2025 20:00",
-      "filename": "30-11-2025_20-00.json",
+      "filename": "30-11-2025_20-00.parquet",
       "stats": {
         "cells_observed": 221,
         "congested": 99,
@@ -4919,7 +4920,7 @@
     },
     {
       "timestamp": "30-11-2025 21:00",
-      "filename": "30-11-2025_21-00.json",
+      "filename": "30-11-2025_21-00.parquet",
       "stats": {
         "cells_observed": 288,
         "congested": 125,
@@ -4932,7 +4933,7 @@
     },
     {
       "timestamp": "30-11-2025 22:00",
-      "filename": "30-11-2025_22-00.json",
+      "filename": "30-11-2025_22-00.parquet",
       "stats": {
         "cells_observed": 184,
         "congested": 74,
@@ -4945,7 +4946,7 @@
     },
     {
       "timestamp": "30-11-2025 23:00",
-      "filename": "30-11-2025_23-00.json",
+      "filename": "30-11-2025_23-00.parquet",
       "stats": {
         "cells_observed": 47,
         "congested": 13,
@@ -4958,7 +4959,7 @@
     },
     {
       "timestamp": "01-12-2025 00:00",
-      "filename": "01-12-2025_00-00.json",
+      "filename": "01-12-2025_00-00.parquet",
       "stats": {
         "cells_observed": 152,
         "congested": 7,
@@ -4971,7 +4972,7 @@
     },
     {
       "timestamp": "01-12-2025 01:00",
-      "filename": "01-12-2025_01-00.json",
+      "filename": "01-12-2025_01-00.parquet",
       "stats": {
         "cells_observed": 20,
         "congested": 2,
@@ -4984,7 +4985,7 @@
     },
     {
       "timestamp": "01-12-2025 02:00",
-      "filename": "01-12-2025_02-00.json",
+      "filename": "01-12-2025_02-00.parquet",
       "stats": {
         "cells_observed": 13,
         "congested": 3,
@@ -4997,7 +4998,7 @@
     },
     {
       "timestamp": "01-12-2025 03:00",
-      "filename": "01-12-2025_03-00.json",
+      "filename": "01-12-2025_03-00.parquet",
       "stats": {
         "cells_observed": 5,
         "congested": 0,
@@ -5010,7 +5011,7 @@
     },
     {
       "timestamp": "01-12-2025 04:00",
-      "filename": "01-12-2025_04-00.json",
+      "filename": "01-12-2025_04-00.parquet",
       "stats": {
         "cells_observed": 8,
         "congested": 3,
@@ -5023,7 +5024,7 @@
     },
     {
       "timestamp": "01-12-2025 05:00",
-      "filename": "01-12-2025_05-00.json",
+      "filename": "01-12-2025_05-00.parquet",
       "stats": {
         "cells_observed": 4,
         "congested": 0,
@@ -5036,7 +5037,7 @@
     },
     {
       "timestamp": "01-12-2025 06:00",
-      "filename": "01-12-2025_06-00.json",
+      "filename": "01-12-2025_06-00.parquet",
       "stats": {
         "cells_observed": 8,
         "congested": 1,
@@ -5049,7 +5050,7 @@
     },
     {
       "timestamp": "01-12-2025 07:00",
-      "filename": "01-12-2025_07-00.json",
+      "filename": "01-12-2025_07-00.parquet",
       "stats": {
         "cells_observed": 8,
         "congested": 0,
@@ -5062,7 +5063,7 @@
     },
     {
       "timestamp": "01-12-2025 08:00",
-      "filename": "01-12-2025_08-00.json",
+      "filename": "01-12-2025_08-00.parquet",
       "stats": {
         "cells_observed": 15,
         "congested": 2,
@@ -5075,7 +5076,7 @@
     },
     {
       "timestamp": "01-12-2025 09:00",
-      "filename": "01-12-2025_09-00.json",
+      "filename": "01-12-2025_09-00.parquet",
       "stats": {
         "cells_observed": 13,
         "congested": 2,
@@ -5088,7 +5089,7 @@
     },
     {
       "timestamp": "01-12-2025 10:00",
-      "filename": "01-12-2025_10-00.json",
+      "filename": "01-12-2025_10-00.parquet",
       "stats": {
         "cells_observed": 16,
         "congested": 3,
@@ -5101,7 +5102,7 @@
     },
     {
       "timestamp": "01-12-2025 11:00",
-      "filename": "01-12-2025_11-00.json",
+      "filename": "01-12-2025_11-00.parquet",
       "stats": {
         "cells_observed": 22,
         "congested": 3,
@@ -5114,7 +5115,7 @@
     },
     {
       "timestamp": "01-12-2025 12:00",
-      "filename": "01-12-2025_12-00.json",
+      "filename": "01-12-2025_12-00.parquet",
       "stats": {
         "cells_observed": 37,
         "congested": 13,
@@ -5127,7 +5128,7 @@
     },
     {
       "timestamp": "01-12-2025 13:00",
-      "filename": "01-12-2025_13-00.json",
+      "filename": "01-12-2025_13-00.parquet",
       "stats": {
         "cells_observed": 44,
         "congested": 13,
@@ -5140,7 +5141,7 @@
     },
     {
       "timestamp": "01-12-2025 14:00",
-      "filename": "01-12-2025_14-00.json",
+      "filename": "01-12-2025_14-00.parquet",
       "stats": {
         "cells_observed": 92,
         "congested": 28,
@@ -5153,7 +5154,7 @@
     },
     {
       "timestamp": "01-12-2025 15:00",
-      "filename": "01-12-2025_15-00.json",
+      "filename": "01-12-2025_15-00.parquet",
       "stats": {
         "cells_observed": 122,
         "congested": 41,
@@ -5166,7 +5167,7 @@
     },
     {
       "timestamp": "01-12-2025 16:00",
-      "filename": "01-12-2025_16-00.json",
+      "filename": "01-12-2025_16-00.parquet",
       "stats": {
         "cells_observed": 28,
         "congested": 4,
@@ -5179,7 +5180,7 @@
     },
     {
       "timestamp": "01-12-2025 17:00",
-      "filename": "01-12-2025_17-00.json",
+      "filename": "01-12-2025_17-00.parquet",
       "stats": {
         "cells_observed": 52,
         "congested": 16,
@@ -5192,7 +5193,7 @@
     },
     {
       "timestamp": "01-12-2025 18:00",
-      "filename": "01-12-2025_18-00.json",
+      "filename": "01-12-2025_18-00.parquet",
       "stats": {
         "cells_observed": 75,
         "congested": 31,
@@ -5205,7 +5206,7 @@
     },
     {
       "timestamp": "01-12-2025 19:00",
-      "filename": "01-12-2025_19-00.json",
+      "filename": "01-12-2025_19-00.parquet",
       "stats": {
         "cells_observed": 126,
         "congested": 44,
@@ -5218,7 +5219,7 @@
     },
     {
       "timestamp": "01-12-2025 20:00",
-      "filename": "01-12-2025_20-00.json",
+      "filename": "01-12-2025_20-00.parquet",
       "stats": {
         "cells_observed": 227,
         "congested": 96,
@@ -5231,7 +5232,7 @@
     },
     {
       "timestamp": "01-12-2025 21:00",
-      "filename": "01-12-2025_21-00.json",
+      "filename": "01-12-2025_21-00.parquet",
       "stats": {
         "cells_observed": 246,
         "congested": 120,
@@ -5244,7 +5245,7 @@
     },
     {
       "timestamp": "01-12-2025 22:00",
-      "filename": "01-12-2025_22-00.json",
+      "filename": "01-12-2025_22-00.parquet",
       "stats": {
         "cells_observed": 158,
         "congested": 71,
@@ -5257,7 +5258,7 @@
     },
     {
       "timestamp": "01-12-2025 23:00",
-      "filename": "01-12-2025_23-00.json",
+      "filename": "01-12-2025_23-00.parquet",
       "stats": {
         "cells_observed": 69,
         "congested": 22,
@@ -5270,7 +5271,7 @@
     },
     {
       "timestamp": "02-12-2025 00:00",
-      "filename": "02-12-2025_00-00.json",
+      "filename": "02-12-2025_00-00.parquet",
       "stats": {
         "cells_observed": 140,
         "congested": 5,
@@ -5283,7 +5284,7 @@
     },
     {
       "timestamp": "02-12-2025 01:00",
-      "filename": "02-12-2025_01-00.json",
+      "filename": "02-12-2025_01-00.parquet",
       "stats": {
         "cells_observed": 12,
         "congested": 0,
@@ -5296,7 +5297,7 @@
     },
     {
       "timestamp": "02-12-2025 02:00",
-      "filename": "02-12-2025_02-00.json",
+      "filename": "02-12-2025_02-00.parquet",
       "stats": {
         "cells_observed": 6,
         "congested": 0,
@@ -5309,7 +5310,7 @@
     },
     {
       "timestamp": "02-12-2025 03:00",
-      "filename": "02-12-2025_03-00.json",
+      "filename": "02-12-2025_03-00.parquet",
       "stats": {
         "cells_observed": 7,
         "congested": 1,
@@ -5322,7 +5323,7 @@
     },
     {
       "timestamp": "02-12-2025 04:00",
-      "filename": "02-12-2025_04-00.json",
+      "filename": "02-12-2025_04-00.parquet",
       "stats": {
         "cells_observed": 1,
         "congested": 0,
@@ -5335,7 +5336,7 @@
     },
     {
       "timestamp": "02-12-2025 05:00",
-      "filename": "02-12-2025_05-00.json",
+      "filename": "02-12-2025_05-00.parquet",
       "stats": {
         "cells_observed": 3,
         "congested": 0,
@@ -5348,7 +5349,7 @@
     },
     {
       "timestamp": "02-12-2025 06:00",
-      "filename": "02-12-2025_06-00.json",
+      "filename": "02-12-2025_06-00.parquet",
       "stats": {
         "cells_observed": 11,
         "congested": 1,
@@ -5361,7 +5362,7 @@
     },
     {
       "timestamp": "02-12-2025 07:00",
-      "filename": "02-12-2025_07-00.json",
+      "filename": "02-12-2025_07-00.parquet",
       "stats": {
         "cells_observed": 9,
         "congested": 2,
@@ -5374,7 +5375,7 @@
     },
     {
       "timestamp": "02-12-2025 08:00",
-      "filename": "02-12-2025_08-00.json",
+      "filename": "02-12-2025_08-00.parquet",
       "stats": {
         "cells_observed": 9,
         "congested": 0,
@@ -5387,7 +5388,7 @@
     },
     {
       "timestamp": "02-12-2025 09:00",
-      "filename": "02-12-2025_09-00.json",
+      "filename": "02-12-2025_09-00.parquet",
       "stats": {
         "cells_observed": 22,
         "congested": 3,
@@ -5400,7 +5401,7 @@
     },
     {
       "timestamp": "02-12-2025 10:00",
-      "filename": "02-12-2025_10-00.json",
+      "filename": "02-12-2025_10-00.parquet",
       "stats": {
         "cells_observed": 19,
         "congested": 1,
@@ -5413,7 +5414,7 @@
     },
     {
       "timestamp": "02-12-2025 11:00",
-      "filename": "02-12-2025_11-00.json",
+      "filename": "02-12-2025_11-00.parquet",
       "stats": {
         "cells_observed": 30,
         "congested": 8,
@@ -5426,7 +5427,7 @@
     },
     {
       "timestamp": "02-12-2025 12:00",
-      "filename": "02-12-2025_12-00.json",
+      "filename": "02-12-2025_12-00.parquet",
       "stats": {
         "cells_observed": 45,
         "congested": 9,
@@ -5439,7 +5440,7 @@
     },
     {
       "timestamp": "02-12-2025 13:00",
-      "filename": "02-12-2025_13-00.json",
+      "filename": "02-12-2025_13-00.parquet",
       "stats": {
         "cells_observed": 51,
         "congested": 15,
@@ -5452,7 +5453,7 @@
     },
     {
       "timestamp": "02-12-2025 14:00",
-      "filename": "02-12-2025_14-00.json",
+      "filename": "02-12-2025_14-00.parquet",
       "stats": {
         "cells_observed": 50,
         "congested": 9,
@@ -5465,7 +5466,7 @@
     },
     {
       "timestamp": "02-12-2025 15:00",
-      "filename": "02-12-2025_15-00.json",
+      "filename": "02-12-2025_15-00.parquet",
       "stats": {
         "cells_observed": 30,
         "congested": 10,
@@ -5478,7 +5479,7 @@
     },
     {
       "timestamp": "02-12-2025 16:00",
-      "filename": "02-12-2025_16-00.json",
+      "filename": "02-12-2025_16-00.parquet",
       "stats": {
         "cells_observed": 44,
         "congested": 8,
@@ -5491,7 +5492,7 @@
     },
     {
       "timestamp": "02-12-2025 17:00",
-      "filename": "02-12-2025_17-00.json",
+      "filename": "02-12-2025_17-00.parquet",
       "stats": {
         "cells_observed": 43,
         "congested": 6,
@@ -5504,7 +5505,7 @@
     },
     {
       "timestamp": "02-12-2025 18:00",
-      "filename": "02-12-2025_18-00.json",
+      "filename": "02-12-2025_18-00.parquet",
       "stats": {
         "cells_observed": 75,
         "congested": 29,
@@ -5517,7 +5518,7 @@
     },
     {
       "timestamp": "02-12-2025 19:00",
-      "filename": "02-12-2025_19-00.json",
+      "filename": "02-12-2025_19-00.parquet",
       "stats": {
         "cells_observed": 122,
         "congested": 42,
@@ -5530,7 +5531,7 @@
     },
     {
       "timestamp": "02-12-2025 20:00",
-      "filename": "02-12-2025_20-00.json",
+      "filename": "02-12-2025_20-00.parquet",
       "stats": {
         "cells_observed": 244,
         "congested": 90,
@@ -5543,7 +5544,7 @@
     },
     {
       "timestamp": "02-12-2025 21:00",
-      "filename": "02-12-2025_21-00.json",
+      "filename": "02-12-2025_21-00.parquet",
       "stats": {
         "cells_observed": 301,
         "congested": 149,
@@ -5556,7 +5557,7 @@
     },
     {
       "timestamp": "02-12-2025 22:00",
-      "filename": "02-12-2025_22-00.json",
+      "filename": "02-12-2025_22-00.parquet",
       "stats": {
         "cells_observed": 216,
         "congested": 96,
@@ -5569,7 +5570,7 @@
     },
     {
       "timestamp": "02-12-2025 23:00",
-      "filename": "02-12-2025_23-00.json",
+      "filename": "02-12-2025_23-00.parquet",
       "stats": {
         "cells_observed": 71,
         "congested": 25,
@@ -5582,7 +5583,7 @@
     },
     {
       "timestamp": "03-12-2025 00:00",
-      "filename": "03-12-2025_00-00.json",
+      "filename": "03-12-2025_00-00.parquet",
       "stats": {
         "cells_observed": 126,
         "congested": 4,
@@ -5595,7 +5596,7 @@
     },
     {
       "timestamp": "03-12-2025 01:00",
-      "filename": "03-12-2025_01-00.json",
+      "filename": "03-12-2025_01-00.parquet",
       "stats": {
         "cells_observed": 14,
         "congested": 1,
@@ -5608,7 +5609,7 @@
     },
     {
       "timestamp": "03-12-2025 02:00",
-      "filename": "03-12-2025_02-00.json",
+      "filename": "03-12-2025_02-00.parquet",
       "stats": {
         "cells_observed": 9,
         "congested": 0,
@@ -5621,7 +5622,7 @@
     },
     {
       "timestamp": "03-12-2025 03:00",
-      "filename": "03-12-2025_03-00.json",
+      "filename": "03-12-2025_03-00.parquet",
       "stats": {
         "cells_observed": 6,
         "congested": 0,
@@ -5634,7 +5635,7 @@
     },
     {
       "timestamp": "03-12-2025 04:00",
-      "filename": "03-12-2025_04-00.json",
+      "filename": "03-12-2025_04-00.parquet",
       "stats": {
         "cells_observed": 3,
         "congested": 0,
@@ -5647,7 +5648,7 @@
     },
     {
       "timestamp": "03-12-2025 05:00",
-      "filename": "03-12-2025_05-00.json",
+      "filename": "03-12-2025_05-00.parquet",
       "stats": {
         "cells_observed": 1,
         "congested": 0,
@@ -5660,7 +5661,7 @@
     },
     {
       "timestamp": "03-12-2025 06:00",
-      "filename": "03-12-2025_06-00.json",
+      "filename": "03-12-2025_06-00.parquet",
       "stats": {
         "cells_observed": 9,
         "congested": 0,
@@ -5673,7 +5674,7 @@
     },
     {
       "timestamp": "03-12-2025 07:00",
-      "filename": "03-12-2025_07-00.json",
+      "filename": "03-12-2025_07-00.parquet",
       "stats": {
         "cells_observed": 7,
         "congested": 3,
@@ -5686,7 +5687,7 @@
     },
     {
       "timestamp": "03-12-2025 08:00",
-      "filename": "03-12-2025_08-00.json",
+      "filename": "03-12-2025_08-00.parquet",
       "stats": {
         "cells_observed": 18,
         "congested": 4,
@@ -5699,7 +5700,7 @@
     },
     {
       "timestamp": "03-12-2025 09:00",
-      "filename": "03-12-2025_09-00.json",
+      "filename": "03-12-2025_09-00.parquet",
       "stats": {
         "cells_observed": 18,
         "congested": 1,
@@ -5712,7 +5713,7 @@
     },
     {
       "timestamp": "03-12-2025 10:00",
-      "filename": "03-12-2025_10-00.json",
+      "filename": "03-12-2025_10-00.parquet",
       "stats": {
         "cells_observed": 27,
         "congested": 5,
@@ -5725,7 +5726,7 @@
     },
     {
       "timestamp": "03-12-2025 11:00",
-      "filename": "03-12-2025_11-00.json",
+      "filename": "03-12-2025_11-00.parquet",
       "stats": {
         "cells_observed": 25,
         "congested": 4,
@@ -5738,7 +5739,7 @@
     },
     {
       "timestamp": "03-12-2025 12:00",
-      "filename": "03-12-2025_12-00.json",
+      "filename": "03-12-2025_12-00.parquet",
       "stats": {
         "cells_observed": 36,
         "congested": 9,
@@ -5751,7 +5752,7 @@
     },
     {
       "timestamp": "03-12-2025 13:00",
-      "filename": "03-12-2025_13-00.json",
+      "filename": "03-12-2025_13-00.parquet",
       "stats": {
         "cells_observed": 60,
         "congested": 18,
@@ -5764,7 +5765,7 @@
     },
     {
       "timestamp": "03-12-2025 14:00",
-      "filename": "03-12-2025_14-00.json",
+      "filename": "03-12-2025_14-00.parquet",
       "stats": {
         "cells_observed": 69,
         "congested": 14,
@@ -5777,7 +5778,7 @@
     },
     {
       "timestamp": "03-12-2025 15:00",
-      "filename": "03-12-2025_15-00.json",
+      "filename": "03-12-2025_15-00.parquet",
       "stats": {
         "cells_observed": 40,
         "congested": 6,
@@ -5790,7 +5791,7 @@
     },
     {
       "timestamp": "03-12-2025 16:00",
-      "filename": "03-12-2025_16-00.json",
+      "filename": "03-12-2025_16-00.parquet",
       "stats": {
         "cells_observed": 48,
         "congested": 8,
@@ -5803,7 +5804,7 @@
     },
     {
       "timestamp": "03-12-2025 17:00",
-      "filename": "03-12-2025_17-00.json",
+      "filename": "03-12-2025_17-00.parquet",
       "stats": {
         "cells_observed": 42,
         "congested": 13,
@@ -5816,7 +5817,7 @@
     },
     {
       "timestamp": "03-12-2025 18:00",
-      "filename": "03-12-2025_18-00.json",
+      "filename": "03-12-2025_18-00.parquet",
       "stats": {
         "cells_observed": 64,
         "congested": 20,
@@ -5829,7 +5830,7 @@
     },
     {
       "timestamp": "03-12-2025 19:00",
-      "filename": "03-12-2025_19-00.json",
+      "filename": "03-12-2025_19-00.parquet",
       "stats": {
         "cells_observed": 140,
         "congested": 56,
@@ -5842,7 +5843,7 @@
     },
     {
       "timestamp": "03-12-2025 20:00",
-      "filename": "03-12-2025_20-00.json",
+      "filename": "03-12-2025_20-00.parquet",
       "stats": {
         "cells_observed": 247,
         "congested": 99,
@@ -5855,7 +5856,7 @@
     },
     {
       "timestamp": "03-12-2025 21:00",
-      "filename": "03-12-2025_21-00.json",
+      "filename": "03-12-2025_21-00.parquet",
       "stats": {
         "cells_observed": 281,
         "congested": 133,
@@ -5868,7 +5869,7 @@
     },
     {
       "timestamp": "03-12-2025 22:00",
-      "filename": "03-12-2025_22-00.json",
+      "filename": "03-12-2025_22-00.parquet",
       "stats": {
         "cells_observed": 197,
         "congested": 87,
@@ -5881,7 +5882,7 @@
     },
     {
       "timestamp": "03-12-2025 23:00",
-      "filename": "03-12-2025_23-00.json",
+      "filename": "03-12-2025_23-00.parquet",
       "stats": {
         "cells_observed": 73,
         "congested": 24,
@@ -5894,7 +5895,7 @@
     },
     {
       "timestamp": "04-12-2025 00:00",
-      "filename": "04-12-2025_00-00.json",
+      "filename": "04-12-2025_00-00.parquet",
       "stats": {
         "cells_observed": 127,
         "congested": 3,
@@ -5907,7 +5908,7 @@
     },
     {
       "timestamp": "04-12-2025 01:00",
-      "filename": "04-12-2025_01-00.json",
+      "filename": "04-12-2025_01-00.parquet",
       "stats": {
         "cells_observed": 17,
         "congested": 1,
@@ -5920,7 +5921,7 @@
     },
     {
       "timestamp": "04-12-2025 02:00",
-      "filename": "04-12-2025_02-00.json",
+      "filename": "04-12-2025_02-00.parquet",
       "stats": {
         "cells_observed": 8,
         "congested": 0,
@@ -5933,7 +5934,7 @@
     },
     {
       "timestamp": "04-12-2025 03:00",
-      "filename": "04-12-2025_03-00.json",
+      "filename": "04-12-2025_03-00.parquet",
       "stats": {
         "cells_observed": 5,
         "congested": 0,
@@ -5946,7 +5947,7 @@
     },
     {
       "timestamp": "04-12-2025 04:00",
-      "filename": "04-12-2025_04-00.json",
+      "filename": "04-12-2025_04-00.parquet",
       "stats": {
         "cells_observed": 4,
         "congested": 0,
@@ -5959,7 +5960,7 @@
     },
     {
       "timestamp": "04-12-2025 05:00",
-      "filename": "04-12-2025_05-00.json",
+      "filename": "04-12-2025_05-00.parquet",
       "stats": {
         "cells_observed": 1,
         "congested": 0,
@@ -5972,7 +5973,7 @@
     },
     {
       "timestamp": "04-12-2025 06:00",
-      "filename": "04-12-2025_06-00.json",
+      "filename": "04-12-2025_06-00.parquet",
       "stats": {
         "cells_observed": 8,
         "congested": 2,
@@ -5985,7 +5986,7 @@
     },
     {
       "timestamp": "04-12-2025 07:00",
-      "filename": "04-12-2025_07-00.json",
+      "filename": "04-12-2025_07-00.parquet",
       "stats": {
         "cells_observed": 9,
         "congested": 2,
@@ -5998,7 +5999,7 @@
     },
     {
       "timestamp": "04-12-2025 08:00",
-      "filename": "04-12-2025_08-00.json",
+      "filename": "04-12-2025_08-00.parquet",
       "stats": {
         "cells_observed": 10,
         "congested": 2,
@@ -6011,7 +6012,7 @@
     },
     {
       "timestamp": "04-12-2025 09:00",
-      "filename": "04-12-2025_09-00.json",
+      "filename": "04-12-2025_09-00.parquet",
       "stats": {
         "cells_observed": 22,
         "congested": 2,
@@ -6024,7 +6025,7 @@
     },
     {
       "timestamp": "04-12-2025 10:00",
-      "filename": "04-12-2025_10-00.json",
+      "filename": "04-12-2025_10-00.parquet",
       "stats": {
         "cells_observed": 25,
         "congested": 5,
@@ -6037,7 +6038,7 @@
     },
     {
       "timestamp": "04-12-2025 11:00",
-      "filename": "04-12-2025_11-00.json",
+      "filename": "04-12-2025_11-00.parquet",
       "stats": {
         "cells_observed": 27,
         "congested": 8,
@@ -6050,7 +6051,7 @@
     },
     {
       "timestamp": "04-12-2025 12:00",
-      "filename": "04-12-2025_12-00.json",
+      "filename": "04-12-2025_12-00.parquet",
       "stats": {
         "cells_observed": 49,
         "congested": 12,
@@ -6063,7 +6064,7 @@
     },
     {
       "timestamp": "04-12-2025 13:00",
-      "filename": "04-12-2025_13-00.json",
+      "filename": "04-12-2025_13-00.parquet",
       "stats": {
         "cells_observed": 39,
         "congested": 11,
@@ -6076,7 +6077,7 @@
     },
     {
       "timestamp": "04-12-2025 14:00",
-      "filename": "04-12-2025_14-00.json",
+      "filename": "04-12-2025_14-00.parquet",
       "stats": {
         "cells_observed": 42,
         "congested": 9,
@@ -6089,7 +6090,7 @@
     },
     {
       "timestamp": "04-12-2025 15:00",
-      "filename": "04-12-2025_15-00.json",
+      "filename": "04-12-2025_15-00.parquet",
       "stats": {
         "cells_observed": 75,
         "congested": 21,
@@ -6102,7 +6103,7 @@
     },
     {
       "timestamp": "04-12-2025 16:00",
-      "filename": "04-12-2025_16-00.json",
+      "filename": "04-12-2025_16-00.parquet",
       "stats": {
         "cells_observed": 138,
         "congested": 42,
@@ -6115,7 +6116,7 @@
     },
     {
       "timestamp": "04-12-2025 17:00",
-      "filename": "04-12-2025_17-00.json",
+      "filename": "04-12-2025_17-00.parquet",
       "stats": {
         "cells_observed": 70,
         "congested": 29,
@@ -6128,7 +6129,7 @@
     },
     {
       "timestamp": "04-12-2025 18:00",
-      "filename": "04-12-2025_18-00.json",
+      "filename": "04-12-2025_18-00.parquet",
       "stats": {
         "cells_observed": 80,
         "congested": 25,
@@ -6141,7 +6142,7 @@
     },
     {
       "timestamp": "04-12-2025 19:00",
-      "filename": "04-12-2025_19-00.json",
+      "filename": "04-12-2025_19-00.parquet",
       "stats": {
         "cells_observed": 114,
         "congested": 46,
@@ -6154,7 +6155,7 @@
     },
     {
       "timestamp": "04-12-2025 20:00",
-      "filename": "04-12-2025_20-00.json",
+      "filename": "04-12-2025_20-00.parquet",
       "stats": {
         "cells_observed": 233,
         "congested": 116,
@@ -6167,7 +6168,7 @@
     },
     {
       "timestamp": "04-12-2025 21:00",
-      "filename": "04-12-2025_21-00.json",
+      "filename": "04-12-2025_21-00.parquet",
       "stats": {
         "cells_observed": 225,
         "congested": 115,
@@ -6180,7 +6181,7 @@
     },
     {
       "timestamp": "04-12-2025 22:00",
-      "filename": "04-12-2025_22-00.json",
+      "filename": "04-12-2025_22-00.parquet",
       "stats": {
         "cells_observed": 162,
         "congested": 71,
@@ -6193,7 +6194,7 @@
     },
     {
       "timestamp": "04-12-2025 23:00",
-      "filename": "04-12-2025_23-00.json",
+      "filename": "04-12-2025_23-00.parquet",
       "stats": {
         "cells_observed": 69,
         "congested": 24,
@@ -6206,7 +6207,7 @@
     },
     {
       "timestamp": "05-12-2025 00:00",
-      "filename": "05-12-2025_00-00.json",
+      "filename": "05-12-2025_00-00.parquet",
       "stats": {
         "cells_observed": 139,
         "congested": 4,
@@ -6219,7 +6220,7 @@
     },
     {
       "timestamp": "05-12-2025 01:00",
-      "filename": "05-12-2025_01-00.json",
+      "filename": "05-12-2025_01-00.parquet",
       "stats": {
         "cells_observed": 11,
         "congested": 1,
@@ -6232,7 +6233,7 @@
     },
     {
       "timestamp": "05-12-2025 02:00",
-      "filename": "05-12-2025_02-00.json",
+      "filename": "05-12-2025_02-00.parquet",
       "stats": {
         "cells_observed": 2,
         "congested": 0,
@@ -6245,7 +6246,7 @@
     },
     {
       "timestamp": "05-12-2025 03:00",
-      "filename": "05-12-2025_03-00.json",
+      "filename": "05-12-2025_03-00.parquet",
       "stats": {
         "cells_observed": 3,
         "congested": 1,
@@ -6258,7 +6259,7 @@
     },
     {
       "timestamp": "05-12-2025 05:00",
-      "filename": "05-12-2025_05-00.json",
+      "filename": "05-12-2025_05-00.parquet",
       "stats": {
         "cells_observed": 5,
         "congested": 0,
@@ -6271,7 +6272,7 @@
     },
     {
       "timestamp": "05-12-2025 06:00",
-      "filename": "05-12-2025_06-00.json",
+      "filename": "05-12-2025_06-00.parquet",
       "stats": {
         "cells_observed": 6,
         "congested": 0,
@@ -6284,7 +6285,7 @@
     },
     {
       "timestamp": "05-12-2025 07:00",
-      "filename": "05-12-2025_07-00.json",
+      "filename": "05-12-2025_07-00.parquet",
       "stats": {
         "cells_observed": 9,
         "congested": 1,
@@ -6297,7 +6298,7 @@
     },
     {
       "timestamp": "05-12-2025 08:00",
-      "filename": "05-12-2025_08-00.json",
+      "filename": "05-12-2025_08-00.parquet",
       "stats": {
         "cells_observed": 18,
         "congested": 4,
@@ -6310,7 +6311,7 @@
     },
     {
       "timestamp": "05-12-2025 09:00",
-      "filename": "05-12-2025_09-00.json",
+      "filename": "05-12-2025_09-00.parquet",
       "stats": {
         "cells_observed": 25,
         "congested": 3,
@@ -6323,7 +6324,7 @@
     },
     {
       "timestamp": "05-12-2025 10:00",
-      "filename": "05-12-2025_10-00.json",
+      "filename": "05-12-2025_10-00.parquet",
       "stats": {
         "cells_observed": 39,
         "congested": 11,
@@ -6336,7 +6337,7 @@
     },
     {
       "timestamp": "05-12-2025 11:00",
-      "filename": "05-12-2025_11-00.json",
+      "filename": "05-12-2025_11-00.parquet",
       "stats": {
         "cells_observed": 51,
         "congested": 20,
@@ -6349,7 +6350,7 @@
     },
     {
       "timestamp": "05-12-2025 12:00",
-      "filename": "05-12-2025_12-00.json",
+      "filename": "05-12-2025_12-00.parquet",
       "stats": {
         "cells_observed": 42,
         "congested": 9,
@@ -6362,7 +6363,7 @@
     },
     {
       "timestamp": "05-12-2025 13:00",
-      "filename": "05-12-2025_13-00.json",
+      "filename": "05-12-2025_13-00.parquet",
       "stats": {
         "cells_observed": 56,
         "congested": 17,
@@ -6375,7 +6376,7 @@
     },
     {
       "timestamp": "05-12-2025 14:00",
-      "filename": "05-12-2025_14-00.json",
+      "filename": "05-12-2025_14-00.parquet",
       "stats": {
         "cells_observed": 56,
         "congested": 18,
@@ -6388,7 +6389,7 @@
     },
     {
       "timestamp": "05-12-2025 15:00",
-      "filename": "05-12-2025_15-00.json",
+      "filename": "05-12-2025_15-00.parquet",
       "stats": {
         "cells_observed": 46,
         "congested": 9,
@@ -6401,7 +6402,7 @@
     },
     {
       "timestamp": "05-12-2025 16:00",
-      "filename": "05-12-2025_16-00.json",
+      "filename": "05-12-2025_16-00.parquet",
       "stats": {
         "cells_observed": 66,
         "congested": 13,
@@ -6414,7 +6415,7 @@
     },
     {
       "timestamp": "05-12-2025 17:00",
-      "filename": "05-12-2025_17-00.json",
+      "filename": "05-12-2025_17-00.parquet",
       "stats": {
         "cells_observed": 46,
         "congested": 15,
@@ -6427,7 +6428,7 @@
     },
     {
       "timestamp": "05-12-2025 18:00",
-      "filename": "05-12-2025_18-00.json",
+      "filename": "05-12-2025_18-00.parquet",
       "stats": {
         "cells_observed": 71,
         "congested": 19,
@@ -6440,7 +6441,7 @@
     },
     {
       "timestamp": "05-12-2025 19:00",
-      "filename": "05-12-2025_19-00.json",
+      "filename": "05-12-2025_19-00.parquet",
       "stats": {
         "cells_observed": 148,
         "congested": 57,
@@ -6453,7 +6454,7 @@
     },
     {
       "timestamp": "05-12-2025 20:00",
-      "filename": "05-12-2025_20-00.json",
+      "filename": "05-12-2025_20-00.parquet",
       "stats": {
         "cells_observed": 220,
         "congested": 95,
@@ -6466,7 +6467,7 @@
     },
     {
       "timestamp": "05-12-2025 21:00",
-      "filename": "05-12-2025_21-00.json",
+      "filename": "05-12-2025_21-00.parquet",
       "stats": {
         "cells_observed": 257,
         "congested": 132,
@@ -6479,7 +6480,7 @@
     },
     {
       "timestamp": "05-12-2025 22:00",
-      "filename": "05-12-2025_22-00.json",
+      "filename": "05-12-2025_22-00.parquet",
       "stats": {
         "cells_observed": 161,
         "congested": 75,
@@ -6492,7 +6493,7 @@
     },
     {
       "timestamp": "05-12-2025 23:00",
-      "filename": "05-12-2025_23-00.json",
+      "filename": "05-12-2025_23-00.parquet",
       "stats": {
         "cells_observed": 84,
         "congested": 34,
@@ -6505,7 +6506,7 @@
     },
     {
       "timestamp": "06-12-2025 00:00",
-      "filename": "06-12-2025_00-00.json",
+      "filename": "06-12-2025_00-00.parquet",
       "stats": {
         "cells_observed": 145,
         "congested": 10,
@@ -6518,7 +6519,7 @@
     },
     {
       "timestamp": "06-12-2025 01:00",
-      "filename": "06-12-2025_01-00.json",
+      "filename": "06-12-2025_01-00.parquet",
       "stats": {
         "cells_observed": 18,
         "congested": 1,
@@ -6531,7 +6532,7 @@
     },
     {
       "timestamp": "06-12-2025 02:00",
-      "filename": "06-12-2025_02-00.json",
+      "filename": "06-12-2025_02-00.parquet",
       "stats": {
         "cells_observed": 9,
         "congested": 1,
@@ -6544,7 +6545,7 @@
     },
     {
       "timestamp": "06-12-2025 03:00",
-      "filename": "06-12-2025_03-00.json",
+      "filename": "06-12-2025_03-00.parquet",
       "stats": {
         "cells_observed": 6,
         "congested": 0,
@@ -6557,7 +6558,7 @@
     },
     {
       "timestamp": "06-12-2025 04:00",
-      "filename": "06-12-2025_04-00.json",
+      "filename": "06-12-2025_04-00.parquet",
       "stats": {
         "cells_observed": 6,
         "congested": 1,
@@ -6570,7 +6571,7 @@
     },
     {
       "timestamp": "06-12-2025 05:00",
-      "filename": "06-12-2025_05-00.json",
+      "filename": "06-12-2025_05-00.parquet",
       "stats": {
         "cells_observed": 2,
         "congested": 1,
@@ -6583,7 +6584,7 @@
     },
     {
       "timestamp": "06-12-2025 06:00",
-      "filename": "06-12-2025_06-00.json",
+      "filename": "06-12-2025_06-00.parquet",
       "stats": {
         "cells_observed": 10,
         "congested": 2,
@@ -6596,7 +6597,7 @@
     },
     {
       "timestamp": "06-12-2025 07:00",
-      "filename": "06-12-2025_07-00.json",
+      "filename": "06-12-2025_07-00.parquet",
       "stats": {
         "cells_observed": 6,
         "congested": 1,
@@ -6609,7 +6610,7 @@
     },
     {
       "timestamp": "06-12-2025 08:00",
-      "filename": "06-12-2025_08-00.json",
+      "filename": "06-12-2025_08-00.parquet",
       "stats": {
         "cells_observed": 14,
         "congested": 6,
@@ -6622,7 +6623,7 @@
     },
     {
       "timestamp": "06-12-2025 09:00",
-      "filename": "06-12-2025_09-00.json",
+      "filename": "06-12-2025_09-00.parquet",
       "stats": {
         "cells_observed": 22,
         "congested": 2,
@@ -6635,7 +6636,7 @@
     },
     {
       "timestamp": "06-12-2025 10:00",
-      "filename": "06-12-2025_10-00.json",
+      "filename": "06-12-2025_10-00.parquet",
       "stats": {
         "cells_observed": 35,
         "congested": 6,
@@ -6648,7 +6649,7 @@
     },
     {
       "timestamp": "06-12-2025 11:00",
-      "filename": "06-12-2025_11-00.json",
+      "filename": "06-12-2025_11-00.parquet",
       "stats": {
         "cells_observed": 55,
         "congested": 9,
@@ -6661,7 +6662,7 @@
     },
     {
       "timestamp": "06-12-2025 12:00",
-      "filename": "06-12-2025_12-00.json",
+      "filename": "06-12-2025_12-00.parquet",
       "stats": {
         "cells_observed": 60,
         "congested": 13,
@@ -6674,7 +6675,7 @@
     },
     {
       "timestamp": "06-12-2025 13:00",
-      "filename": "06-12-2025_13-00.json",
+      "filename": "06-12-2025_13-00.parquet",
       "stats": {
         "cells_observed": 56,
         "congested": 17,
@@ -6687,7 +6688,7 @@
     },
     {
       "timestamp": "06-12-2025 14:00",
-      "filename": "06-12-2025_14-00.json",
+      "filename": "06-12-2025_14-00.parquet",
       "stats": {
         "cells_observed": 55,
         "congested": 17,
@@ -6700,7 +6701,7 @@
     },
     {
       "timestamp": "06-12-2025 15:00",
-      "filename": "06-12-2025_15-00.json",
+      "filename": "06-12-2025_15-00.parquet",
       "stats": {
         "cells_observed": 62,
         "congested": 23,
@@ -6713,7 +6714,7 @@
     },
     {
       "timestamp": "06-12-2025 16:00",
-      "filename": "06-12-2025_16-00.json",
+      "filename": "06-12-2025_16-00.parquet",
       "stats": {
         "cells_observed": 74,
         "congested": 19,
@@ -6726,7 +6727,7 @@
     },
     {
       "timestamp": "06-12-2025 17:00",
-      "filename": "06-12-2025_17-00.json",
+      "filename": "06-12-2025_17-00.parquet",
       "stats": {
         "cells_observed": 51,
         "congested": 19,
@@ -6739,7 +6740,7 @@
     },
     {
       "timestamp": "06-12-2025 18:00",
-      "filename": "06-12-2025_18-00.json",
+      "filename": "06-12-2025_18-00.parquet",
       "stats": {
         "cells_observed": 73,
         "congested": 29,
@@ -6752,7 +6753,7 @@
     },
     {
       "timestamp": "06-12-2025 19:00",
-      "filename": "06-12-2025_19-00.json",
+      "filename": "06-12-2025_19-00.parquet",
       "stats": {
         "cells_observed": 131,
         "congested": 56,
@@ -6765,7 +6766,7 @@
     },
     {
       "timestamp": "06-12-2025 20:00",
-      "filename": "06-12-2025_20-00.json",
+      "filename": "06-12-2025_20-00.parquet",
       "stats": {
         "cells_observed": 206,
         "congested": 80,
@@ -6778,7 +6779,7 @@
     },
     {
       "timestamp": "06-12-2025 21:00",
-      "filename": "06-12-2025_21-00.json",
+      "filename": "06-12-2025_21-00.parquet",
       "stats": {
         "cells_observed": 189,
         "congested": 85,
@@ -6791,7 +6792,7 @@
     },
     {
       "timestamp": "06-12-2025 22:00",
-      "filename": "06-12-2025_22-00.json",
+      "filename": "06-12-2025_22-00.parquet",
       "stats": {
         "cells_observed": 183,
         "congested": 90,
@@ -6804,7 +6805,7 @@
     },
     {
       "timestamp": "06-12-2025 23:00",
-      "filename": "06-12-2025_23-00.json",
+      "filename": "06-12-2025_23-00.parquet",
       "stats": {
         "cells_observed": 92,
         "congested": 37,
@@ -6817,7 +6818,7 @@
     },
     {
       "timestamp": "07-12-2025 00:00",
-      "filename": "07-12-2025_00-00.json",
+      "filename": "07-12-2025_00-00.parquet",
       "stats": {
         "cells_observed": 130,
         "congested": 3,
@@ -6830,7 +6831,7 @@
     },
     {
       "timestamp": "07-12-2025 01:00",
-      "filename": "07-12-2025_01-00.json",
+      "filename": "07-12-2025_01-00.parquet",
       "stats": {
         "cells_observed": 23,
         "congested": 1,
@@ -6843,7 +6844,7 @@
     },
     {
       "timestamp": "07-12-2025 02:00",
-      "filename": "07-12-2025_02-00.json",
+      "filename": "07-12-2025_02-00.parquet",
       "stats": {
         "cells_observed": 7,
         "congested": 2,
@@ -6856,7 +6857,7 @@
     },
     {
       "timestamp": "07-12-2025 03:00",
-      "filename": "07-12-2025_03-00.json",
+      "filename": "07-12-2025_03-00.parquet",
       "stats": {
         "cells_observed": 11,
         "congested": 0,
@@ -6869,7 +6870,7 @@
     },
     {
       "timestamp": "07-12-2025 04:00",
-      "filename": "07-12-2025_04-00.json",
+      "filename": "07-12-2025_04-00.parquet",
       "stats": {
         "cells_observed": 4,
         "congested": 0,
@@ -6882,7 +6883,7 @@
     },
     {
       "timestamp": "07-12-2025 05:00",
-      "filename": "07-12-2025_05-00.json",
+      "filename": "07-12-2025_05-00.parquet",
       "stats": {
         "cells_observed": 7,
         "congested": 0,
@@ -6895,7 +6896,7 @@
     },
     {
       "timestamp": "07-12-2025 06:00",
-      "filename": "07-12-2025_06-00.json",
+      "filename": "07-12-2025_06-00.parquet",
       "stats": {
         "cells_observed": 9,
         "congested": 3,
@@ -6908,7 +6909,7 @@
     },
     {
       "timestamp": "07-12-2025 07:00",
-      "filename": "07-12-2025_07-00.json",
+      "filename": "07-12-2025_07-00.parquet",
       "stats": {
         "cells_observed": 12,
         "congested": 3,
@@ -6921,7 +6922,7 @@
     },
     {
       "timestamp": "07-12-2025 08:00",
-      "filename": "07-12-2025_08-00.json",
+      "filename": "07-12-2025_08-00.parquet",
       "stats": {
         "cells_observed": 12,
         "congested": 2,
@@ -6934,7 +6935,7 @@
     },
     {
       "timestamp": "07-12-2025 09:00",
-      "filename": "07-12-2025_09-00.json",
+      "filename": "07-12-2025_09-00.parquet",
       "stats": {
         "cells_observed": 16,
         "congested": 5,
@@ -6947,7 +6948,7 @@
     },
     {
       "timestamp": "07-12-2025 10:00",
-      "filename": "07-12-2025_10-00.json",
+      "filename": "07-12-2025_10-00.parquet",
       "stats": {
         "cells_observed": 31,
         "congested": 5,
@@ -6960,7 +6961,7 @@
     },
     {
       "timestamp": "07-12-2025 11:00",
-      "filename": "07-12-2025_11-00.json",
+      "filename": "07-12-2025_11-00.parquet",
       "stats": {
         "cells_observed": 38,
         "congested": 11,
@@ -6973,7 +6974,7 @@
     },
     {
       "timestamp": "07-12-2025 12:00",
-      "filename": "07-12-2025_12-00.json",
+      "filename": "07-12-2025_12-00.parquet",
       "stats": {
         "cells_observed": 35,
         "congested": 9,
@@ -6986,7 +6987,7 @@
     },
     {
       "timestamp": "07-12-2025 13:00",
-      "filename": "07-12-2025_13-00.json",
+      "filename": "07-12-2025_13-00.parquet",
       "stats": {
         "cells_observed": 37,
         "congested": 6,
@@ -6999,7 +7000,7 @@
     },
     {
       "timestamp": "07-12-2025 14:00",
-      "filename": "07-12-2025_14-00.json",
+      "filename": "07-12-2025_14-00.parquet",
       "stats": {
         "cells_observed": 65,
         "congested": 21,
@@ -7012,7 +7013,7 @@
     },
     {
       "timestamp": "07-12-2025 15:00",
-      "filename": "07-12-2025_15-00.json",
+      "filename": "07-12-2025_15-00.parquet",
       "stats": {
         "cells_observed": 55,
         "congested": 16,
@@ -7025,7 +7026,7 @@
     },
     {
       "timestamp": "07-12-2025 16:00",
-      "filename": "07-12-2025_16-00.json",
+      "filename": "07-12-2025_16-00.parquet",
       "stats": {
         "cells_observed": 62,
         "congested": 17,
@@ -7038,7 +7039,7 @@
     },
     {
       "timestamp": "07-12-2025 17:00",
-      "filename": "07-12-2025_17-00.json",
+      "filename": "07-12-2025_17-00.parquet",
       "stats": {
         "cells_observed": 34,
         "congested": 12,
@@ -7051,7 +7052,7 @@
     },
     {
       "timestamp": "07-12-2025 18:00",
-      "filename": "07-12-2025_18-00.json",
+      "filename": "07-12-2025_18-00.parquet",
       "stats": {
         "cells_observed": 127,
         "congested": 43,
@@ -7064,7 +7065,7 @@
     },
     {
       "timestamp": "07-12-2025 19:00",
-      "filename": "07-12-2025_19-00.json",
+      "filename": "07-12-2025_19-00.parquet",
       "stats": {
         "cells_observed": 218,
         "congested": 98,
@@ -7077,7 +7078,7 @@
     },
     {
       "timestamp": "07-12-2025 20:00",
-      "filename": "07-12-2025_20-00.json",
+      "filename": "07-12-2025_20-00.parquet",
       "stats": {
         "cells_observed": 188,
         "congested": 88,
@@ -7090,7 +7091,7 @@
     },
     {
       "timestamp": "07-12-2025 21:00",
-      "filename": "07-12-2025_21-00.json",
+      "filename": "07-12-2025_21-00.parquet",
       "stats": {
         "cells_observed": 216,
         "congested": 113,
@@ -7103,7 +7104,7 @@
     },
     {
       "timestamp": "07-12-2025 22:00",
-      "filename": "07-12-2025_22-00.json",
+      "filename": "07-12-2025_22-00.parquet",
       "stats": {
         "cells_observed": 154,
         "congested": 71,
@@ -7116,7 +7117,7 @@
     },
     {
       "timestamp": "07-12-2025 23:00",
-      "filename": "07-12-2025_23-00.json",
+      "filename": "07-12-2025_23-00.parquet",
       "stats": {
         "cells_observed": 69,
         "congested": 28,
@@ -7129,7 +7130,7 @@
     },
     {
       "timestamp": "08-12-2025 00:00",
-      "filename": "08-12-2025_00-00.json",
+      "filename": "08-12-2025_00-00.parquet",
       "stats": {
         "cells_observed": 133,
         "congested": 5,
@@ -7142,7 +7143,7 @@
     },
     {
       "timestamp": "08-12-2025 01:00",
-      "filename": "08-12-2025_01-00.json",
+      "filename": "08-12-2025_01-00.parquet",
       "stats": {
         "cells_observed": 16,
         "congested": 1,
@@ -7155,7 +7156,7 @@
     },
     {
       "timestamp": "08-12-2025 02:00",
-      "filename": "08-12-2025_02-00.json",
+      "filename": "08-12-2025_02-00.parquet",
       "stats": {
         "cells_observed": 7,
         "congested": 0,
@@ -7168,7 +7169,7 @@
     },
     {
       "timestamp": "08-12-2025 03:00",
-      "filename": "08-12-2025_03-00.json",
+      "filename": "08-12-2025_03-00.parquet",
       "stats": {
         "cells_observed": 7,
         "congested": 0,
@@ -7181,7 +7182,7 @@
     },
     {
       "timestamp": "08-12-2025 04:00",
-      "filename": "08-12-2025_04-00.json",
+      "filename": "08-12-2025_04-00.parquet",
       "stats": {
         "cells_observed": 3,
         "congested": 0,
@@ -7194,7 +7195,7 @@
     },
     {
       "timestamp": "08-12-2025 05:00",
-      "filename": "08-12-2025_05-00.json",
+      "filename": "08-12-2025_05-00.parquet",
       "stats": {
         "cells_observed": 4,
         "congested": 0,
@@ -7207,7 +7208,7 @@
     },
     {
       "timestamp": "08-12-2025 06:00",
-      "filename": "08-12-2025_06-00.json",
+      "filename": "08-12-2025_06-00.parquet",
       "stats": {
         "cells_observed": 3,
         "congested": 0,
@@ -7220,7 +7221,7 @@
     },
     {
       "timestamp": "08-12-2025 07:00",
-      "filename": "08-12-2025_07-00.json",
+      "filename": "08-12-2025_07-00.parquet",
       "stats": {
         "cells_observed": 8,
         "congested": 3,
@@ -7233,7 +7234,7 @@
     },
     {
       "timestamp": "08-12-2025 08:00",
-      "filename": "08-12-2025_08-00.json",
+      "filename": "08-12-2025_08-00.parquet",
       "stats": {
         "cells_observed": 7,
         "congested": 0,
@@ -7246,7 +7247,7 @@
     },
     {
       "timestamp": "08-12-2025 09:00",
-      "filename": "08-12-2025_09-00.json",
+      "filename": "08-12-2025_09-00.parquet",
       "stats": {
         "cells_observed": 25,
         "congested": 6,
@@ -7259,7 +7260,7 @@
     },
     {
       "timestamp": "08-12-2025 10:00",
-      "filename": "08-12-2025_10-00.json",
+      "filename": "08-12-2025_10-00.parquet",
       "stats": {
         "cells_observed": 22,
         "congested": 5,
@@ -7272,7 +7273,7 @@
     },
     {
       "timestamp": "08-12-2025 11:00",
-      "filename": "08-12-2025_11-00.json",
+      "filename": "08-12-2025_11-00.parquet",
       "stats": {
         "cells_observed": 38,
         "congested": 9,
@@ -7285,7 +7286,7 @@
     },
     {
       "timestamp": "08-12-2025 12:00",
-      "filename": "08-12-2025_12-00.json",
+      "filename": "08-12-2025_12-00.parquet",
       "stats": {
         "cells_observed": 39,
         "congested": 10,
@@ -7298,7 +7299,7 @@
     },
     {
       "timestamp": "08-12-2025 13:00",
-      "filename": "08-12-2025_13-00.json",
+      "filename": "08-12-2025_13-00.parquet",
       "stats": {
         "cells_observed": 62,
         "congested": 11,
@@ -7311,7 +7312,7 @@
     },
     {
       "timestamp": "08-12-2025 14:00",
-      "filename": "08-12-2025_14-00.json",
+      "filename": "08-12-2025_14-00.parquet",
       "stats": {
         "cells_observed": 55,
         "congested": 14,
@@ -7324,7 +7325,7 @@
     },
     {
       "timestamp": "08-12-2025 15:00",
-      "filename": "08-12-2025_15-00.json",
+      "filename": "08-12-2025_15-00.parquet",
       "stats": {
         "cells_observed": 41,
         "congested": 14,
@@ -7337,7 +7338,7 @@
     },
     {
       "timestamp": "08-12-2025 16:00",
-      "filename": "08-12-2025_16-00.json",
+      "filename": "08-12-2025_16-00.parquet",
       "stats": {
         "cells_observed": 40,
         "congested": 4,
@@ -7350,7 +7351,7 @@
     },
     {
       "timestamp": "08-12-2025 17:00",
-      "filename": "08-12-2025_17-00.json",
+      "filename": "08-12-2025_17-00.parquet",
       "stats": {
         "cells_observed": 47,
         "congested": 10,
@@ -7363,7 +7364,7 @@
     },
     {
       "timestamp": "08-12-2025 18:00",
-      "filename": "08-12-2025_18-00.json",
+      "filename": "08-12-2025_18-00.parquet",
       "stats": {
         "cells_observed": 100,
         "congested": 31,
@@ -7376,7 +7377,7 @@
     },
     {
       "timestamp": "08-12-2025 19:00",
-      "filename": "08-12-2025_19-00.json",
+      "filename": "08-12-2025_19-00.parquet",
       "stats": {
         "cells_observed": 136,
         "congested": 49,
@@ -7389,7 +7390,7 @@
     },
     {
       "timestamp": "08-12-2025 20:00",
-      "filename": "08-12-2025_20-00.json",
+      "filename": "08-12-2025_20-00.parquet",
       "stats": {
         "cells_observed": 232,
         "congested": 101,
@@ -7402,7 +7403,7 @@
     },
     {
       "timestamp": "08-12-2025 21:00",
-      "filename": "08-12-2025_21-00.json",
+      "filename": "08-12-2025_21-00.parquet",
       "stats": {
         "cells_observed": 264,
         "congested": 130,
@@ -7415,7 +7416,7 @@
     },
     {
       "timestamp": "08-12-2025 22:00",
-      "filename": "08-12-2025_22-00.json",
+      "filename": "08-12-2025_22-00.parquet",
       "stats": {
         "cells_observed": 193,
         "congested": 91,
@@ -7428,7 +7429,7 @@
     },
     {
       "timestamp": "08-12-2025 23:00",
-      "filename": "08-12-2025_23-00.json",
+      "filename": "08-12-2025_23-00.parquet",
       "stats": {
         "cells_observed": 78,
         "congested": 29,
@@ -7441,7 +7442,7 @@
     },
     {
       "timestamp": "09-12-2025 00:00",
-      "filename": "09-12-2025_00-00.json",
+      "filename": "09-12-2025_00-00.parquet",
       "stats": {
         "cells_observed": 136,
         "congested": 8,
@@ -7454,7 +7455,7 @@
     },
     {
       "timestamp": "09-12-2025 01:00",
-      "filename": "09-12-2025_01-00.json",
+      "filename": "09-12-2025_01-00.parquet",
       "stats": {
         "cells_observed": 12,
         "congested": 0,
@@ -7467,7 +7468,7 @@
     },
     {
       "timestamp": "09-12-2025 02:00",
-      "filename": "09-12-2025_02-00.json",
+      "filename": "09-12-2025_02-00.parquet",
       "stats": {
         "cells_observed": 6,
         "congested": 0,
@@ -7480,7 +7481,7 @@
     },
     {
       "timestamp": "09-12-2025 03:00",
-      "filename": "09-12-2025_03-00.json",
+      "filename": "09-12-2025_03-00.parquet",
       "stats": {
         "cells_observed": 5,
         "congested": 0,
@@ -7493,7 +7494,7 @@
     },
     {
       "timestamp": "09-12-2025 04:00",
-      "filename": "09-12-2025_04-00.json",
+      "filename": "09-12-2025_04-00.parquet",
       "stats": {
         "cells_observed": 3,
         "congested": 0,
@@ -7506,7 +7507,7 @@
     },
     {
       "timestamp": "09-12-2025 05:00",
-      "filename": "09-12-2025_05-00.json",
+      "filename": "09-12-2025_05-00.parquet",
       "stats": {
         "cells_observed": 4,
         "congested": 0,
@@ -7519,7 +7520,7 @@
     },
     {
       "timestamp": "09-12-2025 06:00",
-      "filename": "09-12-2025_06-00.json",
+      "filename": "09-12-2025_06-00.parquet",
       "stats": {
         "cells_observed": 7,
         "congested": 2,
@@ -7532,7 +7533,7 @@
     },
     {
       "timestamp": "09-12-2025 07:00",
-      "filename": "09-12-2025_07-00.json",
+      "filename": "09-12-2025_07-00.parquet",
       "stats": {
         "cells_observed": 7,
         "congested": 1,
@@ -7545,7 +7546,7 @@
     },
     {
       "timestamp": "09-12-2025 08:00",
-      "filename": "09-12-2025_08-00.json",
+      "filename": "09-12-2025_08-00.parquet",
       "stats": {
         "cells_observed": 9,
         "congested": 2,
@@ -7558,7 +7559,7 @@
     },
     {
       "timestamp": "09-12-2025 09:00",
-      "filename": "09-12-2025_09-00.json",
+      "filename": "09-12-2025_09-00.parquet",
       "stats": {
         "cells_observed": 26,
         "congested": 5,
@@ -7571,7 +7572,7 @@
     },
     {
       "timestamp": "09-12-2025 10:00",
-      "filename": "09-12-2025_10-00.json",
+      "filename": "09-12-2025_10-00.parquet",
       "stats": {
         "cells_observed": 23,
         "congested": 3,
@@ -7584,7 +7585,7 @@
     },
     {
       "timestamp": "09-12-2025 11:00",
-      "filename": "09-12-2025_11-00.json",
+      "filename": "09-12-2025_11-00.parquet",
       "stats": {
         "cells_observed": 36,
         "congested": 12,
@@ -7597,7 +7598,7 @@
     },
     {
       "timestamp": "09-12-2025 12:00",
-      "filename": "09-12-2025_12-00.json",
+      "filename": "09-12-2025_12-00.parquet",
       "stats": {
         "cells_observed": 44,
         "congested": 13,
@@ -7610,7 +7611,7 @@
     },
     {
       "timestamp": "09-12-2025 13:00",
-      "filename": "09-12-2025_13-00.json",
+      "filename": "09-12-2025_13-00.parquet",
       "stats": {
         "cells_observed": 60,
         "congested": 14,
@@ -7623,7 +7624,7 @@
     },
     {
       "timestamp": "09-12-2025 14:00",
-      "filename": "09-12-2025_14-00.json",
+      "filename": "09-12-2025_14-00.parquet",
       "stats": {
         "cells_observed": 46,
         "congested": 18,
@@ -7636,7 +7637,7 @@
     },
     {
       "timestamp": "09-12-2025 15:00",
-      "filename": "09-12-2025_15-00.json",
+      "filename": "09-12-2025_15-00.parquet",
       "stats": {
         "cells_observed": 49,
         "congested": 3,
@@ -7649,7 +7650,7 @@
     },
     {
       "timestamp": "09-12-2025 16:00",
-      "filename": "09-12-2025_16-00.json",
+      "filename": "09-12-2025_16-00.parquet",
       "stats": {
         "cells_observed": 48,
         "congested": 14,
@@ -7662,7 +7663,7 @@
     },
     {
       "timestamp": "09-12-2025 17:00",
-      "filename": "09-12-2025_17-00.json",
+      "filename": "09-12-2025_17-00.parquet",
       "stats": {
         "cells_observed": 39,
         "congested": 13,
@@ -7675,7 +7676,7 @@
     },
     {
       "timestamp": "09-12-2025 18:00",
-      "filename": "09-12-2025_18-00.json",
+      "filename": "09-12-2025_18-00.parquet",
       "stats": {
         "cells_observed": 85,
         "congested": 25,
@@ -7688,7 +7689,7 @@
     },
     {
       "timestamp": "09-12-2025 19:00",
-      "filename": "09-12-2025_19-00.json",
+      "filename": "09-12-2025_19-00.parquet",
       "stats": {
         "cells_observed": 132,
         "congested": 50,
@@ -7701,7 +7702,7 @@
     },
     {
       "timestamp": "09-12-2025 20:00",
-      "filename": "09-12-2025_20-00.json",
+      "filename": "09-12-2025_20-00.parquet",
       "stats": {
         "cells_observed": 213,
         "congested": 93,
@@ -7714,7 +7715,7 @@
     },
     {
       "timestamp": "09-12-2025 21:00",
-      "filename": "09-12-2025_21-00.json",
+      "filename": "09-12-2025_21-00.parquet",
       "stats": {
         "cells_observed": 284,
         "congested": 143,
@@ -7727,7 +7728,7 @@
     },
     {
       "timestamp": "09-12-2025 22:00",
-      "filename": "09-12-2025_22-00.json",
+      "filename": "09-12-2025_22-00.parquet",
       "stats": {
         "cells_observed": 207,
         "congested": 86,
@@ -7740,7 +7741,7 @@
     },
     {
       "timestamp": "09-12-2025 23:00",
-      "filename": "09-12-2025_23-00.json",
+      "filename": "09-12-2025_23-00.parquet",
       "stats": {
         "cells_observed": 79,
         "congested": 31,
@@ -7753,7 +7754,7 @@
     },
     {
       "timestamp": "10-12-2025 00:00",
-      "filename": "10-12-2025_00-00.json",
+      "filename": "10-12-2025_00-00.parquet",
       "stats": {
         "cells_observed": 128,
         "congested": 6,
@@ -7766,7 +7767,7 @@
     },
     {
       "timestamp": "10-12-2025 01:00",
-      "filename": "10-12-2025_01-00.json",
+      "filename": "10-12-2025_01-00.parquet",
       "stats": {
         "cells_observed": 22,
         "congested": 0,
@@ -7779,7 +7780,7 @@
     },
     {
       "timestamp": "10-12-2025 02:00",
-      "filename": "10-12-2025_02-00.json",
+      "filename": "10-12-2025_02-00.parquet",
       "stats": {
         "cells_observed": 7,
         "congested": 1,
@@ -7792,7 +7793,7 @@
     },
     {
       "timestamp": "10-12-2025 03:00",
-      "filename": "10-12-2025_03-00.json",
+      "filename": "10-12-2025_03-00.parquet",
       "stats": {
         "cells_observed": 5,
         "congested": 0,
@@ -7805,7 +7806,7 @@
     },
     {
       "timestamp": "10-12-2025 04:00",
-      "filename": "10-12-2025_04-00.json",
+      "filename": "10-12-2025_04-00.parquet",
       "stats": {
         "cells_observed": 5,
         "congested": 0,
@@ -7818,7 +7819,7 @@
     },
     {
       "timestamp": "10-12-2025 05:00",
-      "filename": "10-12-2025_05-00.json",
+      "filename": "10-12-2025_05-00.parquet",
       "stats": {
         "cells_observed": 2,
         "congested": 0,
@@ -7831,7 +7832,7 @@
     },
     {
       "timestamp": "10-12-2025 06:00",
-      "filename": "10-12-2025_06-00.json",
+      "filename": "10-12-2025_06-00.parquet",
       "stats": {
         "cells_observed": 3,
         "congested": 0,
@@ -7844,7 +7845,7 @@
     },
     {
       "timestamp": "10-12-2025 07:00",
-      "filename": "10-12-2025_07-00.json",
+      "filename": "10-12-2025_07-00.parquet",
       "stats": {
         "cells_observed": 11,
         "congested": 3,
@@ -7857,7 +7858,7 @@
     },
     {
       "timestamp": "10-12-2025 08:00",
-      "filename": "10-12-2025_08-00.json",
+      "filename": "10-12-2025_08-00.parquet",
       "stats": {
         "cells_observed": 20,
         "congested": 2,
@@ -7870,7 +7871,7 @@
     },
     {
       "timestamp": "10-12-2025 09:00",
-      "filename": "10-12-2025_09-00.json",
+      "filename": "10-12-2025_09-00.parquet",
       "stats": {
         "cells_observed": 29,
         "congested": 8,
@@ -7883,7 +7884,7 @@
     },
     {
       "timestamp": "10-12-2025 10:00",
-      "filename": "10-12-2025_10-00.json",
+      "filename": "10-12-2025_10-00.parquet",
       "stats": {
         "cells_observed": 34,
         "congested": 10,
@@ -7896,7 +7897,7 @@
     },
     {
       "timestamp": "10-12-2025 11:00",
-      "filename": "10-12-2025_11-00.json",
+      "filename": "10-12-2025_11-00.parquet",
       "stats": {
         "cells_observed": 47,
         "congested": 11,
@@ -7909,7 +7910,7 @@
     },
     {
       "timestamp": "10-12-2025 12:00",
-      "filename": "10-12-2025_12-00.json",
+      "filename": "10-12-2025_12-00.parquet",
       "stats": {
         "cells_observed": 60,
         "congested": 16,
@@ -7922,7 +7923,7 @@
     },
     {
       "timestamp": "10-12-2025 13:00",
-      "filename": "10-12-2025_13-00.json",
+      "filename": "10-12-2025_13-00.parquet",
       "stats": {
         "cells_observed": 44,
         "congested": 13,
@@ -7935,7 +7936,7 @@
     },
     {
       "timestamp": "10-12-2025 14:00",
-      "filename": "10-12-2025_14-00.json",
+      "filename": "10-12-2025_14-00.parquet",
       "stats": {
         "cells_observed": 53,
         "congested": 11,
@@ -7948,7 +7949,7 @@
     },
     {
       "timestamp": "10-12-2025 15:00",
-      "filename": "10-12-2025_15-00.json",
+      "filename": "10-12-2025_15-00.parquet",
       "stats": {
         "cells_observed": 38,
         "congested": 8,
@@ -7961,7 +7962,7 @@
     },
     {
       "timestamp": "10-12-2025 16:00",
-      "filename": "10-12-2025_16-00.json",
+      "filename": "10-12-2025_16-00.parquet",
       "stats": {
         "cells_observed": 54,
         "congested": 14,
@@ -7974,7 +7975,7 @@
     },
     {
       "timestamp": "10-12-2025 17:00",
-      "filename": "10-12-2025_17-00.json",
+      "filename": "10-12-2025_17-00.parquet",
       "stats": {
         "cells_observed": 48,
         "congested": 10,
@@ -7987,7 +7988,7 @@
     },
     {
       "timestamp": "10-12-2025 18:00",
-      "filename": "10-12-2025_18-00.json",
+      "filename": "10-12-2025_18-00.parquet",
       "stats": {
         "cells_observed": 67,
         "congested": 21,
@@ -8000,7 +8001,7 @@
     },
     {
       "timestamp": "10-12-2025 19:00",
-      "filename": "10-12-2025_19-00.json",
+      "filename": "10-12-2025_19-00.parquet",
       "stats": {
         "cells_observed": 102,
         "congested": 33,
@@ -8013,7 +8014,7 @@
     },
     {
       "timestamp": "10-12-2025 20:00",
-      "filename": "10-12-2025_20-00.json",
+      "filename": "10-12-2025_20-00.parquet",
       "stats": {
         "cells_observed": 211,
         "congested": 85,
@@ -8026,7 +8027,7 @@
     },
     {
       "timestamp": "10-12-2025 21:00",
-      "filename": "10-12-2025_21-00.json",
+      "filename": "10-12-2025_21-00.parquet",
       "stats": {
         "cells_observed": 282,
         "congested": 130,
@@ -8039,7 +8040,7 @@
     },
     {
       "timestamp": "10-12-2025 22:00",
-      "filename": "10-12-2025_22-00.json",
+      "filename": "10-12-2025_22-00.parquet",
       "stats": {
         "cells_observed": 190,
         "congested": 90,
@@ -8052,7 +8053,7 @@
     },
     {
       "timestamp": "10-12-2025 23:00",
-      "filename": "10-12-2025_23-00.json",
+      "filename": "10-12-2025_23-00.parquet",
       "stats": {
         "cells_observed": 98,
         "congested": 38,
@@ -8065,7 +8066,7 @@
     },
     {
       "timestamp": "11-12-2025 00:00",
-      "filename": "11-12-2025_00-00.json",
+      "filename": "11-12-2025_00-00.parquet",
       "stats": {
         "cells_observed": 130,
         "congested": 7,
@@ -8078,7 +8079,7 @@
     },
     {
       "timestamp": "11-12-2025 01:00",
-      "filename": "11-12-2025_01-00.json",
+      "filename": "11-12-2025_01-00.parquet",
       "stats": {
         "cells_observed": 12,
         "congested": 0,
@@ -8091,7 +8092,7 @@
     },
     {
       "timestamp": "11-12-2025 02:00",
-      "filename": "11-12-2025_02-00.json",
+      "filename": "11-12-2025_02-00.parquet",
       "stats": {
         "cells_observed": 8,
         "congested": 1,
@@ -8104,7 +8105,7 @@
     },
     {
       "timestamp": "11-12-2025 03:00",
-      "filename": "11-12-2025_03-00.json",
+      "filename": "11-12-2025_03-00.parquet",
       "stats": {
         "cells_observed": 4,
         "congested": 0,
@@ -8117,7 +8118,7 @@
     },
     {
       "timestamp": "11-12-2025 04:00",
-      "filename": "11-12-2025_04-00.json",
+      "filename": "11-12-2025_04-00.parquet",
       "stats": {
         "cells_observed": 3,
         "congested": 0,
@@ -8130,7 +8131,7 @@
     },
     {
       "timestamp": "11-12-2025 05:00",
-      "filename": "11-12-2025_05-00.json",
+      "filename": "11-12-2025_05-00.parquet",
       "stats": {
         "cells_observed": 10,
         "congested": 0,
@@ -8143,7 +8144,7 @@
     },
     {
       "timestamp": "11-12-2025 06:00",
-      "filename": "11-12-2025_06-00.json",
+      "filename": "11-12-2025_06-00.parquet",
       "stats": {
         "cells_observed": 6,
         "congested": 2,
@@ -8156,7 +8157,7 @@
     },
     {
       "timestamp": "11-12-2025 07:00",
-      "filename": "11-12-2025_07-00.json",
+      "filename": "11-12-2025_07-00.parquet",
       "stats": {
         "cells_observed": 9,
         "congested": 1,
@@ -8169,7 +8170,7 @@
     },
     {
       "timestamp": "11-12-2025 08:00",
-      "filename": "11-12-2025_08-00.json",
+      "filename": "11-12-2025_08-00.parquet",
       "stats": {
         "cells_observed": 11,
         "congested": 1,
@@ -8182,7 +8183,7 @@
     },
     {
       "timestamp": "11-12-2025 09:00",
-      "filename": "11-12-2025_09-00.json",
+      "filename": "11-12-2025_09-00.parquet",
       "stats": {
         "cells_observed": 15,
         "congested": 1,
@@ -8195,7 +8196,7 @@
     },
     {
       "timestamp": "11-12-2025 10:00",
-      "filename": "11-12-2025_10-00.json",
+      "filename": "11-12-2025_10-00.parquet",
       "stats": {
         "cells_observed": 32,
         "congested": 5,
@@ -8208,7 +8209,7 @@
     },
     {
       "timestamp": "11-12-2025 11:00",
-      "filename": "11-12-2025_11-00.json",
+      "filename": "11-12-2025_11-00.parquet",
       "stats": {
         "cells_observed": 41,
         "congested": 8,
@@ -8221,7 +8222,7 @@
     },
     {
       "timestamp": "11-12-2025 12:00",
-      "filename": "11-12-2025_12-00.json",
+      "filename": "11-12-2025_12-00.parquet",
       "stats": {
         "cells_observed": 56,
         "congested": 19,
@@ -8234,7 +8235,7 @@
     },
     {
       "timestamp": "11-12-2025 13:00",
-      "filename": "11-12-2025_13-00.json",
+      "filename": "11-12-2025_13-00.parquet",
       "stats": {
         "cells_observed": 62,
         "congested": 10,
@@ -8247,7 +8248,7 @@
     },
     {
       "timestamp": "11-12-2025 14:00",
-      "filename": "11-12-2025_14-00.json",
+      "filename": "11-12-2025_14-00.parquet",
       "stats": {
         "cells_observed": 43,
         "congested": 11,
@@ -8260,7 +8261,7 @@
     },
     {
       "timestamp": "11-12-2025 15:00",
-      "filename": "11-12-2025_15-00.json",
+      "filename": "11-12-2025_15-00.parquet",
       "stats": {
         "cells_observed": 51,
         "congested": 8,
@@ -8273,7 +8274,7 @@
     },
     {
       "timestamp": "11-12-2025 16:00",
-      "filename": "11-12-2025_16-00.json",
+      "filename": "11-12-2025_16-00.parquet",
       "stats": {
         "cells_observed": 51,
         "congested": 13,
@@ -8286,7 +8287,7 @@
     },
     {
       "timestamp": "11-12-2025 17:00",
-      "filename": "11-12-2025_17-00.json",
+      "filename": "11-12-2025_17-00.parquet",
       "stats": {
         "cells_observed": 59,
         "congested": 18,
@@ -8299,7 +8300,7 @@
     },
     {
       "timestamp": "11-12-2025 18:00",
-      "filename": "11-12-2025_18-00.json",
+      "filename": "11-12-2025_18-00.parquet",
       "stats": {
         "cells_observed": 80,
         "congested": 28,
@@ -8312,7 +8313,7 @@
     },
     {
       "timestamp": "11-12-2025 19:00",
-      "filename": "11-12-2025_19-00.json",
+      "filename": "11-12-2025_19-00.parquet",
       "stats": {
         "cells_observed": 136,
         "congested": 66,
@@ -8325,7 +8326,7 @@
     },
     {
       "timestamp": "11-12-2025 20:00",
-      "filename": "11-12-2025_20-00.json",
+      "filename": "11-12-2025_20-00.parquet",
       "stats": {
         "cells_observed": 249,
         "congested": 109,
@@ -8338,7 +8339,7 @@
     },
     {
       "timestamp": "11-12-2025 21:00",
-      "filename": "11-12-2025_21-00.json",
+      "filename": "11-12-2025_21-00.parquet",
       "stats": {
         "cells_observed": 259,
         "congested": 128,
@@ -8351,7 +8352,7 @@
     },
     {
       "timestamp": "11-12-2025 22:00",
-      "filename": "11-12-2025_22-00.json",
+      "filename": "11-12-2025_22-00.parquet",
       "stats": {
         "cells_observed": 166,
         "congested": 76,
@@ -8364,7 +8365,7 @@
     },
     {
       "timestamp": "11-12-2025 23:00",
-      "filename": "11-12-2025_23-00.json",
+      "filename": "11-12-2025_23-00.parquet",
       "stats": {
         "cells_observed": 67,
         "congested": 19,
@@ -8377,7 +8378,7 @@
     },
     {
       "timestamp": "12-12-2025 00:00",
-      "filename": "12-12-2025_00-00.json",
+      "filename": "12-12-2025_00-00.parquet",
       "stats": {
         "cells_observed": 119,
         "congested": 5,
@@ -8390,7 +8391,7 @@
     },
     {
       "timestamp": "12-12-2025 01:00",
-      "filename": "12-12-2025_01-00.json",
+      "filename": "12-12-2025_01-00.parquet",
       "stats": {
         "cells_observed": 15,
         "congested": 0,
@@ -8403,7 +8404,7 @@
     },
     {
       "timestamp": "12-12-2025 02:00",
-      "filename": "12-12-2025_02-00.json",
+      "filename": "12-12-2025_02-00.parquet",
       "stats": {
         "cells_observed": 3,
         "congested": 0,
@@ -8416,7 +8417,7 @@
     },
     {
       "timestamp": "12-12-2025 03:00",
-      "filename": "12-12-2025_03-00.json",
+      "filename": "12-12-2025_03-00.parquet",
       "stats": {
         "cells_observed": 2,
         "congested": 0,
@@ -8429,7 +8430,7 @@
     },
     {
       "timestamp": "12-12-2025 04:00",
-      "filename": "12-12-2025_04-00.json",
+      "filename": "12-12-2025_04-00.parquet",
       "stats": {
         "cells_observed": 3,
         "congested": 1,
@@ -8442,7 +8443,7 @@
     },
     {
       "timestamp": "12-12-2025 05:00",
-      "filename": "12-12-2025_05-00.json",
+      "filename": "12-12-2025_05-00.parquet",
       "stats": {
         "cells_observed": 5,
         "congested": 1,
@@ -8455,7 +8456,7 @@
     },
     {
       "timestamp": "12-12-2025 06:00",
-      "filename": "12-12-2025_06-00.json",
+      "filename": "12-12-2025_06-00.parquet",
       "stats": {
         "cells_observed": 4,
         "congested": 1,
@@ -8468,7 +8469,7 @@
     },
     {
       "timestamp": "12-12-2025 07:00",
-      "filename": "12-12-2025_07-00.json",
+      "filename": "12-12-2025_07-00.parquet",
       "stats": {
         "cells_observed": 15,
         "congested": 3,
@@ -8481,7 +8482,7 @@
     },
     {
       "timestamp": "12-12-2025 08:00",
-      "filename": "12-12-2025_08-00.json",
+      "filename": "12-12-2025_08-00.parquet",
       "stats": {
         "cells_observed": 19,
         "congested": 0,
@@ -8494,7 +8495,7 @@
     },
     {
       "timestamp": "12-12-2025 09:00",
-      "filename": "12-12-2025_09-00.json",
+      "filename": "12-12-2025_09-00.parquet",
       "stats": {
         "cells_observed": 18,
         "congested": 3,
@@ -8507,7 +8508,7 @@
     },
     {
       "timestamp": "12-12-2025 10:00",
-      "filename": "12-12-2025_10-00.json",
+      "filename": "12-12-2025_10-00.parquet",
       "stats": {
         "cells_observed": 20,
         "congested": 6,
@@ -8520,7 +8521,7 @@
     },
     {
       "timestamp": "12-12-2025 11:00",
-      "filename": "12-12-2025_11-00.json",
+      "filename": "12-12-2025_11-00.parquet",
       "stats": {
         "cells_observed": 47,
         "congested": 12,
@@ -8533,7 +8534,7 @@
     },
     {
       "timestamp": "12-12-2025 12:00",
-      "filename": "12-12-2025_12-00.json",
+      "filename": "12-12-2025_12-00.parquet",
       "stats": {
         "cells_observed": 42,
         "congested": 10,
@@ -8546,7 +8547,7 @@
     },
     {
       "timestamp": "12-12-2025 13:00",
-      "filename": "12-12-2025_13-00.json",
+      "filename": "12-12-2025_13-00.parquet",
       "stats": {
         "cells_observed": 48,
         "congested": 13,
@@ -8559,7 +8560,7 @@
     },
     {
       "timestamp": "12-12-2025 14:00",
-      "filename": "12-12-2025_14-00.json",
+      "filename": "12-12-2025_14-00.parquet",
       "stats": {
         "cells_observed": 49,
         "congested": 8,
@@ -8572,7 +8573,7 @@
     },
     {
       "timestamp": "12-12-2025 15:00",
-      "filename": "12-12-2025_15-00.json",
+      "filename": "12-12-2025_15-00.parquet",
       "stats": {
         "cells_observed": 56,
         "congested": 14,
@@ -8585,7 +8586,7 @@
     },
     {
       "timestamp": "12-12-2025 16:00",
-      "filename": "12-12-2025_16-00.json",
+      "filename": "12-12-2025_16-00.parquet",
       "stats": {
         "cells_observed": 49,
         "congested": 10,
@@ -8598,7 +8599,7 @@
     },
     {
       "timestamp": "12-12-2025 17:00",
-      "filename": "12-12-2025_17-00.json",
+      "filename": "12-12-2025_17-00.parquet",
       "stats": {
         "cells_observed": 51,
         "congested": 17,
@@ -8611,7 +8612,7 @@
     },
     {
       "timestamp": "12-12-2025 18:00",
-      "filename": "12-12-2025_18-00.json",
+      "filename": "12-12-2025_18-00.parquet",
       "stats": {
         "cells_observed": 73,
         "congested": 25,
@@ -8624,7 +8625,7 @@
     },
     {
       "timestamp": "12-12-2025 19:00",
-      "filename": "12-12-2025_19-00.json",
+      "filename": "12-12-2025_19-00.parquet",
       "stats": {
         "cells_observed": 120,
         "congested": 41,
@@ -8637,7 +8638,7 @@
     },
     {
       "timestamp": "12-12-2025 20:00",
-      "filename": "12-12-2025_20-00.json",
+      "filename": "12-12-2025_20-00.parquet",
       "stats": {
         "cells_observed": 274,
         "congested": 118,
@@ -8650,7 +8651,7 @@
     },
     {
       "timestamp": "12-12-2025 21:00",
-      "filename": "12-12-2025_21-00.json",
+      "filename": "12-12-2025_21-00.parquet",
       "stats": {
         "cells_observed": 277,
         "congested": 127,
@@ -8663,7 +8664,7 @@
     },
     {
       "timestamp": "12-12-2025 22:00",
-      "filename": "12-12-2025_22-00.json",
+      "filename": "12-12-2025_22-00.parquet",
       "stats": {
         "cells_observed": 173,
         "congested": 81,
@@ -8676,7 +8677,7 @@
     },
     {
       "timestamp": "12-12-2025 23:00",
-      "filename": "12-12-2025_23-00.json",
+      "filename": "12-12-2025_23-00.parquet",
       "stats": {
         "cells_observed": 76,
         "congested": 29,
@@ -8689,7 +8690,7 @@
     },
     {
       "timestamp": "13-12-2025 00:00",
-      "filename": "13-12-2025_00-00.json",
+      "filename": "13-12-2025_00-00.parquet",
       "stats": {
         "cells_observed": 120,
         "congested": 2,
@@ -8702,7 +8703,7 @@
     },
     {
       "timestamp": "13-12-2025 01:00",
-      "filename": "13-12-2025_01-00.json",
+      "filename": "13-12-2025_01-00.parquet",
       "stats": {
         "cells_observed": 13,
         "congested": 0,
@@ -8715,7 +8716,7 @@
     },
     {
       "timestamp": "13-12-2025 02:00",
-      "filename": "13-12-2025_02-00.json",
+      "filename": "13-12-2025_02-00.parquet",
       "stats": {
         "cells_observed": 10,
         "congested": 1,
@@ -8728,7 +8729,7 @@
     },
     {
       "timestamp": "13-12-2025 03:00",
-      "filename": "13-12-2025_03-00.json",
+      "filename": "13-12-2025_03-00.parquet",
       "stats": {
         "cells_observed": 4,
         "congested": 0,
@@ -8741,7 +8742,7 @@
     },
     {
       "timestamp": "13-12-2025 04:00",
-      "filename": "13-12-2025_04-00.json",
+      "filename": "13-12-2025_04-00.parquet",
       "stats": {
         "cells_observed": 2,
         "congested": 1,
@@ -8754,7 +8755,7 @@
     },
     {
       "timestamp": "13-12-2025 05:00",
-      "filename": "13-12-2025_05-00.json",
+      "filename": "13-12-2025_05-00.parquet",
       "stats": {
         "cells_observed": 4,
         "congested": 0,
@@ -8767,7 +8768,7 @@
     },
     {
       "timestamp": "13-12-2025 06:00",
-      "filename": "13-12-2025_06-00.json",
+      "filename": "13-12-2025_06-00.parquet",
       "stats": {
         "cells_observed": 5,
         "congested": 1,
@@ -8780,7 +8781,7 @@
     },
     {
       "timestamp": "13-12-2025 07:00",
-      "filename": "13-12-2025_07-00.json",
+      "filename": "13-12-2025_07-00.parquet",
       "stats": {
         "cells_observed": 9,
         "congested": 0,
@@ -8793,7 +8794,7 @@
     },
     {
       "timestamp": "13-12-2025 08:00",
-      "filename": "13-12-2025_08-00.json",
+      "filename": "13-12-2025_08-00.parquet",
       "stats": {
         "cells_observed": 14,
         "congested": 3,
@@ -8806,7 +8807,7 @@
     },
     {
       "timestamp": "13-12-2025 09:00",
-      "filename": "13-12-2025_09-00.json",
+      "filename": "13-12-2025_09-00.parquet",
       "stats": {
         "cells_observed": 30,
         "congested": 7,
@@ -8819,7 +8820,7 @@
     },
     {
       "timestamp": "13-12-2025 10:00",
-      "filename": "13-12-2025_10-00.json",
+      "filename": "13-12-2025_10-00.parquet",
       "stats": {
         "cells_observed": 37,
         "congested": 5,
@@ -8832,7 +8833,7 @@
     },
     {
       "timestamp": "13-12-2025 11:00",
-      "filename": "13-12-2025_11-00.json",
+      "filename": "13-12-2025_11-00.parquet",
       "stats": {
         "cells_observed": 31,
         "congested": 4,
@@ -8845,7 +8846,7 @@
     },
     {
       "timestamp": "13-12-2025 12:00",
-      "filename": "13-12-2025_12-00.json",
+      "filename": "13-12-2025_12-00.parquet",
       "stats": {
         "cells_observed": 48,
         "congested": 12,
@@ -8858,7 +8859,7 @@
     },
     {
       "timestamp": "13-12-2025 13:00",
-      "filename": "13-12-2025_13-00.json",
+      "filename": "13-12-2025_13-00.parquet",
       "stats": {
         "cells_observed": 49,
         "congested": 17,
@@ -8871,7 +8872,7 @@
     },
     {
       "timestamp": "13-12-2025 14:00",
-      "filename": "13-12-2025_14-00.json",
+      "filename": "13-12-2025_14-00.parquet",
       "stats": {
         "cells_observed": 47,
         "congested": 8,
@@ -8884,7 +8885,7 @@
     },
     {
       "timestamp": "13-12-2025 15:00",
-      "filename": "13-12-2025_15-00.json",
+      "filename": "13-12-2025_15-00.parquet",
       "stats": {
         "cells_observed": 57,
         "congested": 23,
@@ -8897,7 +8898,7 @@
     },
     {
       "timestamp": "13-12-2025 16:00",
-      "filename": "13-12-2025_16-00.json",
+      "filename": "13-12-2025_16-00.parquet",
       "stats": {
         "cells_observed": 54,
         "congested": 9,
@@ -8910,7 +8911,7 @@
     },
     {
       "timestamp": "13-12-2025 17:00",
-      "filename": "13-12-2025_17-00.json",
+      "filename": "13-12-2025_17-00.parquet",
       "stats": {
         "cells_observed": 45,
         "congested": 12,
@@ -8923,7 +8924,7 @@
     },
     {
       "timestamp": "13-12-2025 18:00",
-      "filename": "13-12-2025_18-00.json",
+      "filename": "13-12-2025_18-00.parquet",
       "stats": {
         "cells_observed": 75,
         "congested": 29,
@@ -8936,7 +8937,7 @@
     },
     {
       "timestamp": "13-12-2025 19:00",
-      "filename": "13-12-2025_19-00.json",
+      "filename": "13-12-2025_19-00.parquet",
       "stats": {
         "cells_observed": 135,
         "congested": 55,
@@ -8949,7 +8950,7 @@
     },
     {
       "timestamp": "13-12-2025 20:00",
-      "filename": "13-12-2025_20-00.json",
+      "filename": "13-12-2025_20-00.parquet",
       "stats": {
         "cells_observed": 218,
         "congested": 104,
@@ -8962,7 +8963,7 @@
     },
     {
       "timestamp": "13-12-2025 21:00",
-      "filename": "13-12-2025_21-00.json",
+      "filename": "13-12-2025_21-00.parquet",
       "stats": {
         "cells_observed": 218,
         "congested": 106,
@@ -8975,7 +8976,7 @@
     },
     {
       "timestamp": "13-12-2025 22:00",
-      "filename": "13-12-2025_22-00.json",
+      "filename": "13-12-2025_22-00.parquet",
       "stats": {
         "cells_observed": 215,
         "congested": 89,
@@ -8988,7 +8989,7 @@
     },
     {
       "timestamp": "13-12-2025 23:00",
-      "filename": "13-12-2025_23-00.json",
+      "filename": "13-12-2025_23-00.parquet",
       "stats": {
         "cells_observed": 121,
         "congested": 49,
@@ -9001,7 +9002,7 @@
     },
     {
       "timestamp": "14-12-2025 00:00",
-      "filename": "14-12-2025_00-00.json",
+      "filename": "14-12-2025_00-00.parquet",
       "stats": {
         "cells_observed": 159,
         "congested": 11,
@@ -9014,7 +9015,7 @@
     },
     {
       "timestamp": "14-12-2025 01:00",
-      "filename": "14-12-2025_01-00.json",
+      "filename": "14-12-2025_01-00.parquet",
       "stats": {
         "cells_observed": 20,
         "congested": 3,
@@ -9027,7 +9028,7 @@
     },
     {
       "timestamp": "14-12-2025 02:00",
-      "filename": "14-12-2025_02-00.json",
+      "filename": "14-12-2025_02-00.parquet",
       "stats": {
         "cells_observed": 7,
         "congested": 0,
@@ -9040,7 +9041,7 @@
     },
     {
       "timestamp": "14-12-2025 03:00",
-      "filename": "14-12-2025_03-00.json",
+      "filename": "14-12-2025_03-00.parquet",
       "stats": {
         "cells_observed": 9,
         "congested": 1,
@@ -9053,7 +9054,7 @@
     },
     {
       "timestamp": "14-12-2025 04:00",
-      "filename": "14-12-2025_04-00.json",
+      "filename": "14-12-2025_04-00.parquet",
       "stats": {
         "cells_observed": 5,
         "congested": 0,
@@ -9066,7 +9067,7 @@
     },
     {
       "timestamp": "14-12-2025 05:00",
-      "filename": "14-12-2025_05-00.json",
+      "filename": "14-12-2025_05-00.parquet",
       "stats": {
         "cells_observed": 1,
         "congested": 0,
@@ -9079,7 +9080,7 @@
     },
     {
       "timestamp": "14-12-2025 06:00",
-      "filename": "14-12-2025_06-00.json",
+      "filename": "14-12-2025_06-00.parquet",
       "stats": {
         "cells_observed": 3,
         "congested": 1,
@@ -9092,7 +9093,7 @@
     },
     {
       "timestamp": "14-12-2025 07:00",
-      "filename": "14-12-2025_07-00.json",
+      "filename": "14-12-2025_07-00.parquet",
       "stats": {
         "cells_observed": 15,
         "congested": 7,
@@ -9105,7 +9106,7 @@
     },
     {
       "timestamp": "14-12-2025 08:00",
-      "filename": "14-12-2025_08-00.json",
+      "filename": "14-12-2025_08-00.parquet",
       "stats": {
         "cells_observed": 24,
         "congested": 8,
@@ -9118,7 +9119,7 @@
     },
     {
       "timestamp": "14-12-2025 09:00",
-      "filename": "14-12-2025_09-00.json",
+      "filename": "14-12-2025_09-00.parquet",
       "stats": {
         "cells_observed": 18,
         "congested": 5,
@@ -9131,7 +9132,7 @@
     },
     {
       "timestamp": "14-12-2025 10:00",
-      "filename": "14-12-2025_10-00.json",
+      "filename": "14-12-2025_10-00.parquet",
       "stats": {
         "cells_observed": 26,
         "congested": 4,
@@ -9144,7 +9145,7 @@
     },
     {
       "timestamp": "14-12-2025 11:00",
-      "filename": "14-12-2025_11-00.json",
+      "filename": "14-12-2025_11-00.parquet",
       "stats": {
         "cells_observed": 44,
         "congested": 10,
@@ -9157,7 +9158,7 @@
     },
     {
       "timestamp": "14-12-2025 12:00",
-      "filename": "14-12-2025_12-00.json",
+      "filename": "14-12-2025_12-00.parquet",
       "stats": {
         "cells_observed": 47,
         "congested": 15,
@@ -9170,7 +9171,7 @@
     },
     {
       "timestamp": "14-12-2025 13:00",
-      "filename": "14-12-2025_13-00.json",
+      "filename": "14-12-2025_13-00.parquet",
       "stats": {
         "cells_observed": 51,
         "congested": 12,
@@ -9183,7 +9184,7 @@
     },
     {
       "timestamp": "14-12-2025 14:00",
-      "filename": "14-12-2025_14-00.json",
+      "filename": "14-12-2025_14-00.parquet",
       "stats": {
         "cells_observed": 65,
         "congested": 15,
@@ -9196,7 +9197,7 @@
     },
     {
       "timestamp": "14-12-2025 15:00",
-      "filename": "14-12-2025_15-00.json",
+      "filename": "14-12-2025_15-00.parquet",
       "stats": {
         "cells_observed": 56,
         "congested": 18,
@@ -9209,7 +9210,7 @@
     },
     {
       "timestamp": "14-12-2025 16:00",
-      "filename": "14-12-2025_16-00.json",
+      "filename": "14-12-2025_16-00.parquet",
       "stats": {
         "cells_observed": 68,
         "congested": 14,
@@ -9222,7 +9223,7 @@
     },
     {
       "timestamp": "14-12-2025 17:00",
-      "filename": "14-12-2025_17-00.json",
+      "filename": "14-12-2025_17-00.parquet",
       "stats": {
         "cells_observed": 61,
         "congested": 15,
@@ -9235,7 +9236,7 @@
     },
     {
       "timestamp": "14-12-2025 18:00",
-      "filename": "14-12-2025_18-00.json",
+      "filename": "14-12-2025_18-00.parquet",
       "stats": {
         "cells_observed": 90,
         "congested": 34,
@@ -9248,7 +9249,7 @@
     },
     {
       "timestamp": "14-12-2025 19:00",
-      "filename": "14-12-2025_19-00.json",
+      "filename": "14-12-2025_19-00.parquet",
       "stats": {
         "cells_observed": 133,
         "congested": 49,
@@ -9261,7 +9262,7 @@
     },
     {
       "timestamp": "14-12-2025 20:00",
-      "filename": "14-12-2025_20-00.json",
+      "filename": "14-12-2025_20-00.parquet",
       "stats": {
         "cells_observed": 244,
         "congested": 112,
@@ -9274,7 +9275,7 @@
     },
     {
       "timestamp": "14-12-2025 21:00",
-      "filename": "14-12-2025_21-00.json",
+      "filename": "14-12-2025_21-00.parquet",
       "stats": {
         "cells_observed": 213,
         "congested": 108,
@@ -9287,7 +9288,7 @@
     },
     {
       "timestamp": "14-12-2025 22:00",
-      "filename": "14-12-2025_22-00.json",
+      "filename": "14-12-2025_22-00.parquet",
       "stats": {
         "cells_observed": 137,
         "congested": 68,
@@ -9300,7 +9301,7 @@
     },
     {
       "timestamp": "14-12-2025 23:00",
-      "filename": "14-12-2025_23-00.json",
+      "filename": "14-12-2025_23-00.parquet",
       "stats": {
         "cells_observed": 63,
         "congested": 18,

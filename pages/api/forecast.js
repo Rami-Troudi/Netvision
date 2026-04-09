@@ -1,6 +1,8 @@
 import { spawn } from 'child_process'
+import crypto from 'crypto'
 import path from 'path'
-import fs from 'fs'
+import { access, rm, readFile, stat, unlink } from 'fs/promises'
+import { enforceRateLimit, requireAuthenticatedRequest } from './_lib/security'
 
 export const config = {
   api: {
@@ -9,44 +11,64 @@ export const config = {
   },
 }
 
-function clearForecastData(projectRoot) {
-  // Clear old forecast data on each generate
-  const forecastDir = path.join(projectRoot, 'public', 'forecast_data')
-  const forecastIndex = path.join(projectRoot, 'public', 'forecast_index.json')
-  
-  // Remove forecast_index.json
-  if (fs.existsSync(forecastIndex)) {
-    fs.unlinkSync(forecastIndex)
+function getForecastDir(projectRoot) {
+  return path.resolve(projectRoot, 'forecast_data')
+}
+
+function getForecastIndexPath(projectRoot) {
+  return path.resolve(projectRoot, 'forecast_index.json')
+}
+
+async function fileExists(filePath) {
+  try {
+    await access(filePath)
+    return true
+  } catch {
+    return false
   }
-  
-  // Remove forecast_data directory contents
-  if (fs.existsSync(forecastDir)) {
-    const files = fs.readdirSync(forecastDir)
-    for (const file of files) {
-      fs.unlinkSync(path.join(forecastDir, file))
-    }
+}
+
+async function clearForecastData(projectRoot) {
+  const forecastDir = getForecastDir(projectRoot)
+  const forecastIndex = getForecastIndexPath(projectRoot)
+
+  if (await fileExists(forecastIndex)) {
+    await unlink(forecastIndex)
+  }
+
+  if (await fileExists(forecastDir)) {
+    await rm(forecastDir, { recursive: true, force: true })
   }
 }
 
 export default async function handler(req, res) {
+  if (!requireAuthenticatedRequest(req, res)) return
+  if (!enforceRateLimit(req, res, { keyPrefix: 'forecast', maxRequests: 10, windowMs: 60_000 })) return
+
   if (req.method === 'GET') {
-    // Return existing forecast data
     const projectRoot = process.cwd()
-    const forecastIndexPath = path.join(projectRoot, 'public', 'forecast_index.json')
+    const forecastIndexPath = getForecastIndexPath(projectRoot)
     
-    if (fs.existsSync(forecastIndexPath)) {
+    if (await fileExists(forecastIndexPath)) {
       try {
-        const data = JSON.parse(fs.readFileSync(forecastIndexPath, 'utf8'))
+        const [raw, info] = await Promise.all([
+          readFile(forecastIndexPath, 'utf8'),
+          stat(forecastIndexPath),
+        ])
+        const data = JSON.parse(raw)
         return res.status(200).json({
           success: true,
           available: true,
           forecasts: data,
-          generated_at: fs.statSync(forecastIndexPath).mtime
+          generated_at: info.mtime
         })
       } catch (err) {
+        const ref = crypto.randomUUID()
+        console.error('Failed to read forecast index:', ref, err)
         return res.status(500).json({ 
           success: false, 
-          error: 'Failed to read forecast index',
+          error: 'Forecast data unavailable',
+          ref,
           available: false
         })
       }
@@ -61,7 +83,6 @@ export default async function handler(req, res) {
   }
   
   if (req.method === 'POST') {
-    // Generate new forecast
     const { days = 7, start_date = null } = req.body || {}
     
     // Validate days (1-30) while preserving explicit values
@@ -72,19 +93,13 @@ export default async function handler(req, res) {
     
     const projectRoot = process.cwd()
     
-    // Clear old forecast data first
-    clearForecastData(projectRoot)
+    await clearForecastData(projectRoot)
     
-    // Use the new HuggingFace-based forecast script (fixes Windows encoding issues)
-    let scriptPath = path.join(projectRoot, 'scripts', 'forecast_hf.py')
-    
-    // Fallback to original if new script doesn't exist
-    if (!fs.existsSync(scriptPath)) {
-      scriptPath = path.join(projectRoot, 'scripts', 'forecast.py')
-    }
-    
-    if (!fs.existsSync(scriptPath)) {
-      return res.status(500).json({ error: 'Forecast script not found' })
+    const scriptPath = path.join(projectRoot, 'scripts', 'forecast_hf.py')
+    if (!(await fileExists(scriptPath))) {
+      const ref = crypto.randomUUID()
+      console.error('Forecast script missing:', ref, scriptPath)
+      return res.status(500).json({ success: false, error: 'Forecast generation failed', ref })
     }
     
     const args = [scriptPath, '--days', String(validDays)]
@@ -126,7 +141,7 @@ export default async function handler(req, res) {
               resolve({ success: true, output: stdout })
             }
           } else {
-            reject(new Error(`Forecast generation failed: ${stderr || stdout}`))
+            reject(new Error(`Forecast generation failed with code ${code}: ${stderr || stdout}`))
           }
         })
         
@@ -136,11 +151,12 @@ export default async function handler(req, res) {
       })
       
       // Load the generated forecast index
-      const forecastIndexPath = path.join(projectRoot, 'public', 'forecast_index.json')
+      const forecastIndexPath = getForecastIndexPath(projectRoot)
       let forecasts = []
       
-      if (fs.existsSync(forecastIndexPath)) {
-        forecasts = JSON.parse(fs.readFileSync(forecastIndexPath, 'utf8'))
+      if (await fileExists(forecastIndexPath)) {
+        const raw = await readFile(forecastIndexPath, 'utf8')
+        forecasts = JSON.parse(raw)
       }
       
       return res.status(200).json({
@@ -151,11 +167,12 @@ export default async function handler(req, res) {
       })
       
     } catch (err) {
-      console.error('Forecast generation error:', err)
+      const ref = crypto.randomUUID()
+      console.error('Forecast generation error:', ref, err)
       return res.status(500).json({
         success: false,
         error: 'Forecast generation failed',
-        detail: err.message
+        ref
       })
     }
   }
@@ -163,7 +180,7 @@ export default async function handler(req, res) {
   // DELETE method - clear forecast data
   if (req.method === 'DELETE') {
     const projectRoot = process.cwd()
-    clearForecastData(projectRoot)
+    await clearForecastData(projectRoot)
     return res.status(200).json({ success: true, message: 'Forecast data cleared' })
   }
   

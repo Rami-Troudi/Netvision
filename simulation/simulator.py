@@ -9,9 +9,10 @@ is paramount - all values are bounded by physical limits.
 import argparse
 import json
 import math
-import os
 from pathlib import Path
 from typing import Dict, Any, Tuple, List, Optional, Union
+import pandas as pd
+import duckdb
 
 # ============================================================================
 # PHYSICAL CONSTANTS & LTE CONSTRAINTS
@@ -58,6 +59,19 @@ BAND_PARAMETERS = {
 }
 
 DEFAULT_BAND_PARAMS = {"name": "Unknown", "bw_mhz": 10, "max_prb": 50, "path_loss_exp": 3.5, "capacity_mbps": 100}
+OBSERVATION_FIELDS = [
+    "load",
+    "throughput",
+    "cqi",
+    "traffic",
+    "ta",
+    "signal_power",
+    "congested",
+    "severity",
+    "issue_type",
+    "root_cause",
+    "health_score",
+]
 
 # ============================================================================
 # UTILITY FUNCTIONS WITH PHYSICAL BOUNDS
@@ -190,9 +204,67 @@ def classify_issue(load: float, cqi: float) -> str:
     return "Normal"
 
 
-def load_file(path: Path) -> Any:
+def load_json_file(path: Path) -> Any:
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
+
+
+def normalize_observation_value(key: str, value: Any) -> Any:
+    if pd.isna(value):
+        return None
+    if key == "congested":
+        if isinstance(value, str):
+            return value.strip().lower() in {"1", "true", "yes"}
+        return bool(value)
+    return value
+
+
+def dataframe_to_observations(df: pd.DataFrame) -> Dict[str, Any]:
+    observations: Dict[str, Any] = {}
+    if df.empty:
+        return observations
+
+    for row in df.to_dict(orient="records"):
+        cell_name = str(row.get("cell_name", "")).strip()
+        if not cell_name:
+            continue
+        observations[cell_name] = {
+            field: normalize_observation_value(field, row.get(field))
+            for field in OBSERVATION_FIELDS
+            if field in row
+        }
+    return observations
+
+
+def load_observations_file(path: Path) -> Dict[str, Any]:
+    suffix = path.suffix.lower()
+    if suffix == ".parquet":
+        df = read_parquet_dataframe(path)
+        return dataframe_to_observations(df)
+    if suffix == ".json":
+        payload = load_json_file(path)
+        if isinstance(payload, dict):
+            return payload.get("observations", {})
+        return {}
+    raise ValueError(f"Unsupported time slice format: {path.name}")
+
+
+def read_parquet_dataframe(path: Path) -> pd.DataFrame:
+    con = duckdb.connect()
+    try:
+        escaped_path = str(path).replace("'", "''")
+        return con.execute(f"SELECT * FROM read_parquet('{escaped_path}')").fetchdf()
+    finally:
+        con.close()
+
+
+def load_time_index_entries(base_dir: Path) -> List[Dict[str, Any]]:
+    index_path = base_dir / "time_index.json"
+    if not index_path.exists():
+        return []
+    idx = load_json_file(index_path)
+    timestamps = idx.get("timestamps") or []
+    return [entry for entry in timestamps if isinstance(entry, dict)]
 
 
 # ============================================================================
@@ -404,25 +476,44 @@ def apply_new_site(state: Dict[str, float]) -> Dict[str, float]:
 # DATA LOADING WITH VALIDATION
 # ============================================================================
 
+def resolve_time_file_path(time_data_dir: Path, time_file: str) -> Path:
+    """Resolve time_file and ensure it stays inside the allowed time_data directory."""
+    raw_path = Path(time_file)
+    candidate = raw_path if raw_path.is_absolute() else (time_data_dir / raw_path)
+    resolved = candidate.resolve()
+    try:
+        resolved.relative_to(time_data_dir)
+    except ValueError as exc:
+        raise ValueError("Invalid time_file path") from exc
+    return resolved
+
+
 def load_time_entry(base_dir: Path, time_file: Optional[str] = None) -> Tuple[str, Dict[str, Any]]:
-    time_data_dir = base_dir / "public" / "time_data"
+    time_data_dir = (base_dir / "time_data").resolve()
+    index_entries = load_time_index_entries(base_dir)
+    entry_by_filename = {
+        str(entry.get("filename")): entry
+        for entry in index_entries
+        if isinstance(entry.get("filename"), str)
+    }
+
     if time_file:
-        candidate = time_data_dir / time_file
-        if candidate.exists():
-            data = load_file(candidate)
-            return data.get("timestamp", time_file), data.get("observations", {})
-    index_path = base_dir / "public" / "time_index.json"
-    if index_path.exists():
-        idx = load_file(index_path)
-        timestamps = idx.get("timestamps") or []
-        if timestamps:
-            first = timestamps[0]
-            fname = first.get("filename")
-            if fname:
-                candidate = time_data_dir / fname
-                if candidate.exists():
-                    data = load_file(candidate)
-                    return data.get("timestamp", fname), data.get("observations", {})
+        candidate = resolve_time_file_path(time_data_dir, time_file)
+        if candidate.exists() and candidate.is_file():
+            observations = load_observations_file(candidate)
+            index_entry = entry_by_filename.get(candidate.name, {})
+            timestamp = index_entry.get("timestamp", Path(time_file).name)
+            return timestamp, observations
+        raise FileNotFoundError(f"Time slice not found: {Path(time_file).name}")
+
+    if index_entries:
+        first = index_entries[0]
+        fname = first.get("filename")
+        if fname:
+            candidate = resolve_time_file_path(time_data_dir, fname)
+            if candidate.exists() and candidate.is_file():
+                observations = load_observations_file(candidate)
+                return first.get("timestamp", fname), observations
     raise FileNotFoundError("No valid time slice found")
 
 
@@ -479,10 +570,10 @@ def simulate_action(base_dir: Path, cell_name: str, action: str, params: Dict[st
     
     Returns calibrated predictions with appropriate confidence levels
     """
-    baseline_path = base_dir / "public" / "baseline.json"
+    baseline_path = base_dir / "baseline.json"
     if not baseline_path.exists():
         raise FileNotFoundError("baseline.json not found")
-    baseline = load_file(baseline_path)
+    baseline = load_json_file(baseline_path)
 
     if cell_name not in baseline:
         raise ValueError(f"Cell {cell_name} not found in baseline")
