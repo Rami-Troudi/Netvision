@@ -33,6 +33,11 @@ python scripts/restore_and_convert_historical.py --output .
 - **Model evaluation + threshold calibration**: `scripts/evaluate_and_calibrate.py`
   - Inputs: `val_predictions.parquet`, `features_engineered.parquet`
   - Outputs: `features_with_score.parquet`, `cell_congestion_profile.parquet`, `thresholds.json`
+
+- **Batch inference + recommendation generation**: `scripts/batch_inference.py`
+  - Inputs: `features_with_score.parquet`, `features_meta.json`, `models/*.pkl`, `cell_congestion_profile.parquet`, `thresholds.json`
+  - Outputs: `all_cell_recommendations.parquet`, `all_cell_recommendations.csv`
+  - Applies a staleness gate by default (`--max-staleness-hours 24`): stale cells get `Data too stale for decision`
 - **Legacy single-snapshot**: `scripts/detect_congestion.py`
   - Outputs: `data.json`, `stats.json`
   - Keep only if you need the legacy static view; thresholds differ from the time-series pipeline.
@@ -111,3 +116,4 @@ For questions or support, please open an issue on GitHub.
 ---
 
 **Built with ❤️ for Orange Digital Center - Tunisia Summer Youth Program**
+
