@@ -14,12 +14,12 @@ npm run dev        # http://localhost:3000
 # Data (recommended, time-series pipeline)
 python scripts/process_time_series.py \
   --input cleaned_data.csv data_set_radio_1.csv \
-  --output public
+  --output .
 ```
 
 ## Data Pipelines
 - **Time-series (recommended)**: `scripts/process_time_series.py`
-  - Outputs: `public/baseline.json`, `public/time_index.json`, `public/time_data/*.json`
+  - Outputs: `baseline.json`, `time_index.json`, `stats.json`, `time_data/*.json`
   - Powers the time slider, alerts, and analytics in `src/main.js`
 - **Legacy single-snapshot**: `scripts/detect_congestion.py`
   - Outputs: `data.json`, `stats.json`
@@ -31,12 +31,13 @@ python scripts/process_time_series.py \
 
 ## API
 - `POST /api/simulate` supports actions: `tilt`, `add_carrier`, `redistribute` (fast mode only)
-- `time_entry.filename` must exist in `public/time_index.json` (whitelisted at the API layer)
+- `time_entry.filename` must exist in `time_index.json` (whitelisted at the API layer)
+- Heavy routes (`/api/simulate`, `/api/forecast`, `/api/data/*`) require auth token via `Authorization: Bearer <token>`
 
 ## Project Structure (key paths)
 ```
 pages/           # Next.js pages (index, api/simulate, site-planning)
-public/          # baseline.json, time_index.json, time_data/
+public/          # static frontend assets only
 scripts/         # process_time_series.py (primary), detect_congestion.py (legacy)
 simulation/      # simulator.py (fast estimator)
 src/             # main.js (UI logic), style.css

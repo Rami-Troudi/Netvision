@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import Head from 'next/head'
 
 const pageMarkup = `
@@ -65,10 +65,14 @@ const pageMarkup = `
                 </button>
                 
                 <div class="forecast-controls">
-                    <input type="number" id="forecast-days" class="forecast-days-input" min="0" max="30" value="7" title="Days to forecast (0 to clear)">
-                    <button class="generate-btn" id="btn-generate-forecast" title="Generate forecast (0 days = clear)">
+                    <input type="number" id="forecast-days" class="forecast-days-input" min="1" max="30" value="7" title="Days to forecast">
+                    <button class="generate-btn" id="btn-generate-forecast" title="Generate forecast">
                         <span class="material-symbols-outlined">model_training</span>
                         Generate
+                    </button>
+                    <button class="btn-secondary" id="btn-clear-forecast" title="Clear generated forecasts">
+                        <span class="material-symbols-outlined">delete</span>
+                        Clear
                     </button>
                 </div>
             </div>
@@ -610,7 +614,15 @@ const pageMarkup = `
             </div>
         </div>`
 
+function sanitizeStaticMarkup(markup) {
+  return String(markup ?? '')
+    .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '')
+    .replace(/\son[a-z]+\s*=\s*(["']).*?\1/gi, '')
+}
+
 export default function Home() {
+  const safeMarkup = useMemo(() => sanitizeStaticMarkup(pageMarkup), [])
+
   useEffect(() => {
     const load = async () => {
       await import('../src/main')
@@ -623,7 +635,7 @@ export default function Home() {
       <Head>
         <title>NetVision Digital Twin | Orange Network Operations</title>
       </Head>
-      <div id="app" dangerouslySetInnerHTML={{ __html: pageMarkup }} />
+      <div id="app" dangerouslySetInnerHTML={{ __html: safeMarkup }} />
     </>
   )
 }

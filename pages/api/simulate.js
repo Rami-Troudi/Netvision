@@ -1,6 +1,8 @@
 import { spawn } from 'child_process'
+import crypto from 'crypto'
 import path from 'path'
-import fs from 'fs'
+import { access, readFile } from 'fs/promises'
+import { enforceRateLimit, requireAuthenticatedRequest } from './_lib/security'
 
 const ALLOWED_ACTIONS = new Set([
   'tilt',
@@ -19,18 +21,40 @@ const ALLOWED_MODES = new Set(['fast']) // fast is the only supported mode
 
 let allowedTimeFiles = null
 
-function loadAllowedTimeFiles() {
+function getTimeIndexPath(projectRoot) {
+  return path.resolve(projectRoot, 'time_index.json')
+}
+
+function getTimeDataRoot(projectRoot) {
+  return path.resolve(projectRoot, 'time_data')
+}
+
+function isPathInsideDirectory(targetPath, directoryPath) {
+  const relative = path.relative(directoryPath, targetPath)
+  return Boolean(relative) && !relative.startsWith('..') && !path.isAbsolute(relative)
+}
+
+async function loadAllowedTimeFiles() {
   if (allowedTimeFiles) return allowedTimeFiles
-  try {
-    const projectRoot = process.cwd()
-    const timeIndexPath = path.join(projectRoot, 'public', 'time_index.json')
-    const raw = fs.readFileSync(timeIndexPath, 'utf8')
-    const parsed = JSON.parse(raw)
-    allowedTimeFiles = new Set((parsed || []).map(String))
-  } catch (err) {
-    console.warn('time_index.json not found or unreadable; skipping filename whitelist')
-    allowedTimeFiles = null
+
+  const projectRoot = process.cwd()
+  const timeIndexPath = getTimeIndexPath(projectRoot)
+  const raw = await readFile(timeIndexPath, 'utf8')
+  const parsed = JSON.parse(raw)
+  const timestamps = parsed?.timestamps
+  if (!Array.isArray(timestamps)) {
+    throw new Error('time_index.json has invalid schema')
   }
+
+  const filenames = timestamps
+    .map((entry) => (entry && typeof entry.filename === 'string' ? entry.filename.trim() : ''))
+    .filter(Boolean)
+
+  if (!filenames.length) {
+    throw new Error('time_index.json does not include filenames')
+  }
+
+  allowedTimeFiles = new Set(filenames)
   return allowedTimeFiles
 }
 
@@ -38,31 +62,37 @@ function isPlainObject(val) {
   return val !== null && typeof val === 'object' && !Array.isArray(val)
 }
 
-function validateRequest(body) {
+async function validateRequest(body) {
   const { cell_name, action, params, time_entry, mode } = body || {}
 
   if (typeof cell_name !== 'string' || !cell_name.trim()) {
-    return 'cell_name must be a non-empty string'
+    return { status: 400, error: 'cell_name must be a non-empty string' }
   }
   if (!ALLOWED_ACTIONS.has(action)) {
-    return `action must be one of: ${Array.from(ALLOWED_ACTIONS).join(', ')}`
+    return { status: 400, error: `action must be one of: ${Array.from(ALLOWED_ACTIONS).join(', ')}` }
   }
   if (mode && !ALLOWED_MODES.has(mode)) {
-    return `mode must be one of: ${Array.from(ALLOWED_MODES).join(', ')}`
+    return { status: 400, error: `mode must be one of: ${Array.from(ALLOWED_MODES).join(', ')}` }
   }
   if (params !== undefined && !isPlainObject(params)) {
-    return 'params must be an object'
+    return { status: 400, error: 'params must be an object' }
   }
   if (time_entry !== undefined && !isPlainObject(time_entry)) {
-    return 'time_entry must be an object'
+    return { status: 400, error: 'time_entry must be an object' }
   }
   if (time_entry && time_entry.filename && typeof time_entry.filename !== 'string') {
-    return 'time_entry.filename must be a string when provided'
+    return { status: 400, error: 'time_entry.filename must be a string when provided' }
   }
   if (time_entry && time_entry.filename) {
-    const allowList = loadAllowedTimeFiles()
-    if (allowList && !allowList.has(time_entry.filename)) {
-      return 'time_entry.filename is not in allowed time_index.json'
+    let allowList
+    try {
+      allowList = await loadAllowedTimeFiles()
+    } catch (err) {
+      console.error('Failed to load time whitelist:', err)
+      return { status: 503, error: 'Simulation whitelist is unavailable' }
+    }
+    if (!allowList.has(time_entry.filename)) {
+      return { status: 400, error: 'time_entry.filename is not in allowed time_index.json' }
     }
   }
   return null
@@ -76,14 +106,16 @@ export const config = {
 }
 
 export default async function handler(req, res) {
+  if (!requireAuthenticatedRequest(req, res)) return
+  if (!enforceRateLimit(req, res, { keyPrefix: 'simulate', maxRequests: 10, windowMs: 60_000 })) return
+
   if (req.method !== 'POST') {
-  const mode = 'fast'
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
-  const validationError = validateRequest(req.body)
+  const validationError = await validateRequest(req.body)
   if (validationError) {
-    return res.status(400).json({ error: validationError })
+    return res.status(validationError.status).json({ error: validationError.error })
   }
 
   const { 
@@ -106,7 +138,21 @@ export default async function handler(req, res) {
 
   const projectRoot = process.cwd()
   const scriptPath = path.join(projectRoot, 'simulation', 'simulator.py')
-  const timeFile = timeEntry.filename || null
+  const requestedTimeFile = typeof timeEntry.filename === 'string' ? timeEntry.filename.trim() : ''
+  const timeDataRoot = getTimeDataRoot(projectRoot)
+  let resolvedTimeFilePath = null
+
+  if (requestedTimeFile) {
+    resolvedTimeFilePath = path.resolve(timeDataRoot, requestedTimeFile)
+    if (!isPathInsideDirectory(resolvedTimeFilePath, timeDataRoot)) {
+      return res.status(400).json({ error: 'Invalid time_entry.filename path' })
+    }
+    try {
+      await access(resolvedTimeFilePath)
+    } catch {
+      return res.status(400).json({ error: 'time_entry.filename does not exist' })
+    }
+  }
 
   const args = [
     scriptPath, 
@@ -116,8 +162,8 @@ export default async function handler(req, res) {
     '--mode', mode
   ]
   
-  if (timeFile) {
-    args.push('--time-file', timeFile)
+  if (resolvedTimeFilePath) {
+    args.push('--time-file', resolvedTimeFilePath)
   }
 
   const timeout = 30000
@@ -146,29 +192,34 @@ export default async function handler(req, res) {
             const payload = JSON.parse(stdout.trim())
             res.status(200).json(payload)
           } catch (err) {
+            const ref = crypto.randomUUID()
             console.error('JSON Parse Error:', err)
             console.error('Stdout:', stdout)
             console.error('Stderr:', stderr)
-            res.status(500).json({ error: 'Failed to parse simulator output', detail: err.message, stderr, stdout })
+            res.status(500).json({ error: 'Simulation failed', ref })
           }
         } else {
+          const ref = crypto.randomUUID()
           console.error('Simulation failed with code:', code)
           console.error('Stderr:', stderr)
           console.error('Stdout:', stdout)
-          res.status(500).json({ error: 'Simulation failed', code, stderr, stdout })
+          res.status(500).json({ error: 'Simulation failed', ref })
         }
         resolve()
       })
 
       python.on('error', (err) => {
+        const ref = crypto.randomUUID()
         console.error('Spawn Error:', err)
-        res.status(500).json({ error: 'Failed to spawn simulator', detail: err.message })
+        res.status(500).json({ error: 'Simulation failed', ref })
         resolve()
       })
     })
   } catch (err) {
     if (!res.headersSent) {
-      return res.status(500).json({ error: 'Failed to spawn simulator', detail: err.message })
+      const ref = crypto.randomUUID()
+      console.error('Simulation request failed:', err)
+      return res.status(500).json({ error: 'Simulation failed', ref })
     }
   }
 }

@@ -116,6 +116,8 @@ const state = {
 let hasInitialized = false;
 const geometryCache = {};
 const MAX_GEOMETRY_CACHE_ENTRIES = 10000;
+const REQUIRED_OBSERVATION_KEYS = ['load', 'throughput', 'traffic', 'ta', 'cqi'];
+let hasObservationSchemaWarning = false;
 
 function pruneGeometryCache() {
     const keys = Object.keys(geometryCache);
@@ -216,6 +218,80 @@ function parseCellName(cellName) {
         return { siteName, antenna: match[1].toLowerCase(), cellNum: parseInt(match[2], 10) };
     }
     return { siteName, antenna: suffix.toLowerCase(), cellNum: 0 };
+}
+
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+}
+
+function sanitizeRichHtml(html) {
+    const template = document.createElement('template');
+    template.innerHTML = String(html ?? '');
+    template.content.querySelectorAll('script, iframe, object, embed').forEach(el => el.remove());
+    template.content.querySelectorAll('*').forEach(el => {
+        Array.from(el.attributes).forEach(attr => {
+            const name = attr.name.toLowerCase();
+            const value = attr.value || '';
+            if (name.startsWith('on')) {
+                el.removeAttribute(attr.name);
+            } else if ((name === 'href' || name === 'src') && /^\s*javascript:/i.test(value)) {
+                el.removeAttribute(attr.name);
+            }
+        });
+    });
+    return template.innerHTML;
+}
+
+function getAuthToken() {
+    try {
+        return (
+            localStorage.getItem('netvision_api_token') ||
+            localStorage.getItem('api_token') ||
+            localStorage.getItem('auth_token') ||
+            ''
+        );
+    } catch {
+        return '';
+    }
+}
+
+async function fetchWithAuth(url, init = {}) {
+    const headers = new Headers(init.headers || {});
+    const token = getAuthToken();
+    if (token && !headers.has('Authorization')) {
+        headers.set('Authorization', `Bearer ${token}`);
+    }
+    return fetch(url, {
+        ...init,
+        headers,
+        credentials: 'same-origin',
+    });
+}
+
+function buildDataUrl(...segments) {
+    const pathSegments = segments
+        .map(seg => String(seg ?? '').trim())
+        .filter(Boolean)
+        .map(seg => encodeURIComponent(seg));
+    return `/api/data/${pathSegments.join('/')}`;
+}
+
+function warnIfObservationSchemaMismatch(observations, sourceLabel = 'observation payload') {
+    if (hasObservationSchemaWarning) return;
+    const sample = Object.values(observations || {}).find(v => v && typeof v === 'object' && !Array.isArray(v));
+    if (!sample) return;
+    const missing = REQUIRED_OBSERVATION_KEYS.filter(key => !(key in sample));
+    if (missing.length === 0) return;
+
+    hasObservationSchemaWarning = true;
+    const message = `[DATA SCHEMA WARNING] Missing keys in ${sourceLabel}: ${missing.join(', ')}. Expected keys: ${REQUIRED_OBSERVATION_KEYS.join(', ')}`;
+    console.error(message, { sample });
+    showNotification('Data schema mismatch detected. See console for missing KPI keys.', 'error');
 }
 
 function buildSiteHierarchy() {
@@ -376,12 +452,27 @@ function performSearch(term) {
         if (site.toLowerCase().includes(q)) results.push({ type: 'site', name: site });
     });
     const limited = results.slice(0, 20);
-    resEl.innerHTML = limited.map(r => `
-        <div class="search-item" data-type="${r.type}" data-name="${r.name}">
-            <span class="search-type">${r.type === 'cell' ? 'Cell' : 'Site'}</span>
-            <span class="search-name">${r.name}</span>
-        </div>
-    `).join('');
+    resEl.innerHTML = '';
+    const fragment = document.createDocumentFragment();
+    limited.forEach((r) => {
+        const item = document.createElement('div');
+        item.className = 'search-item';
+        item.dataset.type = r.type;
+        item.dataset.name = r.name;
+
+        const type = document.createElement('span');
+        type.className = 'search-type';
+        type.textContent = r.type === 'cell' ? 'Cell' : 'Site';
+
+        const name = document.createElement('span');
+        name.className = 'search-name';
+        name.textContent = r.name;
+
+        item.appendChild(type);
+        item.appendChild(name);
+        fragment.appendChild(item);
+    });
+    resEl.appendChild(fragment);
 }
 
 // --- Site Info Panel ---
@@ -431,9 +522,10 @@ function showSiteInfoPanel(siteName, focusCell = null) {
 
     const body = document.getElementById('cell-info-body');
     const antennaEntries = Object.entries(site.antennas).sort((a, b) => a[0].localeCompare(b[0]));
+    const safeSiteId = String(siteName).replace(/[^a-zA-Z0-9_-]/g, '_');
     let html = `
         <div class="site-info-section">
-            <div class="site-info-row"><span>Location</span><span>${site.latitude.toFixed(5)}, ${site.longitude.toFixed(5)}</span></div>
+            <div class="site-info-row"><span>Location</span><span>${escapeHtml(site.latitude.toFixed(5))}, ${escapeHtml(site.longitude.toFixed(5))}</span></div>
             <div class="site-info-row"><span>Avg Load</span><span>${avgLoad.toFixed(1)}%</span></div>
             <div class="site-info-row"><span>Avg CQI</span><span class="${avgCQI < CONFIG.CQI_THRESHOLD ? 'text-danger' : ''}">${avgCQI.toFixed(1)}</span></div>
         </div>
@@ -441,17 +533,18 @@ function showSiteInfoPanel(siteName, focusCell = null) {
     `;
 
     antennaEntries.forEach(([antennaId, ant]) => {
+        const safeAntennaId = String(antennaId).replace(/[^a-zA-Z0-9_-]/g, '_');
         html += `
-            <div class="antenna-block" data-antenna="${antennaId}">
-                <div class="antenna-header" onclick="toggleAntennaDropdown('${siteName}','${antennaId}')">
+            <div class="antenna-block" data-antenna="${escapeHtml(antennaId)}">
+                <div class="antenna-header" data-site-name="${escapeHtml(siteName)}" data-antenna-id="${escapeHtml(antennaId)}">
                     <span class="material-symbols-outlined">cell_tower</span>
                     <div class="antenna-title">
-                        <div>${antennaId.toUpperCase()} • Band ${ant.band}</div>
-                        <div class="antenna-sub">Azimuth ${ant.azimuth} deg - ${ant.type}</div>
+                        <div>${escapeHtml(antennaId.toUpperCase())} • Band ${escapeHtml(ant.band)}</div>
+                        <div class="antenna-sub">Azimuth ${escapeHtml(ant.azimuth)} deg - ${escapeHtml(ant.type)}</div>
                     </div>
-                    <span class="material-symbols-outlined expand-icon" id="expand-icon-${siteName}-${antennaId}">expand_more</span>
+                    <span class="material-symbols-outlined expand-icon" id="expand-icon-${safeSiteId}-${safeAntennaId}">expand_more</span>
                 </div>
-                <div class="antenna-cells" id="antenna-cells-${siteName}-${antennaId}">
+                <div class="antenna-cells" id="antenna-cells-${safeSiteId}-${safeAntennaId}">
         `;
         ant.cells.forEach(cell => {
             const obs = state.currentObservations[cell.cellName];
@@ -459,15 +552,15 @@ function showSiteInfoPanel(siteName, focusCell = null) {
             const cqiVal = obs?.cqi;
             const low = cqiVal !== null && cqiVal !== undefined && cqiVal < CONFIG.CQI_THRESHOLD;
             html += `
-                <div class="cell-item" onclick="selectCell('${cell.cellName}')">
+                <div class="cell-item" data-cell-name="${escapeHtml(cell.cellName)}">
                     <div class="cell-item-main">
                         <span class="cell-dot status-${status}"></span>
-                        <span class="cell-name">${cell.cellName}</span>
-                        <span class="cell-band">${cell.frequency_band}</span>
+                        <span class="cell-name">${escapeHtml(cell.cellName)}</span>
+                        <span class="cell-band">${escapeHtml(cell.frequency_band)}</span>
                     </div>
                     <div class="cell-item-stats">
-                        <span>Load: ${formatNumber(obs?.load)}%</span>
-                        <span class="${low ? 'text-danger' : ''}">CQI: ${formatNumber(cqiVal)}</span>
+                        <span>Load: ${escapeHtml(formatNumber(obs?.load))}%</span>
+                        <span class="${low ? 'text-danger' : ''}">CQI: ${escapeHtml(formatNumber(cqiVal))}</span>
                     </div>
                 </div>
             `;
@@ -476,7 +569,24 @@ function showSiteInfoPanel(siteName, focusCell = null) {
     });
 
     html += '</div>';
-    body.innerHTML = html;
+    body.innerHTML = sanitizeRichHtml(html);
+    body.querySelectorAll('.antenna-header[data-site-name][data-antenna-id]').forEach((header) => {
+        header.addEventListener('click', () => {
+            const selectedSiteName = header.dataset.siteName;
+            const selectedAntennaId = header.dataset.antennaId;
+            if (selectedSiteName && selectedAntennaId) {
+                window.toggleAntennaDropdown(selectedSiteName, selectedAntennaId);
+            }
+        });
+    });
+    body.querySelectorAll('.cell-item[data-cell-name]').forEach((cellEl) => {
+        cellEl.addEventListener('click', () => {
+            const selectedCellName = cellEl.dataset.cellName;
+            if (selectedCellName) {
+                window.selectCell(selectedCellName);
+            }
+        });
+    });
 
     renderActionPanel(state.selectedCellName);
 
@@ -584,8 +694,8 @@ const ORANGE_ACTIONS = {
  */
 function calculateTrafficLoss(obs) {
     const load = obs.load || 0;
-    const throughput = obs.throughput_dl || 10000;
-    const activeUsers = obs.active_users || obs.traffic_dl || 2;
+    const throughput = obs.throughput || 10000;
+    const activeUsers = obs.traffic || 2;
     
     // Perte actuelle = excess capacity being denied
     const excessLoad = Math.max(0, load - 70);
@@ -611,7 +721,7 @@ function calculateTrafficLoss(obs) {
 function calculateOptimalTilt(obs, baseline) {
     const load = obs.load || 0;
     const cqi = obs.cqi || 10;
-    const ta = obs.ta_avg || 5;
+    const ta = obs.ta || 5;
     
     let optimalDegrees = 0;
     let direction = 'downtilt';
@@ -761,7 +871,7 @@ function calculateNeighborOptimization(obs, baseline) {
  */
 function calculateAddSector(obs, baseline) {
     const load = obs.load || 0;
-    const activeUsers = obs.active_users || obs.traffic_dl || 2;
+    const activeUsers = obs.traffic || 2;
     
     // Adding a sector splits capacity
     const expectedLoadReduction = Math.round(load * 0.4);
@@ -816,7 +926,7 @@ function calculatePowerAdjustment(obs, baseline) {
  */
 function calculateMimoUpgrade(obs, baseline) {
     const load = obs.load || 0;
-    const throughput = obs.throughput_dl || 10000;
+    const throughput = obs.throughput || 10000;
     
     // MIMO upgrade doubles spectral efficiency in good conditions
     const expectedThroughputGain = Math.round(throughput * 0.4);
@@ -838,8 +948,8 @@ function calculateMimoUpgrade(obs, baseline) {
  */
 function calculateSmallCell(obs, baseline) {
     const load = obs.load || 0;
-    const activeUsers = obs.active_users || obs.traffic_dl || 2;
-    const ta = obs.ta_avg || 5;
+    const activeUsers = obs.traffic || 2;
+    const ta = obs.ta || 5;
     
     // Small cell offloads nearby high-density users
     const expectedLoadReduction = Math.round(load * 0.35);
@@ -868,10 +978,14 @@ function calculateParameterTuning(obs, baseline) {
     // CIO and Hysteresis tuning helps balance load
     const expectedLoadReduction = Math.round(Math.min(15, load * 0.12));
     const cqiGain = cqi < 9 ? 0.4 : 0.1;
+    const cio = load >= 85 ? -4 : (load >= 70 ? -3 : -2);
+    const hysteresis = cqi < 8 ? 1 : 2;
     
     return {
         expectedLoadReduction,
         expectedCqiGain: cqiGain,
+        cio,
+        hysteresis,
         efficiency: 55,
         recoveryRate: ORANGE_ACTIONS.parameter_tuning.recoveryRate,
         timeline: ORANGE_ACTIONS.parameter_tuning.timeline
@@ -883,7 +997,7 @@ function calculateParameterTuning(obs, baseline) {
  */
 function calculateCellSplit(obs, baseline) {
     const load = obs.load || 0;
-    const activeUsers = obs.active_users || obs.traffic_dl || 2;
+    const activeUsers = obs.traffic || 2;
     
     // Cell split divides capacity
     const expectedLoadReduction = Math.round(load * 0.45);
@@ -904,7 +1018,7 @@ function calculateCellSplit(obs, baseline) {
  */
 function calculateAddSite(obs, baseline) {
     const load = obs.load || 0;
-    const activeUsers = obs.active_users || obs.traffic_dl || 2;
+    const activeUsers = obs.traffic || 2;
     
     const expectedLoadReduction = Math.round(load * 0.5);
     const userReduction = Math.round(activeUsers * 0.45);
@@ -932,9 +1046,9 @@ function generateSmartRecommendations(cellName) {
     const load = obs.load || 0;
     const cqi = obs.cqi ?? 10;
     const congested = obs.congested;
-    const ta = obs.ta_avg || 5;
-    const throughput = obs.throughput_dl || 10000;
-    const activeUsers = obs.active_users || obs.traffic_dl || 2;
+    const ta = obs.ta || 5;
+    const throughput = obs.throughput || 10000;
+    const activeUsers = obs.traffic || 2;
     
     // Calculate traffic loss for this cell
     const trafficLoss = calculateTrafficLoss(obs);
@@ -998,14 +1112,14 @@ function generateSmartRecommendations(cellName) {
             efficiency: split.efficiency,
             timeline: split.timeline,
             recoveryRate: split.recoveryRate,
-            description: `Subdiviser cellule saturée en ${split.splitFactor} cellules. PRB cible: ${(load / split.splitFactor).toFixed(0)}%`,
+            description: `Subdiviser cellule saturée en ${split.newCellCount} cellules. PRB cible: ${(load / split.newCellCount).toFixed(0)}%`,
             expectedGain: { 
                 load: -split.expectedLoadReduction, 
-                capacity: `×${split.splitFactor}` 
+                capacity: `×${split.newCellCount}` 
             },
             trafficLoss,
             estimatedRecovery: { ue: splitGain, gb: Math.round(splitGain * 2.4) },
-            computedParams: { splitFactor: split.splitFactor },
+            computedParams: { newCellCount: split.newCellCount },
             cellName,
             currentMetrics: { load, cqi, congested, activeUsers }
         });
@@ -1044,14 +1158,14 @@ function generateSmartRecommendations(cellName) {
             efficiency: mimo.efficiency,
             timeline: mimo.timeline,
             recoveryRate: mimo.recoveryRate,
-            description: `Upgrade ${mimo.currentConfig} → ${mimo.targetConfig}. Gain capacité: +${mimo.capacityGain}%`,
+            description: `Upgrade ${mimo.currentMimo} → ${mimo.targetMimo}. Gain débit estimé: +${mimo.expectedThroughputGain} kbps`,
             expectedGain: { 
                 throughput: mimo.expectedThroughputGain, 
-                capacity: `+${mimo.capacityGain}%` 
+                load: -mimo.expectedLoadReduction
             },
             trafficLoss,
             estimatedRecovery: { ue: mimoGain, gb: Math.round(mimoGain * 2.4) },
-            computedParams: { config: mimo.targetConfig },
+            computedParams: { targetMimo: mimo.targetMimo },
             cellName,
             currentMetrics: { load, cqi, congested }
         });
@@ -1067,14 +1181,14 @@ function generateSmartRecommendations(cellName) {
             efficiency: smallCell.efficiency,
             timeline: smallCell.timeline,
             recoveryRate: smallCell.recoveryRate,
-            description: `Installer ${smallCell.recommendedCount} small cells pour décharger ${smallCell.offloadPercent}% du trafic`,
+            description: `Déployer small cell (${smallCell.recommendedType}) pour décharger ${smallCell.expectedUserReduction} UE`,
             expectedGain: { 
                 load: -smallCell.expectedLoadReduction, 
                 users: -smallCell.expectedUserReduction 
             },
             trafficLoss,
             estimatedRecovery: { ue: smallCellGain, gb: Math.round(smallCellGain * 2.4) },
-            computedParams: { count: smallCell.recommendedCount },
+            computedParams: { type: smallCell.recommendedType },
             cellName,
             currentMetrics: { load, cqi, congested, activeUsers }
         });
@@ -1113,14 +1227,14 @@ function generateSmartRecommendations(cellName) {
             efficiency: power.efficiency,
             timeline: power.timeline,
             recoveryRate: power.recoveryRate,
-            description: `${power.adjustment > 0 ? 'Augmenter' : 'Réduire'} puissance de ${Math.abs(power.adjustment)} dB. Puissance cible: ${power.targetPower} dBm`,
+            description: `Réduire puissance de ${Math.abs(power.reduction)} dB. Puissance cible: ${power.newPower} dBm`,
             expectedGain: { 
-                coverage: power.coverageChange, 
-                load: power.loadChange 
+                load: -power.expectedLoadReduction,
+                cqi: power.expectedCqiGain
             },
             trafficLoss,
             estimatedRecovery: { ue: powerGain, gb: Math.round(powerGain * 2.4) },
-            computedParams: { adjustment: power.adjustment, target: power.targetPower },
+            computedParams: { reduction: power.reduction, newPower: power.newPower },
             cellName,
             currentMetrics: { load, cqi, congested }
         });
@@ -1207,14 +1321,14 @@ function generateSmartRecommendations(cellName) {
             efficiency: mimo.efficiency,
             timeline: mimo.timeline,
             recoveryRate: mimo.recoveryRate,
-            description: `Upgrade ${mimo.currentConfig} → ${mimo.targetConfig}. Gain débit: +${mimo.capacityGain}%`,
+            description: `Upgrade ${mimo.currentMimo} → ${mimo.targetMimo}. Gain débit estimé: +${mimo.expectedThroughputGain} kbps`,
             expectedGain: { 
                 throughput: mimo.expectedThroughputGain, 
-                capacity: `+${mimo.capacityGain}%` 
+                load: -mimo.expectedLoadReduction
             },
             trafficLoss,
             estimatedRecovery: { ue: mimoGain, gb: Math.round(mimoGain * 2.4) },
-            computedParams: { config: mimo.targetConfig },
+            computedParams: { targetMimo: mimo.targetMimo },
             cellName,
             currentMetrics: { load, cqi, congested }
         });
@@ -1231,14 +1345,14 @@ function generateSmartRecommendations(cellName) {
                 efficiency: smallCell.efficiency,
                 timeline: smallCell.timeline,
                 recoveryRate: smallCell.recoveryRate,
-                description: `Densité UE élevée (${activeUsers}). Installer ${smallCell.recommendedCount} small cells`,
+                description: `Densité trafic élevée (${activeUsers}). Déployer small cell (${smallCell.recommendedType})`,
                 expectedGain: { 
                     load: -smallCell.expectedLoadReduction, 
                     users: -smallCell.expectedUserReduction 
                 },
                 trafficLoss,
                 estimatedRecovery: { ue: smallCellGain, gb: Math.round(smallCellGain * 2.4) },
-                computedParams: { count: smallCell.recommendedCount },
+                computedParams: { type: smallCell.recommendedType },
                 cellName,
                 currentMetrics: { load, cqi, congested, activeUsers }
             });
@@ -1278,14 +1392,14 @@ function generateSmartRecommendations(cellName) {
             efficiency: power.efficiency,
             timeline: power.timeline,
             recoveryRate: power.recoveryRate,
-            description: `${power.adjustment > 0 ? 'Augmenter' : 'Réduire'} puissance de ${Math.abs(power.adjustment)} dB`,
+            description: `Réduire puissance de ${Math.abs(power.reduction)} dB`,
             expectedGain: { 
-                coverage: power.coverageChange, 
-                load: power.loadChange 
+                load: -power.expectedLoadReduction,
+                cqi: power.expectedCqiGain
             },
             trafficLoss,
             estimatedRecovery: { ue: powerGain, gb: Math.round(powerGain * 2.4) },
-            computedParams: { adjustment: power.adjustment, target: power.targetPower },
+            computedParams: { reduction: power.reduction, newPower: power.newPower },
             cellName,
             currentMetrics: { load, cqi, congested }
         });
@@ -1373,14 +1487,14 @@ function generateSmartRecommendations(cellName) {
                 efficiency: mimo.efficiency,
                 timeline: mimo.timeline,
                 recoveryRate: mimo.recoveryRate,
-                description: `Débit faible (${(throughput/1000).toFixed(1)} Mbps). Upgrade MIMO ${mimo.currentConfig} → ${mimo.targetConfig}`,
+                description: `Débit faible (${(throughput/1000).toFixed(1)} Mbps). Upgrade MIMO ${mimo.currentMimo} → ${mimo.targetMimo}`,
                 expectedGain: { 
                     throughput: mimo.expectedThroughputGain, 
-                    capacity: `+${mimo.capacityGain}%` 
+                    load: -mimo.expectedLoadReduction
                 },
                 trafficLoss,
                 estimatedRecovery: { ue: mimoGain, gb: Math.round(mimoGain * 2.4) },
-                computedParams: { config: mimo.targetConfig },
+                computedParams: { targetMimo: mimo.targetMimo },
                 cellName,
                 currentMetrics: { load, cqi, congested, throughput }
             });
@@ -1420,14 +1534,14 @@ function generateSmartRecommendations(cellName) {
             efficiency: power.efficiency,
             timeline: power.timeline,
             recoveryRate: power.recoveryRate,
-            description: `Ajuster puissance Tx: ${power.adjustment > 0 ? '+' : ''}${power.adjustment} dB`,
+            description: `Ajuster puissance Tx: -${Math.abs(power.reduction)} dB`,
             expectedGain: { 
-                coverage: power.coverageChange, 
-                load: power.loadChange 
+                load: -power.expectedLoadReduction,
+                cqi: power.expectedCqiGain
             },
             trafficLoss,
             estimatedRecovery: { ue: powerGain, gb: Math.round(powerGain * 2.4) },
-            computedParams: { adjustment: power.adjustment, target: power.targetPower },
+            computedParams: { reduction: power.reduction, newPower: power.newPower },
             cellName,
             currentMetrics: { load, cqi, congested }
         });
@@ -1592,9 +1706,10 @@ function renderRecommendationsPanel(cellName) {
         return;
     }
     
-    container.innerHTML = recommendations.map((reco, idx) => {
+    container.innerHTML = sanitizeRichHtml(recommendations.map((reco, idx) => {
         const gains = reco.expectedGain || {};
         const metrics = reco.currentMetrics || {};
+        const safeEfficiency = Math.max(0, Math.min(100, Number(reco.efficiency) || 0));
         
         // Timeline badge
         const timelineLabels = {
@@ -1608,20 +1723,20 @@ function renderRecommendationsPanel(cellName) {
         let metricsHtml = '';
         if (gains.load) {
             const newLoad = (metrics.load || 0) + gains.load;
-            metricsHtml += `<div class="reco-metric"><span class="reco-metric-label">Charge:</span><span class="reco-metric-value">${metrics.load?.toFixed(0) || '--'}% → ${newLoad.toFixed(0)}%</span></div>`;
+            metricsHtml += `<div class="reco-metric"><span class="reco-metric-label">Charge:</span><span class="reco-metric-value">${escapeHtml(metrics.load?.toFixed(0) || '--')}% → ${escapeHtml(newLoad.toFixed(0))}%</span></div>`;
         }
         if (gains.cqi) {
             const newCqi = (metrics.cqi || 0) + gains.cqi;
-            metricsHtml += `<div class="reco-metric"><span class="reco-metric-label">CQI:</span><span class="reco-metric-value">${metrics.cqi?.toFixed(1) || '--'} → ${newCqi.toFixed(1)}</span></div>`;
+            metricsHtml += `<div class="reco-metric"><span class="reco-metric-label">CQI:</span><span class="reco-metric-value">${escapeHtml(metrics.cqi?.toFixed(1) || '--')} → ${escapeHtml(newCqi.toFixed(1))}</span></div>`;
         }
         if (gains.throughput) {
-            metricsHtml += `<div class="reco-metric"><span class="reco-metric-label">Débit:</span><span class="reco-metric-value">+${gains.throughput}%</span></div>`;
+            metricsHtml += `<div class="reco-metric"><span class="reco-metric-label">Débit:</span><span class="reco-metric-value">+${escapeHtml(gains.throughput)}</span></div>`;
         }
         if (gains.coverage) {
-            metricsHtml += `<div class="reco-metric"><span class="reco-metric-label">Couverture:</span><span class="reco-metric-value">+${gains.coverage}%</span></div>`;
+            metricsHtml += `<div class="reco-metric"><span class="reco-metric-label">Couverture:</span><span class="reco-metric-value">+${escapeHtml(gains.coverage)}%</span></div>`;
         }
         if (gains.users) {
-            metricsHtml += `<div class="reco-metric"><span class="reco-metric-label">UE:</span><span class="reco-metric-value">${gains.users} utilisateurs</span></div>`;
+            metricsHtml += `<div class="reco-metric"><span class="reco-metric-label">UE:</span><span class="reco-metric-value">${escapeHtml(gains.users)} utilisateurs</span></div>`;
         }
         
         // Manque à gagner display
@@ -1632,11 +1747,11 @@ function renderRecommendationsPanel(cellName) {
                     <div class="traffic-loss-title">📉 Manque à gagner</div>
                     <div class="traffic-loss-row">
                         <span>Perte actuelle:</span>
-                        <span>${reco.trafficLoss.affectedUE} UE / ${reco.trafficLoss.lostGB} Go/mois</span>
+                        <span>${escapeHtml(reco.trafficLoss.affectedUE)} UE / ${escapeHtml(reco.trafficLoss.lostGB)} Go/mois</span>
                     </div>
                     <div class="traffic-loss-row recovery">
                         <span>Gain estimé (${Math.round(reco.recoveryRate * 100)}%):</span>
-                        <span class="recovery-value">+${reco.estimatedRecovery.ue} UE / +${reco.estimatedRecovery.gb} Go</span>
+                        <span class="recovery-value">+${escapeHtml(reco.estimatedRecovery.ue)} UE / +${escapeHtml(reco.estimatedRecovery.gb)} Go</span>
                     </div>
                 </div>
             `;
@@ -1661,37 +1776,45 @@ function renderRecommendationsPanel(cellName) {
         // Determine if action is simulatable
         const simulatable = ['tilt', 'redistribute', 'add_carrier'].includes(reco.action);
         const buttonHtml = simulatable 
-            ? `<button class="reco-apply-btn" onclick="applyRecommendation(${idx})">
+            ? `<button class="reco-apply-btn" data-reco-idx="${idx}">
                 <span class="material-symbols-outlined">bolt</span>
                 Simuler cette action
                </button>`
             : `<div class="reco-capex-note">⚠️ Action CAPEX - Planification requise</div>`;
         
         return `
-        <div class="reco-item priority-${reco.priority}" data-reco-idx="${idx}">
+        <div class="reco-item priority-${escapeHtml(reco.priority)}" data-reco-idx="${idx}">
             <div class="reco-header">
-                <div class="reco-icon ${reco.icon}">
-                    <span class="material-symbols-outlined">${getRecoIcon(reco.icon)}</span>
+                <div class="reco-icon ${escapeHtml(reco.icon)}">
+                    <span class="material-symbols-outlined">${escapeHtml(getRecoIcon(reco.icon))}</span>
                 </div>
                 <div class="reco-header-content">
-                    <div class="reco-title">${reco.title} ${paramHint} ${recoveryHtml}</div>
+                    <div class="reco-title">${escapeHtml(reco.title)} ${paramHint} ${recoveryHtml}</div>
                     <div class="reco-badges">
-                        <span class="reco-priority-badge priority-${reco.priority}">${reco.priority.toUpperCase()}</span>
-                        ${timeline.label ? `<span class="reco-timeline-badge ${timeline.class}">${timeline.label}</span>` : ''}
+                        <span class="reco-priority-badge priority-${escapeHtml(reco.priority)}">${escapeHtml(reco.priority.toUpperCase())}</span>
+                        ${timeline.label ? `<span class="reco-timeline-badge ${escapeHtml(timeline.class)}">${escapeHtml(timeline.label)}</span>` : ''}
                     </div>
                 </div>
             </div>
-            <div class="reco-body">${reco.description}</div>
+            <div class="reco-body">${escapeHtml(reco.description)}</div>
             <div class="reco-metrics">${metricsHtml}</div>
             ${trafficLossHtml}
             <div class="reco-efficiency">
                 <span class="efficiency-label">Efficacité:</span>
-                <div class="efficiency-bar"><div class="efficiency-fill" style="width: ${reco.efficiency}%"></div></div>
-                <span class="efficiency-value">${reco.efficiency}%</span>
+                <div class="efficiency-bar"><div class="efficiency-fill" style="width: ${safeEfficiency}%"></div></div>
+                <span class="efficiency-value">${safeEfficiency}%</span>
             </div>
             ${buttonHtml}
         </div>
-    `}).join('');
+    `}).join(''));
+    container.querySelectorAll('.reco-apply-btn[data-reco-idx]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            const idx = Number(btn.dataset.recoIdx);
+            if (!Number.isNaN(idx)) {
+                window.applyRecommendation(idx);
+            }
+        });
+    });
     
     // Store recommendations in state for apply function
     state.currentRecommendations = recommendations;
@@ -1787,7 +1910,7 @@ function renderActionPanel(cellName) {
     if (isCritical) {
         result.innerHTML = '<div class="action-hint action-hint-warning">⚠️ Cell is congested or has low CQI - action recommended.</div>';
     } else {
-        result.innerHTML = '<div class="action-hint">Cell: ' + cellName + ' (healthy - simulation for testing)</div>';
+        result.innerHTML = `<div class="action-hint">Cell: ${escapeHtml(cellName)} (healthy - simulation for testing)</div>`;
     }
     buildActionParamsUI(select.value || '');
 }
@@ -1815,72 +1938,72 @@ function buildActionParamsUI(action) {
     ` : '';
 
     if (action === 'tilt') {
-        container.innerHTML = `${infoBox}
+        container.innerHTML = sanitizeRichHtml(`${infoBox}
             <label class="action-label" for="param-tilt-deg">Downtilt (degrés)</label>
             <input type="number" id="param-tilt-deg" class="action-input" value="2" min="-5" max="10" step="0.5">
             <div class="action-hint">Positif = downtilt, Négatif = uptilt</div>
-        `;
+        `);
         return;
     }
 
     if (action === 'power') {
-        container.innerHTML = `${infoBox}
+        container.innerHTML = sanitizeRichHtml(`${infoBox}
             <label class="action-label" for="param-power-delta">Réduction puissance (dB)</label>
             <input type="number" id="param-power-delta" class="action-input" value="3" min="0" max="10" step="1">
             <div class="action-hint">Réduction Tx Power en dB (0 = pas de changement)</div>
-        `;
+        `);
         return;
     }
 
     if (action === 'add_carrier') {
         const bands = (state.globalStats?.frequency_bands || []).map(String);
         const options = bands.length
-            ? bands.map(b => `<option value="${b}">Bande ${b}</option>`).join('')
+            ? bands.map(b => `<option value="${escapeHtml(b)}">Bande ${escapeHtml(b)}</option>`).join('')
             : '<option value="">Aucune bande disponible</option>';
-        container.innerHTML = `${infoBox}
+        container.innerHTML = sanitizeRichHtml(`${infoBox}
             <label class="action-label" for="param-carrier-band">Sélectionner bande</label>
             <select id="param-carrier-band" class="action-input">${options}</select>
             <div class="action-hint">Active Carrier Aggregation si bande non présente sur site.</div>
-        `;
+        `);
         return;
     }
 
     if (action === 'redistribute') {
-        container.innerHTML = `${infoBox}
+        container.innerHTML = sanitizeRichHtml(`${infoBox}
             <label class="action-label" for="param-redistribute-target">Cellule cible (optionnel)</label>
             <input type="text" id="param-redistribute-target" class="action-input" placeholder="nom cellule voisine">
             <label class="action-label" for="param-redistribute-ratio">Ratio redistribution (0-0.6)</label>
             <input type="number" id="param-redistribute-ratio" class="action-input" value="0.2" min="0" max="0.6" step="0.05">
             <div class="action-hint">MLB: équilibrage charge vers voisins moins chargés</div>
-        `;
+        `);
         return;
     }
 
     if (action === 'parameter_tuning') {
-        container.innerHTML = `${infoBox}
+        container.innerHTML = sanitizeRichHtml(`${infoBox}
             <label class="action-label" for="param-cio">Cell Individual Offset (dB)</label>
             <input type="number" id="param-cio" class="action-input" value="-3" min="-6" max="6" step="1">
             <label class="action-label" for="param-hysteresis">Hysteresis (dB)</label>
             <input type="number" id="param-hysteresis" class="action-input" value="2" min="0" max="6" step="1">
             <div class="action-hint">CIO négatif = repousse UE vers voisins</div>
-        `;
+        `);
         return;
     }
 
     if (action === 'mimo_upgrade') {
-        container.innerHTML = `${infoBox}
+        container.innerHTML = sanitizeRichHtml(`${infoBox}
             <label class="action-label" for="param-mimo-target">Configuration MIMO cible</label>
             <select id="param-mimo-target" class="action-input">
                 <option value="4T4R">4T4R (Recommandé)</option>
                 <option value="8T8R">8T8R (Massive MIMO)</option>
             </select>
             <div class="action-hint">Upgrade antenne pour meilleure efficacité spectrale</div>
-        `;
+        `);
         return;
     }
 
     if (action === 'small_cell') {
-        container.innerHTML = `${infoBox}
+        container.innerHTML = sanitizeRichHtml(`${infoBox}
             <label class="action-label" for="param-sc-type">Type Small Cell</label>
             <select id="param-sc-type" class="action-input">
                 <option value="micro">Micro outdoor</option>
@@ -1888,41 +2011,41 @@ function buildActionParamsUI(action) {
                 <option value="pico">Pico hotspot</option>
             </select>
             <div class="action-hint">Déploiement capacité locale ciblée</div>
-        `;
+        `);
         return;
     }
 
     if (action === 'add_sector') {
-        container.innerHTML = `${infoBox}
+        container.innerHTML = sanitizeRichHtml(`${infoBox}
             <label class="action-label">Configuration actuelle</label>
             <div class="action-static">3 secteurs → 4 secteurs</div>
             <div class="action-hint">Sectorisation: +33% capacité site</div>
-        `;
+        `);
         return;
     }
 
     if (action === 'add_site') {
-        container.innerHTML = `${infoBox}
+        container.innerHTML = sanitizeRichHtml(`${infoBox}
             <label class="action-label" for="param-site-type">Type de site</label>
             <select id="param-site-type" class="action-input">
                 <option value="macro">Macro capacitaire</option>
                 <option value="rooftop">Rooftop urbain</option>
             </select>
             <div class="action-hint">Nouveau site pour absorber trafic zone congestionnée</div>
-        `;
+        `);
         return;
     }
 
     if (action === 'split_cell') {
-        container.innerHTML = `${infoBox}
+        container.innerHTML = sanitizeRichHtml(`${infoBox}
             <label class="action-label">Cell Split</label>
             <div class="action-static">1 cellule → 2 cellules</div>
             <div class="action-hint">Subdivision cellule haute charge en 2+ cellules</div>
-        `;
+        `);
         return;
     }
 
-    container.innerHTML = `${infoBox}<div class="action-hint">Action: ${actionInfo?.name || action}</div>`;
+    container.innerHTML = sanitizeRichHtml(`${infoBox}<div class="action-hint">Action: ${escapeHtml(actionInfo?.name || action)}</div>`);
 }
 
 function collectActionParams(action) {
@@ -1930,14 +2053,44 @@ function collectActionParams(action) {
         const deg = Number(document.getElementById('param-tilt-deg')?.value || 0);
         return { degrees: deg };
     }
+    if (action === 'power') {
+        const reduction = Number(document.getElementById('param-power-delta')?.value || 0);
+        return { reduction: Math.max(0, Math.min(10, reduction)) };
+    }
     if (action === 'redistribute') {
         const target = document.getElementById('param-redistribute-target')?.value || '';
         const ratio = Number(document.getElementById('param-redistribute-ratio')?.value || 0.2);
-        return { target: target || undefined, ratio };
+        return { target: target || undefined, ratio: Math.max(0, Math.min(0.6, ratio)) };
     }
     if (action === 'add_carrier') {
         const band = document.getElementById('param-carrier-band')?.value;
         return { band: band || undefined };
+    }
+    if (action === 'parameter_tuning') {
+        const cio = Number(document.getElementById('param-cio')?.value || 0);
+        const hysteresis = Number(document.getElementById('param-hysteresis')?.value || 0);
+        return {
+            cio: Math.max(-6, Math.min(6, cio)),
+            hysteresis: Math.max(0, Math.min(6, hysteresis)),
+        };
+    }
+    if (action === 'mimo_upgrade') {
+        const targetMimo = document.getElementById('param-mimo-target')?.value || '4T4R';
+        return { targetMimo };
+    }
+    if (action === 'small_cell') {
+        const type = document.getElementById('param-sc-type')?.value || 'micro';
+        return { type };
+    }
+    if (action === 'add_site') {
+        const siteType = document.getElementById('param-site-type')?.value || 'macro';
+        return { siteType };
+    }
+    if (action === 'add_sector') {
+        return { targetSectors: 4 };
+    }
+    if (action === 'split_cell') {
+        return { newCellCount: 2 };
     }
     return {};
 }
@@ -1946,14 +2099,15 @@ function displaySimulationResults(result) {
     const container = document.getElementById('action-result');
     if (!container) return;
     if (result.error) {
-        container.innerHTML = `<div class="action-error">${result.error}</div>`;
+        container.innerHTML = '<div class="action-error"></div>';
+        const errorEl = container.querySelector('.action-error');
+        if (errorEl) errorEl.textContent = result.error;
         return;
     }
 
     const before = result.before || {};
     const after = result.after || {};
     const impact = result.impact || {};
-    const simMode = result.simulation_mode || 'fast';
     const action = result.action || '';
     const defaultConfidence = action === 'redistribute' ? 0.55 : 0.65;
     const confidence = result.confidence ?? defaultConfidence;
@@ -1965,10 +2119,10 @@ function displaySimulationResults(result) {
         return { name: n.name || n.cell_name, delta };
     }).sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta)).slice(0, 12);
     const neighborsText = neighbors.length
-        ? `Neighbors affected: ${neighbors.map(c => `${c.name} (${formatNumber(c.delta)}%)`).join(', ')}${impact.affected_cells.length > neighbors.length ? ', …more' : ''}`
+        ? `Neighbors affected: ${neighbors.map(c => `${escapeHtml(c.name)} (${escapeHtml(formatNumber(c.delta))}%)`).join(', ')}${impact.affected_cells.length > neighbors.length ? ', …more' : ''}`
         : '';
 
-    container.innerHTML = `
+    container.innerHTML = sanitizeRichHtml(`
         <div class="action-mode-badge">${modeLabel} (${confidencePct}% confidence)</div>
         <div class="action-comparison">
             <div>
@@ -1988,9 +2142,9 @@ function displaySimulationResults(result) {
             </div>
         </div>
         <div class="action-impact">Load: ${impact.load_change >= 0 ? '+' : ''}${impact.load_change ?? 0}% | Throughput: ${impact.throughput_change >= 0 ? '+' : ''}${impact.throughput_change ?? 0} kbps</div>
-        <div class="action-reco">${result.recommendation || ''}</div>
+        <div class="action-reco">${escapeHtml(result.recommendation || '')}</div>
         ${neighborsText ? `<div class="action-affected">${neighborsText}</div>` : ''}
-    `;
+    `);
 }
 
 async function runSimulation(cellName, action) {
@@ -2020,7 +2174,7 @@ async function runSimulation(cellName, action) {
             Object.values(site.antennas || {}).forEach(ant => existingBands.add(String(ant.band)));
         }
         if (existingBands.has(String(params.band))) {
-            if (resultEl) resultEl.innerHTML = `<div class="action-error">Site ${siteName} already has Band ${params.band}.</div>`;
+            if (resultEl) resultEl.innerHTML = `<div class="action-error">Site ${escapeHtml(siteName)} already has Band ${escapeHtml(params.band)}.</div>`;
             return;
         }
     }
@@ -2034,7 +2188,7 @@ async function runSimulation(cellName, action) {
             runBtn.innerHTML = '<span class="material-symbols-outlined">hourglass_top</span> Running...';
         }
 
-        const res = await fetch('/api/simulate', {
+        const res = await fetchWithAuth('/api/simulate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ cell_name: cellName, action, params, time_entry: timeEntry, mode })
@@ -2042,7 +2196,7 @@ async function runSimulation(cellName, action) {
         const payload = await res.json();
         displaySimulationResults(payload);
     } catch (err) {
-        if (resultEl) resultEl.innerHTML = `<div class="action-error">Simulation failed: ${err.message}</div>`;
+        if (resultEl) resultEl.innerHTML = `<div class="action-error">Simulation failed: ${escapeHtml(err.message)}</div>`;
     } finally {
         if (runBtn) {
             runBtn.disabled = false;
@@ -2052,8 +2206,10 @@ async function runSimulation(cellName, action) {
 }
 
 window.toggleAntennaDropdown = (siteName, antennaId) => {
-    const el = document.getElementById(`antenna-cells-${siteName}-${antennaId}`);
-    const icon = document.getElementById(`expand-icon-${siteName}-${antennaId}`);
+    const safeSite = String(siteName || '').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const safeAntenna = String(antennaId || '').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const el = document.getElementById(`antenna-cells-${safeSite}-${safeAntenna}`);
+    const icon = document.getElementById(`expand-icon-${safeSite}-${safeAntenna}`);
     if (el) {
         el.classList.toggle('expanded');
         icon?.classList.toggle('rotated');
@@ -2069,22 +2225,45 @@ window.selectCell = (cellName, fly = true) => {
     renderActionPanel(cellName);
     if (feature && state.popup) {
         const p = feature.properties;
+        const popupRoot = document.createElement('div');
+        popupRoot.className = 'cell-popup';
+
+        const popupHeader = document.createElement('div');
+        popupHeader.className = 'cell-popup-header';
+        popupHeader.style.borderLeft = `4px solid ${p.color}`;
+        popupHeader.textContent = p.cell_name;
+
+        const popupBody = document.createElement('div');
+        popupBody.className = 'cell-popup-body';
+        const rows = [
+            ['Site', p.site_name],
+            ['Antenna', String(p.antenna_id || '').toUpperCase()],
+            ['Band', p.band],
+            ['Local ID', p.localcell_id],
+            ['Load', `${formatNumber(p.load)}%`],
+            ['CQI', formatNumber(p.cqi)],
+            ['Throughput', formatThroughput(p.throughput)],
+        ];
+        rows.forEach(([label, value]) => {
+            const row = document.createElement('div');
+            row.className = 'popup-row';
+            if (label === 'CQI' && p.has_low_cqi) {
+                row.classList.add('text-danger');
+            }
+            const labelEl = document.createElement('span');
+            labelEl.textContent = label;
+            const valueEl = document.createElement('span');
+            valueEl.textContent = value;
+            row.appendChild(labelEl);
+            row.appendChild(valueEl);
+            popupBody.appendChild(row);
+        });
+
+        popupRoot.appendChild(popupHeader);
+        popupRoot.appendChild(popupBody);
         state.popup
             .setLngLat(feature.geometry.coordinates)
-            .setHTML(`
-                <div class="cell-popup">
-                    <div class="cell-popup-header" style="border-left:4px solid ${p.color}">${p.cell_name}</div>
-                    <div class="cell-popup-body">
-                        <div class="popup-row"><span>Site</span><span>${p.site_name}</span></div>
-                        <div class="popup-row"><span>Antenna</span><span>${p.antenna_id.toUpperCase()}</span></div>
-                        <div class="popup-row"><span>Band</span><span>${p.band}</span></div>
-                        <div class="popup-row"><span>Local ID</span><span>${p.localcell_id}</span></div>
-                        <div class="popup-row"><span>Load</span><span>${formatNumber(p.load)}%</span></div>
-                        <div class="popup-row ${p.has_low_cqi ? 'text-danger' : ''}"><span>CQI</span><span>${formatNumber(p.cqi)}</span></div>
-                        <div class="popup-row"><span>Throughput</span><span>${formatThroughput(p.throughput)}</span></div>
-                    </div>
-                </div>
-            `)
+            .setDOMContent(popupRoot)
             .addTo(state.map);
     }
 };
@@ -2109,7 +2288,8 @@ function applyFilters() {
         if (p.severity !== null && p.severity !== undefined && (p.severity < minSeverity || p.severity > maxSeverity)) return false;
         return true;
     });
-    const sectors = state.sectorFeatures.filter(f => points.some(p => p.id === f.id));
+    const visiblePointIds = new Set(points.map(p => p.id));
+    const sectors = state.sectorFeatures.filter(f => visiblePointIds.has(f.id));
     state.filteredPointFeatures = points;
     state.filteredSectorFeatures = sectors;
     updateMapData();
@@ -2125,7 +2305,18 @@ function populateFrequencyFilters(bandsList = []) {
         const id = `band-${b}`;
         const wrapper = document.createElement('label');
         wrapper.className = 'checkbox-item';
-        wrapper.innerHTML = `<input type="checkbox" id="${id}" data-band="${b}" checked><span class="checkmark"></span><span>Band ${b}</span>`;
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.id = id;
+        checkbox.dataset.band = String(b);
+        checkbox.checked = true;
+        const checkmark = document.createElement('span');
+        checkmark.className = 'checkmark';
+        const labelText = document.createElement('span');
+        labelText.textContent = `Band ${b}`;
+        wrapper.appendChild(checkbox);
+        wrapper.appendChild(checkmark);
+        wrapper.appendChild(labelText);
         container.appendChild(wrapper);
         state.filters.bands[b] = true;
     });
@@ -2140,7 +2331,18 @@ function populateIssueFilters(issueTypes = []) {
         const safeId = `issue-${type.replace(/\s+/g, '-').toLowerCase()}`;
         const wrapper = document.createElement('label');
         wrapper.className = 'checkbox-item';
-        wrapper.innerHTML = `<input type="checkbox" id="${safeId}" data-issue="${type}" checked><span class="checkmark"></span><span>${type}</span>`;
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.id = safeId;
+        checkbox.dataset.issue = String(type);
+        checkbox.checked = true;
+        const checkmark = document.createElement('span');
+        checkmark.className = 'checkmark';
+        const labelText = document.createElement('span');
+        labelText.textContent = String(type);
+        wrapper.appendChild(checkbox);
+        wrapper.appendChild(checkmark);
+        wrapper.appendChild(labelText);
         container.appendChild(wrapper);
         state.filters.issueTypes[type] = true;
     });
@@ -2548,12 +2750,12 @@ const unifiedTimeline = {
     currentIndex: 0,
     dividerIndex: 0  // Where historical ends and forecast begins
 };
+let activeSliceAbortController = null;
+let activeSliceRequestId = 0;
 
 async function checkForecastAvailability() {
-    // Don't load old forecast data on startup - user must generate fresh
-    // This is called after generate to load the new forecast
     try {
-        const res = await fetch('/api/forecast');
+        const res = await fetchWithAuth('/api/forecast');
         const data = await res.json();
         forecastState.available = data.available;
         if (data.available && data.forecasts) {
@@ -2568,20 +2770,6 @@ async function checkForecastAvailability() {
         console.warn('Could not check forecast availability:', err);
         forecastState.forecastIndex = [];
         return { available: false };
-    }
-}
-
-async function clearForecastOnStartup() {
-    // Clear any leftover forecast data when app starts
-    try {
-        await fetch('/api/forecast', { method: 'DELETE' });
-        forecastState.forecastIndex = [];
-        unifiedTimeline.currentIndex = Math.min(
-            unifiedTimeline.currentIndex,
-            Math.max(0, state.timeIndex.length - 1)
-        );
-    } catch (err) {
-        // Ignore errors
     }
 }
 
@@ -2672,29 +2860,40 @@ function getDataForIndex(index) {
 async function loadUnifiedTimeSlice(index) {
     if (index < 0 || index >= unifiedTimeline.totalCount) return;
     
+    if (activeSliceAbortController) {
+        activeSliceAbortController.abort();
+    }
+    activeSliceAbortController = new AbortController();
+    const requestId = ++activeSliceRequestId;
+    const { signal } = activeSliceAbortController;
+
     unifiedTimeline.currentIndex = index;
     const data = getDataForIndex(index);
     
     if (data.type === 'forecast') {
-        await loadForecastSliceInternal(data.entry, data.localIndex);
+        await loadForecastSliceInternal(data.entry, data.localIndex, { signal, requestId });
     } else {
-        await loadHistoricalSliceInternal(data.entry, data.localIndex);
+        await loadHistoricalSliceInternal(data.entry, data.localIndex, { signal, requestId });
     }
+
+    if (signal.aborted || requestId !== activeSliceRequestId) return;
     
     // Update slider position
     const slider = document.getElementById('time-slider');
     if (slider) slider.value = index;
 }
 
-async function loadHistoricalSliceInternal(timeEntry, localIndex) {
+async function loadHistoricalSliceInternal(timeEntry, localIndex, requestContext = {}) {
     if (!timeEntry) return;
-    
-    state.currentTimeIndex = localIndex;
+    const { signal, requestId } = requestContext;
     
     try {
-        const res = await fetch(`/time_data/${timeEntry.filename}?t=${Date.now()}`);
+        const res = await fetchWithAuth(`${buildDataUrl('time_data', timeEntry.filename)}?t=${Date.now()}`, { signal });
         const sliceData = await res.json();
+        if (signal?.aborted || requestId !== activeSliceRequestId) return;
         
+        state.currentTimeIndex = localIndex;
+        warnIfObservationSchemaMismatch(sliceData.observations, `historical slice ${timeEntry.timestamp || timeEntry.filename}`);
         state.currentObservations = sliceData.observations;
         state.currentStats = sliceData.stats;
         
@@ -2712,17 +2911,21 @@ async function loadHistoricalSliceInternal(timeEntry, localIndex) {
             showSiteInfoPanel(state.selectedSite);
         }
     } catch (err) {
+        if (err?.name === 'AbortError') return;
         console.error('Failed to load historical slice:', err);
     }
 }
 
-async function loadForecastSliceInternal(forecastEntry, localIndex) {
+async function loadForecastSliceInternal(forecastEntry, localIndex, requestContext = {}) {
     if (!forecastEntry) return;
+    const { signal, requestId } = requestContext;
     
     try {
-        const res = await fetch(`/forecast_data/${forecastEntry.filename}?t=${Date.now()}`);
+        const res = await fetchWithAuth(`${buildDataUrl('forecast_data', forecastEntry.filename)}?t=${Date.now()}`, { signal });
         const sliceData = await res.json();
+        if (signal?.aborted || requestId !== activeSliceRequestId) return;
         
+        warnIfObservationSchemaMismatch(sliceData.observations || {}, `forecast slice ${forecastEntry.timestamp || forecastEntry.filename}`);
         state.currentObservations = sliceData.observations || {};
         state.currentStats = sliceData.stats || forecastEntry.stats;
         
@@ -2751,6 +2954,7 @@ async function loadForecastSliceInternal(forecastEntry, localIndex) {
             showSiteInfoPanel(state.selectedSite);
         }
     } catch (err) {
+        if (err?.name === 'AbortError') return;
         console.error('Failed to load forecast slice:', err);
         showNotification('Failed to load forecast data', 'error');
     }
@@ -2761,23 +2965,10 @@ async function generateForecast() {
     
     const btn = document.getElementById('btn-generate-forecast');
     const daysInput = document.getElementById('forecast-days');
-    const days = daysInput ? parseInt(daysInput.value, 10) : 7;
+    const parsedDays = daysInput ? parseInt(daysInput.value, 10) : 7;
+    const days = Number.isFinite(parsedDays) ? Math.max(1, Math.min(30, parsedDays)) : 7;
+    if (daysInput) daysInput.value = String(days);
     const originalHtml = btn?.innerHTML;
-    
-    // If days is 0 or less, clear the forecast
-    if (days <= 0) {
-        try {
-            await fetch('/api/forecast', { method: 'DELETE' });
-            forecastState.forecastIndex = [];
-            updateUnifiedTimeline();
-            const slider = document.getElementById('time-slider');
-            if (slider) slider.value = Math.min(unifiedTimeline.currentIndex, unifiedTimeline.totalCount - 1);
-            showNotification('Forecast cleared', 'success');
-        } catch (err) {
-            showNotification('Failed to clear forecast', 'error');
-        }
-        return;
-    }
     
     try {
         forecastState.isGenerating = true;
@@ -2787,7 +2978,7 @@ async function generateForecast() {
             btn.innerHTML = '<span class="material-symbols-outlined">sync</span> Generating...';
         }
         
-        const res = await fetch('/api/forecast', {
+        const res = await fetchWithAuth('/api/forecast', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ days: days })
@@ -2815,16 +3006,35 @@ async function generateForecast() {
     }
 }
 
+async function clearForecastDataByUser() {
+    try {
+        await fetchWithAuth('/api/forecast', { method: 'DELETE' });
+        forecastState.forecastIndex = [];
+        forecastState.available = false;
+        updateUnifiedTimeline();
+        const maxIndex = Math.max(0, unifiedTimeline.totalCount - 1);
+        unifiedTimeline.currentIndex = Math.min(unifiedTimeline.currentIndex, maxIndex);
+        await loadUnifiedTimeSlice(unifiedTimeline.currentIndex);
+        showNotification('Forecast cleared', 'success');
+    } catch (err) {
+        console.error('Failed to clear forecast:', err);
+        showNotification('Failed to clear forecast', 'error');
+    }
+}
+
 function showNotification(message, type = 'info') {
     const existing = document.querySelector('.notification-toast');
     if (existing) existing.remove();
     
     const toast = document.createElement('div');
     toast.className = `notification-toast notification-${type}`;
-    toast.innerHTML = `
-        <span class="material-symbols-outlined">${type === 'success' ? 'check_circle' : type === 'error' ? 'error' : 'info'}</span>
-        <span>${message}</span>
-    `;
+    const icon = document.createElement('span');
+    icon.className = 'material-symbols-outlined';
+    icon.textContent = type === 'success' ? 'check_circle' : type === 'error' ? 'error' : 'info';
+    const text = document.createElement('span');
+    text.textContent = String(message ?? '');
+    toast.appendChild(icon);
+    toast.appendChild(text);
     document.body.appendChild(toast);
     
     setTimeout(() => toast.classList.add('show'), 10);
@@ -2840,6 +3050,7 @@ function setupUnifiedTimelineControls() {
     const nextBtn = document.getElementById('time-next');
     const playBtn = document.getElementById('time-play');
     const generateBtn = document.getElementById('btn-generate-forecast');
+    const clearBtn = document.getElementById('btn-clear-forecast');
     
     // Unified slider handler
     const debouncedLoad = debounce((val) => loadUnifiedTimeSlice(val), 100);
@@ -2887,12 +3098,10 @@ function setupUnifiedTimelineControls() {
     
     // Generate button
     generateBtn?.addEventListener('click', generateForecast);
+    clearBtn?.addEventListener('click', clearForecastDataByUser);
     
-    // Clear old forecast data on startup, then initialize on real data only
-    clearForecastOnStartup().then(async () => {
-        updateUnifiedTimeline();
-        await loadUnifiedTimeSlice(Math.min(unifiedTimeline.currentIndex, unifiedTimeline.totalCount - 1));
-    });
+    updateUnifiedTimeline();
+    loadUnifiedTimeSlice(Math.min(unifiedTimeline.currentIndex, Math.max(0, unifiedTimeline.totalCount - 1)));
 }
 
 // --- Time Navigation ---
@@ -2981,6 +3190,7 @@ function updateStatsUI(stats) {
 
 function updateAlertsUI(features) {
     const alertsList = document.getElementById('alerts-list');
+    if (!alertsList) return;
     const congested = features.filter(f => f.properties.congested);
     
     const badge = document.getElementById('alert-count');
@@ -2990,16 +3200,37 @@ function updateAlertsUI(features) {
         alertsList.innerHTML = '<div class="alert-placeholder">✓ No active alerts</div>';
         return;
     }
-    
-    alertsList.innerHTML = congested.slice(0, CONFIG.MAX_ALERTS_RENDER).map(f => `
-        <div class="alert-item" data-cell-id="${f.properties.id}" data-cell-name="${f.properties.cell_name}">
-            <span class="material-symbols-outlined">error</span>
-            <div class="alert-item-content">
-                <div class="alert-item-title">${f.properties.cell_name}</div>
-                <div class="alert-item-desc">${f.properties.issue_type} • Load: ${formatNumber(f.properties.load)}%</div>
-            </div>
-        </div>
-    `).join('');
+
+    alertsList.innerHTML = '';
+    const fragment = document.createDocumentFragment();
+    congested.slice(0, CONFIG.MAX_ALERTS_RENDER).forEach((feature) => {
+        const alertItem = document.createElement('div');
+        alertItem.className = 'alert-item';
+        alertItem.dataset.cellId = String(feature.properties.id ?? '');
+        alertItem.dataset.cellName = String(feature.properties.cell_name ?? '');
+
+        const icon = document.createElement('span');
+        icon.className = 'material-symbols-outlined';
+        icon.textContent = 'error';
+
+        const content = document.createElement('div');
+        content.className = 'alert-item-content';
+
+        const title = document.createElement('div');
+        title.className = 'alert-item-title';
+        title.textContent = feature.properties.cell_name;
+
+        const desc = document.createElement('div');
+        desc.className = 'alert-item-desc';
+        desc.textContent = `${feature.properties.issue_type} • Load: ${formatNumber(feature.properties.load)}%`;
+
+        content.appendChild(title);
+        content.appendChild(desc);
+        alertItem.appendChild(icon);
+        alertItem.appendChild(content);
+        fragment.appendChild(alertItem);
+    });
+    alertsList.appendChild(fragment);
 
     // Make alerts clickable to navigate to the cell
     alertsList.querySelectorAll('.alert-item').forEach(item => {
@@ -3370,19 +3601,36 @@ function setupMapInteractions(map) {
     map.on('mouseenter', 'cells-points', (e) => {
         map.getCanvas().style.cursor = 'pointer';
         const p = e.features[0].properties;
+        const popupRoot = document.createElement('div');
+        popupRoot.style.padding = '10px';
+        popupRoot.style.fontFamily = 'Inter, sans-serif';
+        popupRoot.style.minWidth = '180px';
+
+        const title = document.createElement('div');
+        title.style.fontWeight = '600';
+        title.style.marginBottom = '6px';
+        title.style.color = p.color;
+        title.textContent = p.cell_name;
+
+        const body = document.createElement('div');
+        body.style.fontSize = '12px';
+        body.style.color = '#a0aec0';
+        [
+            `Site: ${p.enodeb_name}`,
+            `Load: ${formatNumber(p.load)}%`,
+            `CQI: ${formatNumber(p.cqi)}`,
+            `Status: ${p.status}`,
+        ].forEach((line) => {
+            const row = document.createElement('div');
+            row.textContent = line;
+            body.appendChild(row);
+        });
+
+        popupRoot.appendChild(title);
+        popupRoot.appendChild(body);
         state.popup
             .setLngLat(e.lngLat)
-            .setHTML(`
-                <div style="padding: 10px; font-family: Inter, sans-serif; min-width: 180px;">
-                    <div style="font-weight: 600; margin-bottom: 6px; color: ${p.color};">${p.cell_name}</div>
-                    <div style="font-size: 12px; color: #a0aec0;">
-                        <div>Site: ${p.enodeb_name}</div>
-                        <div>Load: ${formatNumber(p.load)}%</div>
-                        <div>CQI: ${formatNumber(p.cqi)}</div>
-                        <div>Status: ${p.status}</div>
-                    </div>
-                </div>
-            `)
+            .setDOMContent(popupRoot)
             .addTo(map);
     });
     
@@ -3571,15 +3819,39 @@ async function init() {
         setLoading(true, 'Loading baseline...');
         
         const [baselineRes, timeIndexRes, statsRes] = await Promise.all([
-            fetch('/baseline.json?t=' + Date.now()),
-            fetch('/time_index.json?t=' + Date.now()),
-            fetch('/stats.json?t=' + Date.now())
+            fetchWithAuth(`${buildDataUrl('baseline.json')}?t=${Date.now()}`),
+            fetchWithAuth(`${buildDataUrl('time_index.json')}?t=${Date.now()}`),
+            fetchWithAuth(`${buildDataUrl('stats.json')}?t=${Date.now()}`)
         ]);
+
+        if (!baselineRes.ok || !timeIndexRes.ok) {
+            throw new Error(`Data API request failed (${baselineRes.status}/${timeIndexRes.status}/${statsRes.status})`);
+        }
         
         state.baseline = await baselineRes.json();
         const timeIndexData = await timeIndexRes.json();
-        state.timeIndex = [...timeIndexData.timestamps].sort((a, b) => parseTimestamp(a.timestamp) - parseTimestamp(b.timestamp));
-        state.globalStats = await statsRes.json();
+        const timestamps = Array.isArray(timeIndexData?.timestamps) ? timeIndexData.timestamps : [];
+        if (!timestamps.length) {
+            throw new Error('Invalid time_index.json payload: missing timestamps array');
+        }
+        state.timeIndex = [...timestamps].sort((a, b) => parseTimestamp(a.timestamp) - parseTimestamp(b.timestamp));
+
+        if (statsRes.ok) {
+            state.globalStats = await statsRes.json();
+        } else {
+            const frequencyBands = Array.from(new Set(
+                Object.values(state.baseline)
+                    .map((cell) => Number(cell?.frequency_band))
+                    .filter((band) => Number.isFinite(band))
+            )).sort((a, b) => a - b);
+
+            state.globalStats = {
+                total_timestamps: state.timeIndex.length,
+                total_cells: Object.keys(state.baseline).length,
+                frequency_bands: frequencyBands,
+            };
+            console.warn(`stats.json unavailable (${statsRes.status}); using fallback global stats`);
+        }
         buildSiteHierarchy();
 
         populateFrequencyFilters(state.globalStats?.frequency_bands || []);

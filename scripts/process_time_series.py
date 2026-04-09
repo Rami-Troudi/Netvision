@@ -12,6 +12,7 @@ import pandas as pd
 import numpy as np
 import json
 import os
+import argparse
 from datetime import datetime
 from typing import List, Dict
 import warnings
@@ -413,13 +414,22 @@ def process_time_series_data(
 
 
 if __name__ == "__main__":
-    input_files = [
-        'data_set_radio_1.csv',
-        'data_set_radio_all_hour.csv'
-    ]
+    parser = argparse.ArgumentParser(description="Process time-series network KPI files for NetVision")
+    parser.add_argument(
+        '--input',
+        nargs='+',
+        default=['data_set_radio_1.csv', 'data_set_radio_all_hour.csv'],
+        help='Input CSV file(s)'
+    )
+    parser.add_argument(
+        '--output',
+        default='.',
+        help='Output directory for baseline.json, time_index.json, stats.json, and time_data/'
+    )
+    args = parser.parse_args()
     
     try:
-        stats = process_time_series_data(input_files, output_dir='.')
+        stats = process_time_series_data(args.input, output_dir=args.output)
     except Exception as e:
         print(f"\n❌ Error: {e}")
         import traceback

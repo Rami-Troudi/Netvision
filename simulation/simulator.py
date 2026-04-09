@@ -404,14 +404,27 @@ def apply_new_site(state: Dict[str, float]) -> Dict[str, float]:
 # DATA LOADING WITH VALIDATION
 # ============================================================================
 
+def resolve_time_file_path(time_data_dir: Path, time_file: str) -> Path:
+    """Resolve time_file and ensure it stays inside the allowed time_data directory."""
+    raw_path = Path(time_file)
+    candidate = raw_path if raw_path.is_absolute() else (time_data_dir / raw_path)
+    resolved = candidate.resolve()
+    try:
+        resolved.relative_to(time_data_dir)
+    except ValueError as exc:
+        raise ValueError("Invalid time_file path") from exc
+    return resolved
+
+
 def load_time_entry(base_dir: Path, time_file: Optional[str] = None) -> Tuple[str, Dict[str, Any]]:
-    time_data_dir = base_dir / "public" / "time_data"
+    time_data_dir = (base_dir / "time_data").resolve()
     if time_file:
-        candidate = time_data_dir / time_file
-        if candidate.exists():
+        candidate = resolve_time_file_path(time_data_dir, time_file)
+        if candidate.exists() and candidate.is_file():
             data = load_file(candidate)
             return data.get("timestamp", time_file), data.get("observations", {})
-    index_path = base_dir / "public" / "time_index.json"
+        raise FileNotFoundError(f"Time slice not found: {Path(time_file).name}")
+    index_path = base_dir / "time_index.json"
     if index_path.exists():
         idx = load_file(index_path)
         timestamps = idx.get("timestamps") or []
@@ -419,8 +432,8 @@ def load_time_entry(base_dir: Path, time_file: Optional[str] = None) -> Tuple[st
             first = timestamps[0]
             fname = first.get("filename")
             if fname:
-                candidate = time_data_dir / fname
-                if candidate.exists():
+                candidate = resolve_time_file_path(time_data_dir, fname)
+                if candidate.exists() and candidate.is_file():
                     data = load_file(candidate)
                     return data.get("timestamp", fname), data.get("observations", {})
     raise FileNotFoundError("No valid time slice found")
@@ -479,7 +492,7 @@ def simulate_action(base_dir: Path, cell_name: str, action: str, params: Dict[st
     
     Returns calibrated predictions with appropriate confidence levels
     """
-    baseline_path = base_dir / "public" / "baseline.json"
+    baseline_path = base_dir / "baseline.json"
     if not baseline_path.exists():
         raise FileNotFoundError("baseline.json not found")
     baseline = load_file(baseline_path)

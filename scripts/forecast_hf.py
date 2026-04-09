@@ -23,12 +23,12 @@ if sys.platform == 'win32':
 
 # Configuration
 BASE_DIR = Path(__file__).resolve().parent.parent
-PUBLIC_DIR = BASE_DIR / "public"
-TIME_DATA_DIR = PUBLIC_DIR / "time_data"
-FORECAST_DATA_DIR = PUBLIC_DIR / "forecast_data"
-BASELINE_PATH = PUBLIC_DIR / "baseline.json"
-TIME_INDEX_PATH = PUBLIC_DIR / "time_index.json"
-FORECAST_INDEX_PATH = PUBLIC_DIR / "forecast_index.json"
+DATA_DIR = BASE_DIR
+TIME_DATA_DIR = DATA_DIR / "time_data"
+FORECAST_DATA_DIR = DATA_DIR / "forecast_data"
+BASELINE_PATH = DATA_DIR / "baseline.json"
+TIME_INDEX_PATH = DATA_DIR / "time_index.json"
+FORECAST_INDEX_PATH = DATA_DIR / "forecast_index.json"
 
 
 def log(msg, level="INFO"):
