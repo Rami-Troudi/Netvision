@@ -68,7 +68,7 @@ function resolveDataPath(projectRoot, slugParts) {
   }
 }
 
-async function readParquetRows(filePath) {
+async function readParquetObservations(filePath) {
   const parquetModule = await import('parquetjs-lite')
   const ParquetReader = parquetModule?.ParquetReader || parquetModule?.default?.ParquetReader
   if (!ParquetReader) {
@@ -77,14 +77,22 @@ async function readParquetRows(filePath) {
 
   const reader = await ParquetReader.openFile(filePath)
   try {
-    const rows = []
+    const observations = {}
     const cursor = reader.getCursor()
     let record = await cursor.next()
     while (record) {
-      rows.push(record)
+      const cellName = String(record?.cell_name || '').trim()
+      if (cellName) {
+        const observation = {}
+        for (const [key, value] of Object.entries(record)) {
+          if (key === 'cell_name') continue
+          observation[key] = normalizeObservationValue(key, value)
+        }
+        observations[cellName] = observation
+      }
       record = await cursor.next()
     }
-    return rows
+    return observations
   } finally {
     await reader.close()
   }
@@ -106,44 +114,36 @@ function normalizeObservationValue(key, value) {
   return value
 }
 
-function rowsToObservations(rows) {
-  const observations = {}
-
-  for (const row of rows) {
-    const cellName = String(row?.cell_name || '').trim()
-    if (!cellName) continue
-
-    const observation = {}
-    for (const [key, value] of Object.entries(row)) {
-      if (key === 'cell_name') continue
-      observation[key] = normalizeObservationValue(key, value)
-    }
-
-    observations[cellName] = observation
-  }
-
-  return observations
+// Module-level metadata cache
+const _metadataCache = {
+  time_data: { mtime: 0, entries: [] },
+  forecast_data: { mtime: 0, entries: [] }
 }
 
 async function loadSliceMetadata(projectRoot, dataDir, filename) {
-  if (dataDir === 'time_data') {
-    const raw = await readFile(path.resolve(projectRoot, 'time_index.json'), 'utf8')
-    const parsed = JSON.parse(raw)
-    const entries = Array.isArray(parsed?.timestamps) ? parsed.timestamps : []
-    const match = entries.find((entry) => entry?.filename === filename)
-    if (!match) throw new Error('Time index metadata not found')
-    return {
-      timestamp: match.timestamp || filename,
-      stats: match.stats || {},
+  if (dataDir === 'time_data' || dataDir === 'forecast_data') {
+    const indexFileName = dataDir === 'time_data' ? 'time_index.json' : 'forecast_index.json'
+    const indexPath = path.resolve(projectRoot, indexFileName)
+    
+    let currentMtime = 0
+    try {
+      const indexStat = await stat(indexPath)
+      currentMtime = indexStat.mtimeMs
+    } catch {
+      throw new Error(indexFileName + ' not found')
     }
-  }
 
-  if (dataDir === 'forecast_data') {
-    const raw = await readFile(path.resolve(projectRoot, 'forecast_index.json'), 'utf8')
-    const parsed = JSON.parse(raw)
-    const entries = Array.isArray(parsed) ? parsed : []
-    const match = entries.find((entry) => entry?.filename === filename)
-    if (!match) throw new Error('Forecast index metadata not found')
+    if (_metadataCache[dataDir].mtime !== currentMtime) {
+      const raw = await readFile(indexPath, 'utf8')
+      const parsed = JSON.parse(raw)
+      _metadataCache[dataDir].entries = Array.isArray(parsed?.timestamps || parsed) 
+        ? (parsed.timestamps || parsed) : []
+      _metadataCache[dataDir].mtime = currentMtime
+    }
+
+    const match = _metadataCache[dataDir].entries.find((entry) => entry?.filename === filename)
+    if (!match) throw new Error(indexFileName + ' metadata not found')
+    
     return {
       timestamp: match.timestamp || filename,
       stats: match.stats || {},
@@ -153,7 +153,6 @@ async function loadSliceMetadata(projectRoot, dataDir, filename) {
 
   throw new Error('Unsupported Parquet directory')
 }
-
 export default async function handler(req, res) {
   if (!requireAuthenticatedRequest(req, res)) return
 
@@ -192,14 +191,14 @@ export default async function handler(req, res) {
   if (kind === 'parquet') {
     try {
       const [rows, metadata] = await Promise.all([
-        readParquetRows(filePath),
+        readParquetObservations(filePath),
         loadSliceMetadata(projectRoot, dataDir, path.basename(filePath)),
       ])
 
       const payload = {
         timestamp: metadata.timestamp,
         stats: metadata.stats,
-        observations: rowsToObservations(rows),
+        observations: rows,
       }
 
       if (metadata.confidence !== undefined) {

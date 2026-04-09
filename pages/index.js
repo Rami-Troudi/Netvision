@@ -614,15 +614,7 @@ const pageMarkup = `
             </div>
         </div>`
 
-function sanitizeStaticMarkup(markup) {
-  return String(markup ?? '')
-    .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '')
-    .replace(/\son[a-z]+\s*=\s*(["']).*?\1/gi, '')
-}
-
 export default function Home() {
-  const safeMarkup = useMemo(() => sanitizeStaticMarkup(pageMarkup), [])
-
   useEffect(() => {
     const load = async () => {
       await import('../src/main')
@@ -635,7 +627,7 @@ export default function Home() {
       <Head>
         <title>NetVision Digital Twin | Orange Network Operations</title>
       </Head>
-      <div id="app" dangerouslySetInnerHTML={{ __html: safeMarkup }} />
+      <div id="app" dangerouslySetInnerHTML={{ __html: pageMarkup }} />
     </>
   )
 }

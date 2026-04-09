@@ -65,11 +65,16 @@ function safeTokenEquals(left, right) {
 export function isAuthenticatedRequest(req) {
   const configuredToken = getConfiguredToken()
   if (!configuredToken) {
+    const isDevBypass = process.env.NODE_ENV !== 'production' || process.env.AUTH_BYPASS === 'true';
     if (!warnedMissingToken) {
       warnedMissingToken = true
-      console.warn('Auth token is not configured; auth checks are currently bypassed')
+      if (isDevBypass) {
+        console.warn('Auth token is not configured; auth checks bypassed due to dev/explicit bypass flag')
+      } else {
+        console.error('CRITICAL: Auth token is not configured but auth checks are strictly enforced (failing closed). To bypass temporarily, set AUTH_BYPASS=true.');
+      }
     }
-    return true
+    return isDevBypass
   }
 
   const requestToken = extractRequestToken(req)

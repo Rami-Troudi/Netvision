@@ -61,3 +61,12 @@ data_set_radio_all_hour.csv
 venv/
 env/
 ENV/
+
+# Runtime databases and indices
+time_data/
+forecast_data/
+baseline.json
+time_index.json
+forecast_index.json
+*.db
+*.sqlite

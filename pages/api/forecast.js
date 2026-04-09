@@ -1,7 +1,7 @@
 import { spawn } from 'child_process'
 import crypto from 'crypto'
 import path from 'path'
-import { access, readdir, readFile, stat, unlink } from 'fs/promises'
+import { access, rm, readFile, stat, unlink } from 'fs/promises'
 import { enforceRateLimit, requireAuthenticatedRequest } from './_lib/security'
 
 export const config = {
@@ -37,8 +37,7 @@ async function clearForecastData(projectRoot) {
   }
 
   if (await fileExists(forecastDir)) {
-    const files = await readdir(forecastDir)
-    await Promise.all(files.map((file) => unlink(path.join(forecastDir, file))))
+    await rm(forecastDir, { recursive: true, force: true })
   }
 }
 
