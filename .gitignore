@@ -34,6 +34,10 @@ yarn-error.log*
 
 # Generated data (keep out of git history)
 public/baseline.json
+/.next-dev
+/.next-dev/
+/.next-temp
+/.next-temp/
 public/stats.json
 public/time_index.json
 public/time_data/
@@ -56,4 +60,3 @@ data_set_radio_all_hour.csv
 venv/
 env/
 ENV/
-.next-dev/
