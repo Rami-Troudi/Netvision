@@ -18,10 +18,10 @@ const CONFIG = {
     SECTOR_MIN_ZOOM: 10,
     MAX_ALERTS_RENDER: 50,
     CQI_THRESHOLD: 8,
-    HEATMAP_RADIUS: 30,
-    HEATMAP_INTENSITY: 1,
     HEATMAP_OPACITY: 0.8,
     PLAY_INTERVAL_MS: 500,
+    SECTOR_ARC_STEPS_DEFAULT: 16,
+    SECTOR_ARC_STEPS_PLAYBACK: 6,
 
     BAND_RADIUS: {
         20: 1500,
@@ -91,9 +91,12 @@ const state = {
     isPlaying: false,
     playInterval: null,
     playSpeed: 1,
+    isLoadingSlice: false,
+    analyticsModalOpen: false,
+    currentSectorArcSteps: 24,
     
     filters: {
-        status: { congested: true, 'high-load': true, normal: true, idle: true, 'no-data': true, 'poor-cqi': true },
+        status: { congested: true, 'high-load': true, normal: true, idle: true, 'no-data': false, 'poor-cqi': true },
         bands: {},
         issueTypes: {},
         loadRange: [0, 100],
@@ -110,7 +113,11 @@ const state = {
         severity: null,
         bands: null,
         load: null
-    }
+    },
+    cellGeometryMeta: {},
+    needsSectorGeometrySync: false,
+    lastCongestedCount: null,
+    lastVisibleFilterSignature: null
 };
 
 let hasInitialized = false;
@@ -118,6 +125,9 @@ const geometryCache = {};
 const MAX_GEOMETRY_CACHE_ENTRIES = 10000;
 const REQUIRED_OBSERVATION_KEYS = ['load', 'throughput', 'traffic', 'ta', 'cqi'];
 let hasObservationSchemaWarning = false;
+const featureStateCache = {
+    cells: new Map()
+};
 
 function pruneGeometryCache() {
     const keys = Object.keys(geometryCache);
@@ -144,15 +154,15 @@ function parseTimestamp(ts) {
     return new Date(y, m - 1, d, hh, mm, 0, 0);
 }
 
-function createSectorPolygon(center, radiusMeters, azimuth, beamwidth) {
+function createSectorPolygon(center, radiusMeters, azimuth, beamwidth, steps = CONFIG.SECTOR_ARC_STEPS_DEFAULT) {
     // Use geodesic destination for each point on the sector arc for higher accuracy
-    const steps = 24;
+    const stepsCount = Math.max(3, Number(steps) || CONFIG.SECTOR_ARC_STEPS_DEFAULT);
     const startAzimuth = azimuth - beamwidth / 2;
     const endAzimuth = azimuth + beamwidth / 2;
     const coordinates = [center];
 
-    for (let i = 0; i <= steps; i++) {
-        const currentAzimuth = startAzimuth + (i / steps) * (endAzimuth - startAzimuth);
+    for (let i = 0; i <= stepsCount; i++) {
+        const currentAzimuth = startAzimuth + (i / stepsCount) * (endAzimuth - startAzimuth);
         const dest = destination(center, radiusMeters / 1000, currentAzimuth, { units: 'kilometers' });
         coordinates.push(dest.geometry.coordinates);
     }
@@ -202,10 +212,19 @@ function formatLargeNumber(num) {
 
 function calculateCellRadius(band, ta) {
     let baseRadius = CONFIG.BAND_RADIUS[band] || CONFIG.DEFAULT_RADIUS_METERS;
-    if (ta && ta > 0) {
-        baseRadius = Math.max(baseRadius, ta * CONFIG.TA_TO_METERS);
+    const taMetersRaw = Number(ta) * CONFIG.TA_TO_METERS;
+    if (Number.isFinite(taMetersRaw) && taMetersRaw > 0) {
+        // Blend static band footprint with live TA so radius changes stay visible but stable.
+        const blended = baseRadius * 0.55 + taMetersRaw * 0.9;
+        baseRadius = Math.round(blended / 10) * 10;
     }
     return Math.max(CONFIG.MIN_RADIUS, Math.min(CONFIG.MAX_RADIUS, baseRadius));
+}
+
+function getObservationTA(obs) {
+    const taCandidate = obs?.ta ?? obs?.timing_advance ?? obs?.avg_ta ?? obs?.ta_avg ?? null;
+    const ta = Number(taCandidate);
+    return Number.isFinite(ta) ? ta : null;
 }
 
 function parseCellName(cellName) {
@@ -418,29 +437,136 @@ function buildSiteHierarchy() {
     state.siteHierarchy = hierarchy;
 }
 
+function getLivePointProperties(mapFeature) {
+    const featureId = Number(mapFeature?.id ?? mapFeature?.properties?.id);
+    if (!Number.isInteger(featureId) || featureId < 0 || featureId >= state.pointFeatures.length) {
+        return mapFeature?.properties || {};
+    }
+    return state.pointFeatures[featureId]?.properties || mapFeature?.properties || {};
+}
+
+function computeSiteLiveStats(site) {
+    let totalCells = 0;
+    let congestedCells = 0;
+    let lowCQI = 0;
+    let avgLoad = 0;
+    let avgCQI = 0;
+    let loadCount = 0;
+    let cqiCount = 0;
+
+    Object.values(site.antennas).forEach(ant => {
+        ant.cells.forEach(cell => {
+            totalCells++;
+            const obs = state.currentObservations[cell.cellName];
+            if (obs) {
+                if (obs.congested) congestedCells++;
+                if (obs.cqi !== null && obs.cqi < CONFIG.CQI_THRESHOLD) lowCQI++;
+                if (obs.load !== null && obs.load !== undefined) {
+                    avgLoad += obs.load;
+                    loadCount++;
+                }
+                if (obs.cqi !== null && obs.cqi !== undefined) {
+                    avgCQI += obs.cqi;
+                    cqiCount++;
+                }
+            }
+        });
+    });
+
+    return {
+        totalCells,
+        congestedCells,
+        lowCQI,
+        avgLoad: loadCount ? avgLoad / loadCount : 0,
+        avgCQI: cqiCount ? avgCQI / cqiCount : 0
+    };
+}
+
 // --- Data Processing ---
-function buildFeaturesForTime(observations) {
-    if (!observations) observations = {};
+function updateFeatureProperties(pointProperties, sectorProperties, obs, options = {}) {
+    const { isForecast = false, confidence = null } = options;
+    const cqi = obs?.cqi ?? null;
+    const hasLowCQI = cqi !== null && cqi < CONFIG.CQI_THRESHOLD;
+    const status = getCellStatus(obs);
+    const load = obs?.load ?? null;
+    const severity = obs?.severity ?? 0;
+    const issueType = obs?.issue_type || 'Normal';
+    const color = getLoadColor(load, obs?.congested, cqi);
+    const taValue = getObservationTA(obs);
+    const pointOpacity = obs ? 0.75 : 0.35;
+    const sectorOpacity = obs ? 0.58 : 0.04;
+
+    pointProperties.status = status;
+    pointProperties.color = color;
+    pointProperties.opacity = pointOpacity;
+    pointProperties.load = load;
+    pointProperties.congested = obs?.congested || false;
+    pointProperties.issue_type = issueType;
+    pointProperties.root_cause = obs?.root_cause || '-';
+    pointProperties.severity = severity;
+    pointProperties.health_score = obs?.health_score ?? 100;
+    pointProperties.throughput = obs?.throughput;
+    pointProperties.cqi = cqi;
+    pointProperties.has_low_cqi = hasLowCQI;
+    pointProperties.traffic = obs?.traffic;
+    pointProperties.ta = taValue;
+    pointProperties.signal_power = obs?.signal_power;
+    pointProperties.is_forecast = isForecast;
+    if (isForecast && confidence !== null && confidence !== undefined) {
+        pointProperties.confidence = confidence;
+    } else {
+        delete pointProperties.confidence;
+    }
+
+    sectorProperties.status = status;
+    sectorProperties.color = color;
+    sectorProperties.opacity = sectorOpacity;
+    sectorProperties.load = load;
+    sectorProperties.cqi = cqi;
+    sectorProperties.has_low_cqi = hasLowCQI;
+    sectorProperties.congested = obs?.congested || false;
+    sectorProperties.severity = severity;
+    sectorProperties.issue_type = issueType;
+    sectorProperties.is_forecast = isForecast;
+    if (isForecast && confidence !== null && confidence !== undefined) {
+        sectorProperties.confidence = confidence;
+    } else {
+        delete sectorProperties.confidence;
+    }
+}
+
+function buildFeaturesForTime() {
     const pointFeatures = [];
     const sectorFeatures = [];
     const sites = new Map();
+    state.cellGeometryMeta = {};
     
     let index = 0;
     for (const [cellName, baseInfo] of Object.entries(state.baseline)) {
-        const obs = observations[cellName] || null;
         const center = [baseInfo.longitude, baseInfo.latitude];
         const azimuth = baseInfo.azimuth || 0;
         const band = baseInfo.frequency_band;
         const { siteName, antenna, cellNum } = parseCellName(cellName);
-        const cqi = obs?.cqi ?? null;
-        const hasLowCQI = cqi !== null && cqi < CONFIG.CQI_THRESHOLD;
-        
-        const status = getCellStatus(obs);
-        const load = obs?.load ?? null;
-        const color = getLoadColor(load, obs?.congested, cqi);
-        const opacity = obs ? 0.7 : 0.4;
-        const severity = obs?.severity ?? 0;
-        const issueType = obs?.issue_type || 'Normal';
+        const radius = calculateCellRadius(band, null);
+        const cacheKey = `${cellName}_${radius}_${CONFIG.SECTOR_ARC_STEPS_DEFAULT}`;
+        const geometry = geometryCache[cacheKey] || createSectorPolygon(
+            center,
+            radius,
+            azimuth,
+            CONFIG.DEFAULT_BEAMWIDTH,
+            CONFIG.SECTOR_ARC_STEPS_DEFAULT
+        );
+        geometryCache[cacheKey] = geometry;
+
+        state.cellGeometryMeta[cellName] = {
+            center,
+            azimuth,
+            radius,
+            band,
+            siteName,
+            antenna,
+            cellNum
+        };
         
         pointFeatures.push({
             type: 'Feature',
@@ -452,34 +578,29 @@ function buildFeaturesForTime(observations) {
                 antenna_id: antenna,
                 cell_num: cellNum,
                 enodeb_name: baseInfo.enodeb_name,
-                status,
-                color,
-                opacity,
-                load,
-                congested: obs?.congested || false,
-                issue_type: issueType,
-                root_cause: obs?.root_cause || '-',
-                severity,
-                health_score: obs?.health_score ?? 100,
-                throughput: obs?.throughput,
-                cqi,
-                has_low_cqi: hasLowCQI,
-                traffic: obs?.traffic,
-                ta: obs?.ta,
-                signal_power: obs?.signal_power,
+                status: 'no-data',
+                color: CONFIG.COLORS.NO_DATA,
+                opacity: 0.4,
+                load: null,
+                congested: false,
+                issue_type: 'Normal',
+                root_cause: '-',
+                severity: 0,
+                health_score: 100,
+                throughput: null,
+                cqi: null,
+                has_low_cqi: false,
+                traffic: null,
+                ta: null,
+                signal_power: null,
                 band,
                 azimuth,
                 localcell_id: baseInfo.localcell_id,
-                duplex: baseInfo.cell_fdd_tdd_indication || 'FDD'
+                duplex: baseInfo.cell_fdd_tdd_indication || 'FDD',
+                is_forecast: false
             },
             geometry: { type: 'Point', coordinates: center }
         });
-        
-        const radius = calculateCellRadius(band, obs?.ta);
-        const cacheKey = `${cellName}_${radius}`;
-        const geometry = geometryCache[cacheKey] || createSectorPolygon(center, radius, azimuth, CONFIG.DEFAULT_BEAMWIDTH);
-        geometryCache[cacheKey] = geometry;
-        pruneGeometryCache();
         
         sectorFeatures.push({
             type: 'Feature',
@@ -490,18 +611,20 @@ function buildFeaturesForTime(observations) {
                 site_name: siteName,
                 antenna_id: antenna,
                 enodeb_name: baseInfo.enodeb_name,
-                status,
-                color,
-                opacity,
-                load,
-                cqi,
-                has_low_cqi: hasLowCQI,
-                congested: obs?.congested || false,
+                status: 'no-data',
+                color: CONFIG.COLORS.NO_DATA,
+                opacity: 0.4,
+                load: null,
+                cqi: null,
+                has_low_cqi: false,
+                congested: false,
                 band,
                 azimuth,
                 radius,
-                severity,
-                issue_type: issueType
+                arc_steps: CONFIG.SECTOR_ARC_STEPS_DEFAULT,
+                severity: 0,
+                issue_type: 'Normal',
+                is_forecast: false
             },
             geometry: { type: 'Polygon', coordinates: geometry }
         });
@@ -513,8 +636,80 @@ function buildFeaturesForTime(observations) {
         
         index++;
     }
+
+    pruneGeometryCache();
     
     return { pointFeatures, sectorFeatures, sites: Array.from(sites.values()) };
+}
+
+function syncSectorGeometryForObservations(observations = {}) {
+    let geometryChanged = false;
+    const steps = Math.max(3, Number(state.currentSectorArcSteps) || CONFIG.SECTOR_ARC_STEPS_DEFAULT);
+
+    state.sectorFeatures.forEach((feature) => {
+        const cellName = feature?.properties?.cell_name;
+        const meta = cellName ? state.cellGeometryMeta[cellName] : null;
+        if (!meta) return;
+
+        const obs = observations[cellName] || null;
+        const radius = calculateCellRadius(meta.band, getObservationTA(obs));
+        const previousRadius = Number(feature?.properties?.radius);
+        const previousSteps = Number(feature?.properties?.arc_steps);
+        const mustRebuild =
+            !Number.isFinite(previousRadius) ||
+            previousRadius !== radius ||
+            !Number.isFinite(previousSteps) ||
+            previousSteps !== steps;
+
+        if (!mustRebuild) {
+            return;
+        }
+
+        const cacheKey = `${cellName}_${radius}_${steps}`;
+        const geometry = geometryCache[cacheKey] || createSectorPolygon(
+            meta.center,
+            radius,
+            meta.azimuth,
+            CONFIG.DEFAULT_BEAMWIDTH,
+            steps
+        );
+
+        geometryCache[cacheKey] = geometry;
+        feature.geometry.coordinates = geometry;
+        feature.properties.radius = radius;
+        feature.properties.arc_steps = steps;
+        geometryChanged = true;
+    });
+
+    if (geometryChanged) {
+        pruneGeometryCache();
+    }
+
+    return geometryChanged;
+}
+
+function updateFeaturesForTime(observations = {}, options = {}) {
+    const featuresCount = Math.min(state.pointFeatures.length, state.sectorFeatures.length);
+    for (let i = 0; i < featuresCount; i++) {
+        const pointFeature = state.pointFeatures[i];
+        const sectorFeature = state.sectorFeatures[i];
+        const cellName = pointFeature?.properties?.cell_name;
+        if (!cellName || !sectorFeature) continue;
+        const obs = observations[cellName] || null;
+        updateFeatureProperties(pointFeature.properties, sectorFeature.properties, obs, options);
+    }
+
+    syncSectorGeometryForObservations(observations);
+    state.needsSectorGeometrySync = true;
+}
+
+function setSectorGeometryResolution(steps) {
+    const targetSteps = Math.max(3, Number(steps) || CONFIG.SECTOR_ARC_STEPS_DEFAULT);
+    if (state.currentSectorArcSteps === targetSteps) return;
+
+    state.currentSectorArcSteps = targetSteps;
+    syncSectorGeometryForObservations(state.currentObservations);
+    state.needsSectorGeometrySync = true;
 }
 
 // --- Search Functionality ---
@@ -579,23 +774,13 @@ function showSiteInfoPanel(siteName, focusCell = null) {
     panel.classList.remove('hidden');
     document.getElementById('cell-info-name').textContent = site.name;
 
-    let totalCells = 0, congestedCells = 0, lowCQI = 0, avgLoad = 0, avgCQI = 0, loadCount = 0, cqiCount = 0;
-
-    Object.values(site.antennas).forEach(ant => {
-        ant.cells.forEach(cell => {
-            totalCells++;
-            const obs = state.currentObservations[cell.cellName];
-            if (obs) {
-                if (obs.congested) congestedCells++;
-                if (obs.cqi !== null && obs.cqi < CONFIG.CQI_THRESHOLD) lowCQI++;
-                if (obs.load !== null && obs.load !== undefined) { avgLoad += obs.load; loadCount++; }
-                if (obs.cqi !== null && obs.cqi !== undefined) { avgCQI += obs.cqi; cqiCount++; }
-            }
-        });
-    });
-
-    avgLoad = loadCount ? avgLoad / loadCount : 0;
-    avgCQI = cqiCount ? avgCQI / cqiCount : 0;
+    const {
+        totalCells,
+        congestedCells,
+        lowCQI,
+        avgLoad,
+        avgCQI
+    } = computeSiteLiveStats(site);
 
     const statusEl = document.getElementById('cell-status');
     let statusClass = 'normal', statusText = 'Normal';
@@ -611,8 +796,8 @@ function showSiteInfoPanel(siteName, focusCell = null) {
     let html = `
         <div class="site-info-section">
             <div class="site-info-row"><span>Location</span><span>${escapeHtml(site.latitude.toFixed(5))}, ${escapeHtml(site.longitude.toFixed(5))}</span></div>
-            <div class="site-info-row"><span>Avg Load</span><span>${avgLoad.toFixed(1)}%</span></div>
-            <div class="site-info-row"><span>Avg CQI</span><span class="${avgCQI < CONFIG.CQI_THRESHOLD ? 'text-danger' : ''}">${avgCQI.toFixed(1)}</span></div>
+            <div class="site-info-row"><span>Avg Load</span><span id="site-avg-load">${avgLoad.toFixed(1)}%</span></div>
+            <div class="site-info-row"><span>Avg CQI</span><span id="site-avg-cqi" class="${avgCQI < CONFIG.CQI_THRESHOLD ? 'text-danger' : ''}">${avgCQI.toFixed(1)}</span></div>
         </div>
         <div class="site-antennas">
     `;
@@ -676,6 +861,49 @@ function showSiteInfoPanel(siteName, focusCell = null) {
     renderActionPanel(state.selectedCellName);
 
     if (focusCell) selectCell(focusCell, false);
+}
+
+function refreshSiteInfoStats(siteName) {
+    if (!siteName || state.selectedSite !== siteName) return;
+    const panel = document.getElementById('cell-info-panel');
+    if (!panel || panel.classList.contains('hidden')) return;
+    const site = state.siteHierarchy[siteName];
+    if (!site) return;
+
+    const {
+        totalCells,
+        congestedCells,
+        lowCQI,
+        avgLoad,
+        avgCQI
+    } = computeSiteLiveStats(site);
+
+    const statusEl = document.getElementById('cell-status');
+    if (statusEl) {
+        let statusClass = 'normal';
+        let statusText = 'Normal';
+        if (congestedCells > 0) {
+            statusClass = 'congested';
+            statusText = `${congestedCells} congested`;
+        } else if (lowCQI > 0) {
+            statusClass = 'poor-cqi';
+            statusText = `${lowCQI} low CQI`;
+        }
+        statusEl.className = `cell-status ${statusClass}`;
+        statusEl.textContent = statusText;
+    }
+
+    const healthEl = document.getElementById('cell-health');
+    if (healthEl) healthEl.textContent = `Cells: ${totalCells}`;
+
+    const avgLoadEl = document.getElementById('site-avg-load');
+    if (avgLoadEl) avgLoadEl.textContent = `${avgLoad.toFixed(1)}%`;
+
+    const avgCqiEl = document.getElementById('site-avg-cqi');
+    if (avgCqiEl) {
+        avgCqiEl.textContent = avgCQI.toFixed(1);
+        avgCqiEl.classList.toggle('text-danger', avgCQI < CONFIG.CQI_THRESHOLD);
+    }
 }
 
 function hideSiteInfoPanel() {
@@ -1409,7 +1637,9 @@ function applyFilters() {
     state.filteredPointFeatures = points;
     state.filteredSectorFeatures = sectors;
     updateMapData();
-    updateAnalyticsCharts(points);
+    if (state.analyticsModalOpen) {
+        updateAnalyticsCharts(points);
+    }
 }
 
 function populateFrequencyFilters(bandsList = []) {
@@ -1472,6 +1702,9 @@ function collectIssueTypesFromCurrent() {
 
 function resetFiltersUI() {
     document.querySelectorAll('input[data-filter]').forEach(cb => { cb.checked = true; state.filters.status[cb.dataset.filter] = true; });
+    state.filters.status['no-data'] = false;
+    const noDataFilter = document.querySelector('input[data-filter="no-data"]');
+    if (noDataFilter instanceof HTMLInputElement) noDataFilter.checked = false;
     Object.keys(state.filters.bands).forEach(k => state.filters.bands[k] = true);
     document.querySelectorAll('#frequency-filters input[type="checkbox"]').forEach(cb => cb.checked = true);
     Object.keys(state.filters.issueTypes).forEach(k => state.filters.issueTypes[k] = true);
@@ -1974,7 +2207,16 @@ function getDataForIndex(index) {
 }
 
 async function loadUnifiedTimeSlice(index) {
+    return loadUnifiedTimeSliceInternal(index, { skipIfLoading: false });
+}
+
+async function loadUnifiedTimeSliceInternal(index, options = {}) {
+    const { skipIfLoading = false } = options;
     if (index < 0 || index >= unifiedTimeline.totalCount) return;
+
+    if (skipIfLoading && state.isLoadingSlice) {
+        return;
+    }
     
     if (activeSliceAbortController) {
         activeSliceAbortController.abort();
@@ -1982,21 +2224,28 @@ async function loadUnifiedTimeSlice(index) {
     activeSliceAbortController = new AbortController();
     const requestId = ++activeSliceRequestId;
     const { signal } = activeSliceAbortController;
+    state.isLoadingSlice = true;
 
-    unifiedTimeline.currentIndex = index;
-    const data = getDataForIndex(index);
-    
-    if (data.type === 'forecast') {
-        await loadForecastSliceInternal(data.entry, data.localIndex, { signal, requestId });
-    } else {
-        await loadHistoricalSliceInternal(data.entry, data.localIndex, { signal, requestId });
+    try {
+        unifiedTimeline.currentIndex = index;
+        const data = getDataForIndex(index);
+        
+        if (data.type === 'forecast') {
+            await loadForecastSliceInternal(data.entry, data.localIndex, { signal, requestId });
+        } else {
+            await loadHistoricalSliceInternal(data.entry, data.localIndex, { signal, requestId });
+        }
+
+        if (signal.aborted || requestId !== activeSliceRequestId) return;
+        
+        // Update slider position
+        const slider = document.getElementById('time-slider');
+        if (slider) slider.value = index;
+    } finally {
+        if (requestId === activeSliceRequestId) {
+            state.isLoadingSlice = false;
+        }
     }
-
-    if (signal.aborted || requestId !== activeSliceRequestId) return;
-    
-    // Update slider position
-    const slider = document.getElementById('time-slider');
-    if (slider) slider.value = index;
 }
 
 async function loadHistoricalSliceInternal(timeEntry, localIndex, requestContext = {}) {
@@ -2004,7 +2253,7 @@ async function loadHistoricalSliceInternal(timeEntry, localIndex, requestContext
     const { signal, requestId } = requestContext;
     
     try {
-        const res = await fetchWithAuth(`${buildDataUrl('time_data', timeEntry.filename)}?t=${Date.now()}`, { signal });
+        const res = await fetchWithAuth(buildDataUrl('time_data', timeEntry.filename), { signal });
         const sliceData = await res.json();
         if (!res.ok) {
             throw new Error(sliceData.error || `HTTP error ${res.status}`);
@@ -2015,11 +2264,8 @@ async function loadHistoricalSliceInternal(timeEntry, localIndex, requestContext
         warnIfObservationSchemaMismatch(sliceData.observations, `historical slice ${timeEntry.timestamp || timeEntry.filename}`);
         state.currentObservations = sliceData.observations;
         state.currentStats = sliceData.stats;
-        
-        const { pointFeatures, sectorFeatures } = buildFeaturesForTime(sliceData.observations);
-        state.pointFeatures = pointFeatures;
-        state.sectorFeatures = sectorFeatures;
-        state.features = pointFeatures;
+
+        updateFeaturesForTime(sliceData.observations, { isForecast: false });
         applyFilters();
         
         updateTimeSliderUI();
@@ -2027,7 +2273,7 @@ async function loadHistoricalSliceInternal(timeEntry, localIndex, requestContext
         updateAlertsUI(state.filteredPointFeatures);
         
         if (state.selectedSite) {
-            showSiteInfoPanel(state.selectedSite);
+            refreshSiteInfoStats(state.selectedSite);
         }
     } catch (err) {
         if (err?.name === 'AbortError') return;
@@ -2040,7 +2286,7 @@ async function loadForecastSliceInternal(forecastEntry, localIndex, requestConte
     const { signal, requestId } = requestContext;
     
     try {
-        const res = await fetchWithAuth(`${buildDataUrl('forecast_data', forecastEntry.filename)}?t=${Date.now()}`, { signal });
+        const res = await fetchWithAuth(buildDataUrl('forecast_data', forecastEntry.filename), { signal });
         const sliceData = await res.json();
         if (!res.ok) {
             throw new Error(sliceData.error || `HTTP error ${res.status}`);
@@ -2051,21 +2297,9 @@ async function loadForecastSliceInternal(forecastEntry, localIndex, requestConte
         state.currentObservations = sliceData.observations || {};
         state.currentStats = sliceData.stats || forecastEntry.stats;
         
-        const { pointFeatures, sectorFeatures } = buildFeaturesForTime(sliceData.observations || {});
-        
-        // Mark features as forecast
         const confidence = sliceData.confidence || forecastEntry.confidence || 0.75;
-        pointFeatures.forEach(f => {
-            f.properties.is_forecast = true;
-            f.properties.confidence = confidence;
-        });
-        sectorFeatures.forEach(f => {
-            f.properties.is_forecast = true;
-        });
-        
-        state.pointFeatures = pointFeatures;
-        state.sectorFeatures = sectorFeatures;
-        state.features = pointFeatures;
+
+        updateFeaturesForTime(sliceData.observations || {}, { isForecast: true, confidence });
         applyFilters();
         
         updateTimeSliderUI();
@@ -2073,7 +2307,7 @@ async function loadForecastSliceInternal(forecastEntry, localIndex, requestConte
         updateAlertsUI(state.filteredPointFeatures);
         
         if (state.selectedSite) {
-            showSiteInfoPanel(state.selectedSite);
+            refreshSiteInfoStats(state.selectedSite);
         }
     } catch (err) {
         if (err?.name === 'AbortError') return;
@@ -2208,18 +2442,23 @@ function setupUnifiedTimelineControls() {
         if (state.isPlaying) {
             playBtn.classList.add('playing');
             if (icon) icon.textContent = 'pause';
+            setSectorGeometryResolution(CONFIG.SECTOR_ARC_STEPS_PLAYBACK);
             const interval = CONFIG.PLAY_INTERVAL_MS / Math.max(0.25, state.playSpeed);
             state.playInterval = setInterval(() => {
+                if (state.isLoadingSlice) return;
                 if (unifiedTimeline.currentIndex < unifiedTimeline.totalCount - 1) {
-                    loadUnifiedTimeSlice(unifiedTimeline.currentIndex + 1);
+                    loadUnifiedTimeSliceInternal(unifiedTimeline.currentIndex + 1, { skipIfLoading: true });
                 } else {
-                    loadUnifiedTimeSlice(0);  // Loop back
+                    loadUnifiedTimeSliceInternal(0, { skipIfLoading: true });  // Loop back
                 }
             }, interval);
         } else {
             playBtn.classList.remove('playing');
             if (icon) icon.textContent = 'play_arrow';
             clearInterval(state.playInterval);
+            state.playInterval = null;
+            setSectorGeometryResolution(CONFIG.SECTOR_ARC_STEPS_DEFAULT);
+            updateMapData();
         }
     });
     
@@ -2239,16 +2478,62 @@ async function loadTimeSlice(index) {
 
 function updateMapData() {
     if (!state.map) return;
-    
-    const pointsGeojson = { type: 'FeatureCollection', features: state.filteredPointFeatures };
-    const sectorsGeojson = { type: 'FeatureCollection', features: state.filteredSectorFeatures };
-    
-    if (state.map.getSource('cells')) {
-        state.map.getSource('cells').setData(pointsGeojson);
+
+    const cellsSource = state.map.getSource('cells');
+    const sectorsSource = state.map.getSource('sectors');
+    if (!cellsSource || !sectorsSource) return;
+
+    const sectorsVisible = !state.layers.heatmap;
+    if (sectorsVisible || state.needsSectorGeometrySync) {
+        const sectorsGeojson = { type: 'FeatureCollection', features: state.filteredSectorFeatures };
+        sectorsSource.setData(sectorsGeojson);
+        state.needsSectorGeometrySync = false;
     }
-    if (state.map.getSource('sectors')) {
-        state.map.getSource('sectors').setData(sectorsGeojson);
+
+    const visibleIds = state.filteredPointFeatures
+        .map(feature => Number(feature.id))
+        .filter(id => Number.isInteger(id));
+
+    const visibleSignature = visibleIds.join(',');
+    if (state.lastVisibleFilterSignature !== visibleSignature) {
+        state.lastVisibleFilterSignature = visibleSignature;
+        const filterExpr = visibleIds.length
+            ? ['in', ['id'], ['literal', visibleIds]]
+            : ['==', ['id'], -1];
+
+        ['cells-heatmap', 'cells-points', 'cells-labels', 'cells-congested-ring']
+            .forEach((layerId) => {
+                if (state.map.getLayer(layerId)) {
+                    state.map.setFilter(layerId, filterExpr);
+                }
+            });
     }
+
+    state.pointFeatures.forEach((feature) => {
+        const id = Number(feature?.id);
+        if (!Number.isInteger(id)) return;
+        const props = feature?.properties || {};
+        const nextState = {
+            color: props.color ?? CONFIG.COLORS.NO_DATA,
+            opacity: Number.isFinite(Number(props.opacity)) ? Number(props.opacity) : 0.4,
+            congested: Boolean(props.congested),
+            load: Number.isFinite(Number(props.load)) ? Number(props.load) : 0
+        };
+
+        const prevState = featureStateCache.cells.get(id);
+        if (
+            prevState &&
+            prevState.color === nextState.color &&
+            prevState.opacity === nextState.opacity &&
+            prevState.congested === nextState.congested &&
+            prevState.load === nextState.load
+        ) {
+            return;
+        }
+
+        state.map.setFeatureState({ source: 'cells', id }, nextState);
+        featureStateCache.cells.set(id, nextState);
+    });
 }
 
 function updateTimeSliderUI() {
@@ -2322,6 +2607,11 @@ function updateAlertsUI(features) {
     
     const badge = document.getElementById('alert-count');
     if (badge) badge.textContent = String(congested.length);
+
+    if (state.lastCongestedCount === congested.length) {
+        return;
+    }
+    state.lastCongestedCount = congested.length;
     
     if (congested.length === 0) {
         alertsList.innerHTML = '<div class="alert-placeholder">✓ No active alerts</div>';
@@ -2377,6 +2667,18 @@ function destroyCharts() {
     });
 }
 
+function upsertAnalyticsChart(chartKey, ctx, config) {
+    const existing = state.charts[chartKey];
+    if (existing) {
+        existing.config.type = config.type;
+        existing.data = config.data;
+        existing.options = config.options;
+        existing.update('none');
+        return;
+    }
+    state.charts[chartKey] = new Chart(ctx, config);
+}
+
 function updateAnalyticsCharts(features) {
     const issueCtx = document.getElementById('chart-issues');
     const sevCtx = document.getElementById('chart-severity');
@@ -2384,16 +2686,14 @@ function updateAnalyticsCharts(features) {
     const loadCtx = document.getElementById('chart-load');
     if (!issueCtx || !sevCtx || !bandCtx || !loadCtx) return;
 
-    destroyCharts();
-
     // Issue distribution
     const issueCounts = {};
     features.forEach(f => {
         const type = f.properties.issue_type || 'Normal';
         issueCounts[type] = (issueCounts[type] || 0) + 1;
     });
-    
-    state.charts.issues = new Chart(issueCtx, {
+
+    upsertAnalyticsChart('issues', issueCtx, {
         type: 'doughnut',
         data: {
             labels: Object.keys(issueCounts),
@@ -2423,7 +2723,7 @@ function updateAnalyticsCharts(features) {
         else severityBuckets['High (70-100)']++;
     });
 
-    state.charts.severity = new Chart(sevCtx, {
+    upsertAnalyticsChart('severity', sevCtx, {
         type: 'bar',
         data: {
             labels: Object.keys(severityBuckets),
@@ -2451,7 +2751,7 @@ function updateAnalyticsCharts(features) {
         bandCounts[b] = (bandCounts[b] || 0) + 1;
     });
 
-    state.charts.bands = new Chart(bandCtx, {
+    upsertAnalyticsChart('bands', bandCtx, {
         type: 'bar',
         data: {
             labels: Object.keys(bandCounts).map(b => 'B' + b),
@@ -2483,7 +2783,7 @@ function updateAnalyticsCharts(features) {
         else loadBuckets['85-100%']++;
     });
 
-    state.charts.load = new Chart(loadCtx, {
+    upsertAnalyticsChart('load', loadCtx, {
         type: 'bar',
         data: {
             labels: Object.keys(loadBuckets),
@@ -2511,6 +2811,12 @@ function toggleModal(id, show) {
     const modal = document.getElementById(id);
     if (!modal) return;
     modal.classList.toggle('hidden', !show);
+    if (id === 'analytics-modal') {
+        state.analyticsModalOpen = !!show;
+        if (state.analyticsModalOpen) {
+            updateAnalyticsCharts(state.filteredPointFeatures);
+        }
+    }
 }
 
 function toggleTheme() {
@@ -2573,7 +2879,7 @@ function initMap() {
         zoom: CONFIG.MAP_ZOOM,
         pitch: 45,
         bearing: 0,
-        antialias: true
+        antialias: false
     });
     
     map.addControl(new maplibregl.NavigationControl(), 'bottom-right');
@@ -2598,7 +2904,7 @@ function addMapLayers(map, sites) {
         minzoom: CONFIG.SECTOR_MIN_ZOOM,
         paint: {
             'fill-color': ['get', 'color'],
-            'fill-opacity': ['interpolate', ['linear'], ['zoom'], 10, 0.4, 14, 0.6]
+            'fill-opacity': ['coalesce', ['get', 'opacity'], 0.45]
         }
     });
     
@@ -2606,11 +2912,16 @@ function addMapLayers(map, sites) {
         id: 'sectors-outline',
         type: 'line',
         source: 'sectors',
-        minzoom: CONFIG.SECTOR_MIN_ZOOM,
+        minzoom: 12,
         paint: {
-            'line-color': '#ffffff',
-            'line-width': ['interpolate', ['linear'], ['zoom'], 10, 1, 14, 2],
-            'line-opacity': 0.5
+            'line-color': '#f3f3f3',
+            'line-width': ['interpolate', ['linear'], ['zoom'], 12, 0.5, 15, 1.1],
+            'line-opacity': [
+                'case',
+                ['==', ['get', 'status'], 'no-data'],
+                0.03,
+                ['interpolate', ['linear'], ['zoom'], 12, 0.09, 15, 0.2]
+            ]
         }
     });
     
@@ -2624,10 +2935,29 @@ function addMapLayers(map, sites) {
         maxzoom: 22,
         layout: { 'visibility': 'none' },
         paint: {
-            'heatmap-weight': ['interpolate', ['linear'], ['coalesce', ['get', 'load'], 0], 0, 0.1, 100, 1],
-            'heatmap-radius': CONFIG.HEATMAP_RADIUS,
-            'heatmap-intensity': CONFIG.HEATMAP_INTENSITY,
-            'heatmap-opacity': CONFIG.HEATMAP_OPACITY,
+            'heatmap-weight': ['interpolate', ['linear'], ['coalesce', ['feature-state', 'load'], ['get', 'load'], 0], 0, 0.1, 100, 1],
+            'heatmap-radius': [
+                'interpolate',
+                ['exponential', 2],
+                ['zoom'],
+                0, 1,
+                10, 10,
+                15, 100
+            ],
+            'heatmap-intensity': [
+                'interpolate',
+                ['linear'],
+                ['zoom'],
+                10, 1,
+                15, 5
+            ],
+            'heatmap-opacity': [
+                'interpolate',
+                ['linear'],
+                ['zoom'],
+                8, CONFIG.HEATMAP_OPACITY,
+                15, 0.95
+            ],
             'heatmap-color': [
                 'interpolate', ['linear'], ['heatmap-density'],
                 0.0, 'rgba(0,0,0,0)',
@@ -2645,8 +2975,8 @@ function addMapLayers(map, sites) {
         source: 'cells',
         paint: {
             'circle-radius': ['interpolate', ['linear'], ['zoom'], 8, 4, 12, 6, 16, 10],
-            'circle-color': ['get', 'color'],
-            'circle-opacity': 0.8,
+            'circle-color': ['coalesce', ['feature-state', 'color'], ['get', 'color'], CONFIG.COLORS.NO_DATA],
+            'circle-opacity': ['coalesce', ['feature-state', 'opacity'], ['get', 'opacity'], 0.8],
             'circle-stroke-color': '#ffffff',
             'circle-stroke-width': 1.5
         }
@@ -2674,12 +3004,17 @@ function addMapLayers(map, sites) {
         id: 'cells-congested-ring',
         type: 'circle',
         source: 'cells',
-        filter: ['==', ['get', 'congested'], true],
         paint: {
             'circle-radius': ['interpolate', ['linear'], ['zoom'], 8, 6, 12, 9, 16, 14],
             'circle-color': 'rgba(0,0,0,0)',
             'circle-stroke-color': CONFIG.COLORS.CONGESTED,
-            'circle-stroke-width': 3
+            'circle-stroke-width': 3,
+            'circle-stroke-opacity': [
+                'case',
+                ['coalesce', ['feature-state', 'congested'], ['get', 'congested'], false],
+                1,
+                0
+            ]
         }
     });
     
@@ -2712,7 +3047,7 @@ function setupMapInteractions(map) {
     map.on('click', 'cells-points', (e) => {
         const feature = e.features?.[0];
         if (!feature) return;
-        const p = feature.properties;
+        const p = getLivePointProperties(feature);
         showSiteInfoPanel(p.site_name, p.cell_name);
         map.flyTo({ center: feature.geometry.coordinates, zoom: 14, pitch: 45 });
     });
@@ -2727,7 +3062,9 @@ function setupMapInteractions(map) {
     
     map.on('mouseenter', 'cells-points', (e) => {
         map.getCanvas().style.cursor = 'pointer';
-        const p = e.features[0].properties;
+        const feature = e.features?.[0];
+        if (!feature) return;
+        const p = getLivePointProperties(feature);
         const popupRoot = document.createElement('div');
         popupRoot.style.padding = '10px';
         popupRoot.style.fontFamily = 'Inter, sans-serif';
@@ -2787,6 +3124,32 @@ function setVisualizationMode(mode) {
     document.querySelectorAll('.toggle-btn[data-viz]').forEach(b => {
         b.classList.toggle('active', b.dataset.viz === mode);
     });
+
+    updateMapData();
+}
+
+function switchBasemap(basemapKey) {
+    const basemap = CONFIG.BASEMAPS[basemapKey];
+    if (!basemap || !state.map) return;
+
+    const source = state.map.getSource('basemap');
+    if (!source) {
+        console.warn('Basemap source is not available yet');
+        return;
+    }
+
+    if (typeof source.setTiles === 'function') {
+        source.setTiles(basemap.tiles);
+        return;
+    }
+
+    // Fallback for environments without setTiles support.
+    const style = state.map.getStyle();
+    if (style?.sources?.basemap && style.sources.basemap.type === 'raster') {
+        style.sources.basemap.tiles = [...basemap.tiles];
+        style.sources.basemap.attribution = basemap.attribution;
+        state.map.setStyle(style, { diff: true });
+    }
 }
 
 // --- Event Handlers ---
@@ -2800,13 +3163,8 @@ function setupEventHandlers() {
     });
     
     document.getElementById('basemap-select')?.addEventListener('change', (e) => {
-        const basemap = CONFIG.BASEMAPS[e.target.value];
-        if (basemap && state.map) {
-            state.map.getSource('basemap').tiles = basemap.tiles;
-            state.map.style.sourceCaches['basemap'].clearTiles();
-            state.map.style.sourceCaches['basemap'].update(state.map.transform);
-            state.map.triggerRepaint();
-        }
+        const selectedKey = e.target instanceof HTMLSelectElement ? e.target.value : '';
+        switchBasemap(selectedKey);
     });
     
     document.getElementById('toggle-left')?.addEventListener('click', () => {
@@ -2946,9 +3304,9 @@ async function init() {
         setLoading(true, 'Loading baseline...');
         
         const [baselineRes, timeIndexRes, statsRes] = await Promise.all([
-            fetchWithAuth(`${buildDataUrl('baseline.json')}?t=${Date.now()}`),
-            fetchWithAuth(`${buildDataUrl('time_index.json')}?t=${Date.now()}`),
-            fetchWithAuth(`${buildDataUrl('stats.json')}?t=${Date.now()}`)
+            fetchWithAuth(buildDataUrl('baseline.json')),
+            fetchWithAuth(buildDataUrl('time_index.json')),
+            fetchWithAuth(buildDataUrl('stats.json'))
         ]);
 
         if (!baselineRes.ok || !timeIndexRes.ok) {
@@ -2982,6 +3340,13 @@ async function init() {
         buildSiteHierarchy();
 
         populateFrequencyFilters(state.globalStats?.frequency_bands || []);
+        const { pointFeatures, sectorFeatures, sites } = buildFeaturesForTime();
+        state.pointFeatures = pointFeatures;
+        state.sectorFeatures = sectorFeatures;
+        state.features = pointFeatures;
+        state.filteredPointFeatures = pointFeatures;
+        state.filteredSectorFeatures = sectorFeatures;
+        state.currentSectorArcSteps = CONFIG.SECTOR_ARC_STEPS_DEFAULT;
         
         console.log(`Loaded ${Object.keys(state.baseline).length} cells, ${state.timeIndex.length} time slices`);
         
@@ -2997,18 +3362,13 @@ async function init() {
         
         setLoading(true, 'Initializing map...');
         
-        const { pointFeatures, sectorFeatures, sites } = buildFeaturesForTime(state.currentObservations);
-        state.pointFeatures = pointFeatures;
-        state.sectorFeatures = sectorFeatures;
-        state.filteredPointFeatures = pointFeatures;
-        state.filteredSectorFeatures = sectorFeatures;
-        
         const map = initMap();
         
         map.on('load', () => {
             try {
                 addMapLayers(map, sites);
                 setupMapInteractions(map);
+                updateMapData();
                 
                 if (pointFeatures.length > 0) {
                     const bounds = new maplibregl.LngLatBounds();
