@@ -33,6 +33,7 @@ function sanitizeSlugParts(rawParts) {
 }
 
 function resolveDataPath(projectRoot, slugParts) {
+  const dataRoot = path.resolve(projectRoot, 'runtime_data')
   const [head, ...tail] = slugParts
 
   if (!tail.length) {
@@ -40,7 +41,7 @@ function resolveDataPath(projectRoot, slugParts) {
       throw new Error('File is not allowed')
     }
     return {
-      filePath: path.resolve(projectRoot, head),
+      filePath: path.resolve(dataRoot, head),
       kind: 'json',
       dataDir: null,
     }
@@ -50,7 +51,7 @@ function resolveDataPath(projectRoot, slugParts) {
     throw new Error('Directory is not allowed')
   }
 
-  const baseDir = path.resolve(projectRoot, head)
+  const baseDir = path.resolve(dataRoot, head)
   const targetPath = path.resolve(baseDir, ...tail)
   if (!isPathInsideDirectory(targetPath, baseDir)) {
     throw new Error('Invalid path')
@@ -126,9 +127,10 @@ const _metadataCache = {
 }
 
 async function loadSliceMetadata(projectRoot, dataDir, filename) {
+  const dataRoot = path.resolve(projectRoot, 'runtime_data')
   if (dataDir === 'time_data' || dataDir === 'forecast_data') {
     const indexFileName = dataDir === 'time_data' ? 'time_index.json' : 'forecast_index.json'
-    const indexPath = path.resolve(projectRoot, indexFileName)
+    const indexPath = path.resolve(dataRoot, indexFileName)
     
     let currentMtime = 0
     try {

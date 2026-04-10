@@ -22,11 +22,11 @@ const ALLOWED_MODES = new Set(['fast']) // fast is the only supported mode
 let allowedTimeFiles = null
 
 function getTimeIndexPath(projectRoot) {
-  return path.resolve(projectRoot, 'time_index.json')
+  return path.resolve(projectRoot, 'runtime_data', 'time_index.json')
 }
 
 function getTimeDataRoot(projectRoot) {
-  return path.resolve(projectRoot, 'time_data')
+  return path.resolve(projectRoot, 'runtime_data', 'time_data')
 }
 
 function isPathInsideDirectory(targetPath, directoryPath) {

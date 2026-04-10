@@ -4,7 +4,7 @@ Real-time radio network monitoring, analytics, and action simulation for Orange 
 
 ## Stack
 - **Next.js (pages router)** with MapLibre GL + Chart.js UI
-- **Python** data processors (time-series + legacy batch)
+- **Python** time-series processing + trained forecaster pipeline
 - **Simulation**: fast estimator only (ns-3/precise mode removed)
 
 ## Quickstart
@@ -12,35 +12,37 @@ Real-time radio network monitoring, analytics, and action simulation for Orange 
 npm install
 npm run dev        # http://localhost:3000
 npm run worker     # BullMQ worker (requires Redis)
-# Python data pipeline deps (Parquet I/O via DuckDB)
-python -m pip install duckdb pandas numpy
+# Python deps
+python -m pip install -r requirements.txt
 # Data (recommended, parquet time-series pipeline)
 python scripts/process_time_series.py \
   --input cleaned_data.csv data_set_radio_1.csv \
-  --output .
-```
+  --output runtime_data
 
-If legacy CSV files are no longer in the working tree, restore them from git history and convert in one step:
+# Train production forecast model on full history
+python scripts/train_forecast_model.py --history-limit 0
 
-```bash
-python scripts/restore_and_convert_historical.py --output .
+# Generate 1-day forecast
+python scripts/forecast_hf.py --days 1
 ```
 
 ## Data Pipelines
 - **Time-series (recommended)**: `scripts/process_time_series.py`
-  - Outputs: `baseline.json`, `time_index.json`, `stats.json`, `time_data/*.parquet`
+  - Outputs: `runtime_data/baseline.json`, `runtime_data/time_index.json`, `runtime_data/stats.json`, `runtime_data/time_data/*.parquet`
   - Powers the time slider, alerts, and analytics in `src/main.js`
-- **Model evaluation + threshold calibration**: `scripts/evaluate_and_calibrate.py`
-  - Inputs: `val_predictions.parquet`, `features_engineered.parquet`
-  - Outputs: `features_with_score.parquet`, `cell_congestion_profile.parquet`, `thresholds.json`
-
-- **Batch inference + recommendation generation**: `scripts/batch_inference.py`
-  - Inputs: `features_with_score.parquet`, `features_meta.json`, `models/*.pkl`, `cell_congestion_profile.parquet`, `thresholds.json`
-  - Outputs: `all_cell_recommendations.parquet`, `all_cell_recommendations.csv`
-  - Applies a staleness gate by default (`--max-staleness-hours 24`): stale cells get `Data too stale for decision`
-- **Legacy single-snapshot**: `scripts/detect_congestion.py`
-  - Outputs: `data.json`, `stats.json`
-  - Keep only if you need the legacy static view; thresholds differ from the time-series pipeline.
+- **Forecast model training (production)**: `scripts/train_forecast_model.py`
+  - Inputs: `runtime_data/baseline.json`, `runtime_data/time_index.json`, `runtime_data/time_data/*.parquet`
+  - Outputs: `models/forecast_model.pkl`
+  - This model is used by `scripts/forecast_hf.py` for forecast generation and by `backend/api.py` for `/predict` decisions.
+- **Decision artifacts (backend inputs)**:
+  - Location: `runtime_data/model_assets/`
+  - Files: `features_meta.json`, `features_with_score.parquet`, `cell_congestion_profile.parquet`, `all_cell_recommendations.*`, `thresholds.json`, `val_predictions.parquet`
+- **Forecast generation**: `scripts/forecast_hf.py`
+  - Default mode uses `models/forecast_model.pkl`
+  - Predicts active cells by weekday/hour slot to avoid inflated congestion counts
+- **Leakage-safe walk-forward validation**: `run_cross_val.py`
+  - Example: `python run_cross_val.py`
+  - Last measured accuracy (1 - WAPE): `86.6%`
 
 ## Running
 - Dev: `npm run dev` → http://localhost:3000
@@ -61,7 +63,10 @@ python scripts/restore_and_convert_historical.py --output .
 ```
 pages/           # Next.js pages (index, api/simulate, site-planning)
 public/          # static frontend assets only
-scripts/         # process_time_series.py, evaluate_and_calibrate.py, detect_congestion.py
+backend/         # api.py, action_engine.py, validate_pipeline.py
+scripts/         # process_time_series.py, forecast_hf.py
+                # train_forecast_model.py
+runtime_data/    # baseline/index/slices + model_assets
 simulation/      # simulator.py (fast estimator)
 src/             # main.js (UI logic), style.css
 ```
@@ -78,6 +83,17 @@ src/             # main.js (UI logic), style.css
 
 ## Links
 - Architecture notes: [ENGINEERING_RECOMMENDATIONS.md](ENGINEERING_RECOMMENDATIONS.md)
+
+## Next Steps
+1. Add a scheduled retraining job (daily/weekly) for `models/forecast_model.pkl`.
+2. Add alert thresholds for forecast-vs-actual drift by hour and by site.
+3. Version forecast artifacts (`forecast_model_YYYYMMDD.pkl`) and keep rollback support.
+
+## Latest Validation Snapshot
+- Date run: 10-04-2026
+- Command: `python run_cross_val.py`
+- Model: `models/forecast_model.pkl`
+- Result: `86.6%` walk-forward accuracy (`1 - WAPE`)
 
 ## 🤝 Contributing
 
