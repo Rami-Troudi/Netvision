@@ -16,6 +16,10 @@ import numpy as np
 import pandas as pd
 from pydantic import BaseModel
 
+from backend.common import normalize_band as _normalize_band
+from backend.common import to_bool as _to_bool
+from backend.common import to_float as _to_float
+
 
 BACKEND_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = BACKEND_DIR.parent
@@ -23,7 +27,6 @@ MODEL_ASSETS_DIR = PROJECT_ROOT / "runtime_data" / "model_assets"
 NO_ACTION_LABEL = "Aucune action requise"
 STALE_ACTION_LABEL = "Data too stale for decision"
 MODEL_VERSIONS = ["forecast_model"]
-ENCODED_BAND_MAP = {0: "B1", 1: "B3", 2: "B20"}
 
 # Forecast request defaults can be tuned via environment for deterministic ops/tests.
 FORECAST_CONFIDENCE_DECAY = float(os.getenv("FORECAST_CONFIDENCE_DECAY", "0.003"))
@@ -39,47 +42,6 @@ class CellNotFoundError(Exception):
     def __init__(self, cellname: str) -> None:
         super().__init__(f"Cell not found: {cellname}")
         self.cellname = cellname
-
-
-def _to_float(value: Any, default: float = 0.0) -> float:
-    try:
-        out = float(value)
-    except (TypeError, ValueError):
-        return default
-    if pd.isna(out):
-        return default
-    return out
-
-
-def _to_bool(value: Any) -> bool:
-    if isinstance(value, bool):
-        return value
-    if value is None or pd.isna(value):
-        return False
-    if isinstance(value, str):
-        return value.strip().lower() in {"1", "true", "t", "yes", "y"}
-    return bool(value)
-
-
-def _normalize_band(value: Any) -> str:
-    if value is None or pd.isna(value):
-        return ""
-
-    if isinstance(value, (int, np.integer, float, np.floating)):
-        int_value = int(value)
-        if int_value in ENCODED_BAND_MAP:
-            return ENCODED_BAND_MAP[int_value]
-
-    text = str(value).strip().upper().replace(".0", "")
-    if text in {"B1", "1"}:
-        return "B1"
-    if text in {"B3", "3"}:
-        return "B3"
-    if text in {"B20", "20"}:
-        return "B20"
-    if text in {"0", "2"}:
-        return ENCODED_BAND_MAP[int(text)]
-    return text
 
 
 def _load_feature_columns(meta_path: Path) -> list[str]:
