@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 import importlib
+import inspect
 import json
-import sys
+import os
 from pathlib import Path
 from typing import Any
 
@@ -19,11 +20,15 @@ from pydantic import BaseModel
 BACKEND_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = BACKEND_DIR.parent
 MODEL_ASSETS_DIR = PROJECT_ROOT / "runtime_data" / "model_assets"
-SCRIPTS_DIR = PROJECT_ROOT / "scripts"
 NO_ACTION_LABEL = "Aucune action requise"
 STALE_ACTION_LABEL = "Data too stale for decision"
 MODEL_VERSIONS = ["forecast_model"]
 ENCODED_BAND_MAP = {0: "B1", 1: "B3", 2: "B20"}
+
+# Forecast request defaults can be tuned via environment for deterministic ops/tests.
+FORECAST_CONFIDENCE_DECAY = float(os.getenv("FORECAST_CONFIDENCE_DECAY", "0.003"))
+FORECAST_HOURS_AHEAD = int(os.getenv("FORECAST_HOURS_AHEAD", "1"))
+FORECAST_STOCHASTIC = os.getenv("FORECAST_STOCHASTIC", "false").strip().lower() in {"1", "true", "yes", "y"}
 
 
 class PredictRequest(BaseModel):
@@ -91,23 +96,19 @@ def _predict_next_with_forecaster(
     target_dt: Any,
     baseline_info: dict[str, Any],
 ) -> dict[str, Any]:
-    try:
-        out = forecaster.forecast_cell(
-            cell_name=cellname,
-            target_dt=target_dt,
-            baseline_info=baseline_info,
-            confidence_decay=0.003,
-            hours_ahead=1,
-            stochastic=False,
-        )
-    except TypeError:
-        out = forecaster.forecast_cell(
-            cell_name=cellname,
-            target_dt=target_dt,
-            baseline_info=baseline_info,
-            confidence_decay=0.003,
-            hours_ahead=1,
-        )
+    forecast_kwargs = {
+        "cell_name": cellname,
+        "target_dt": target_dt,
+        "baseline_info": baseline_info,
+        "confidence_decay": FORECAST_CONFIDENCE_DECAY,
+        "hours_ahead": FORECAST_HOURS_AHEAD,
+        "stochastic": FORECAST_STOCHASTIC,
+    }
+
+    # Pass only supported kwargs to avoid masking TypeErrors raised inside forecast_cell.
+    supported_params = set(inspect.signature(forecaster.forecast_cell).parameters)
+    call_kwargs = {k: v for k, v in forecast_kwargs.items() if k in supported_params}
+    out = forecaster.forecast_cell(**call_kwargs)
 
     if not isinstance(out, dict):
         raise ValueError("Forecast model returned an invalid prediction payload.")
@@ -243,10 +244,7 @@ async def lifespan(app: FastAPI):
         forecast_model = None
         forecast_model_baseline: dict[str, Any] = {}
 
-        if str(SCRIPTS_DIR) not in sys.path:
-            sys.path.append(str(SCRIPTS_DIR))
-
-        from forecast_hf import load_trained_forecaster  # type: ignore
+        from scripts.forecast_hf import load_trained_forecaster  # type: ignore
 
         forecast_model, forecast_model_baseline, _ = load_trained_forecaster(paths["forecast_model"])
 

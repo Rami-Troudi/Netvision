@@ -90,7 +90,7 @@ src/             # main.js (UI logic), style.css
 3. Version forecast artifacts (`forecast_model_YYYYMMDD.pkl`) and keep rollback support.
 
 ## Latest Validation Snapshot
-- Date run: 10-04-2026
+- Date run: 2026-04-10
 - Command: `python run_cross_val.py`
 - Model: `models/forecast_model.pkl`
 - Result: `86.6%` walk-forward accuracy (`1 - WAPE`)
