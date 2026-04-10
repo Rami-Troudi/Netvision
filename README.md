@@ -33,7 +33,10 @@ python scripts/forecast_hf.py --days 1
 - **Forecast model training (production)**: `scripts/train_forecast_model.py`
   - Inputs: `runtime_data/baseline.json`, `runtime_data/time_index.json`, `runtime_data/time_data/*.parquet`
   - Outputs: `models/forecast_model.pkl`
-  - This model is used by `scripts/forecast_hf.py` for forecast generation and by `api.py` for `/predict` decisions.
+  - This model is used by `scripts/forecast_hf.py` for forecast generation and by `backend/api.py` for `/predict` decisions.
+- **Decision artifacts (backend inputs)**:
+  - Location: `runtime_data/model_assets/`
+  - Files: `features_meta.json`, `features_with_score.parquet`, `cell_congestion_profile.parquet`, `all_cell_recommendations.*`, `thresholds.json`, `val_predictions.parquet`
 - **Forecast generation**: `scripts/forecast_hf.py`
   - Default mode uses `models/forecast_model.pkl`
   - Predicts active cells by weekday/hour slot to avoid inflated congestion counts
@@ -60,8 +63,10 @@ python scripts/forecast_hf.py --days 1
 ```
 pages/           # Next.js pages (index, api/simulate, site-planning)
 public/          # static frontend assets only
+backend/         # api.py, action_engine.py, validate_pipeline.py
 scripts/         # process_time_series.py, forecast_hf.py
                 # train_forecast_model.py
+runtime_data/    # baseline/index/slices + model_assets
 simulation/      # simulator.py (fast estimator)
 src/             # main.js (UI logic), style.css
 ```
@@ -85,7 +90,7 @@ src/             # main.js (UI logic), style.css
 3. Version forecast artifacts (`forecast_model_YYYYMMDD.pkl`) and keep rollback support.
 
 ## Latest Validation Snapshot
-- Date run: 10-04-2026
+- Date run: 2026-04-10
 - Command: `python run_cross_val.py`
 - Model: `models/forecast_model.pkl`
 - Result: `86.6%` walk-forward accuracy (`1 - WAPE`)

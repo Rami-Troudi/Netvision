@@ -11,8 +11,10 @@ import pandas as pd
 
 
 MODULE_DIR = Path(__file__).resolve().parent
-THRESHOLDS_PATH = MODULE_DIR / "thresholds.json"
-CELL_PROFILE_PATH = MODULE_DIR / "cell_congestion_profile.parquet"
+PROJECT_ROOT = MODULE_DIR.parent
+MODEL_ASSETS_DIR = PROJECT_ROOT / "runtime_data" / "model_assets"
+THRESHOLDS_PATH = MODEL_ASSETS_DIR / "thresholds.json"
+CELL_PROFILE_PATH = MODEL_ASSETS_DIR / "cell_congestion_profile.parquet"
 
 
 def _load_thresholds(path: Path) -> dict[str, Any]:

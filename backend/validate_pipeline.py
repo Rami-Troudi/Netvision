@@ -14,7 +14,9 @@ except Exception:  # requests is optional for the API smoke check
     requests = None
 
 
-ROOT_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+ROOT_DIR = PROJECT_ROOT / "runtime_data" / "model_assets"
+REPORT_PATH = PROJECT_ROOT / "runtime_data" / "validation_report.txt"
 
 PASS = "PASS"
 WARN = "WARN"
@@ -341,7 +343,7 @@ def check_6_capex_action_sanity(results: list[dict], state: dict) -> None:
 def check_7_api_smoke_test(results: list[dict], state: dict) -> None:
     check_name = "CHECK 7 — API smoke test"
     if requests is None:
-        _record_result(results, check_name, SKIP, "SKIP — API not running, start with: python api.py")
+        _record_result(results, check_name, SKIP, "SKIP — API not running, start with: python run_backend.py")
         return
 
     try:
@@ -349,7 +351,7 @@ def check_7_api_smoke_test(results: list[dict], state: dict) -> None:
         state["api_status_code"] = response.status_code
         _record_result(results, check_name, PASS, f"API reachable at /health (status_code={response.status_code})")
     except Exception:
-        _record_result(results, check_name, SKIP, "SKIP — API not running, start with: python api.py")
+        _record_result(results, check_name, SKIP, "SKIP — API not running, start with: python run_backend.py")
 
 
 def build_report(results: list[dict], state: dict) -> str:
@@ -435,8 +437,7 @@ def main() -> None:
     check_7_api_smoke_test(results, state)
 
     report_text = build_report(results, state)
-    report_path = ROOT_DIR / "validation_report.txt"
-    report_path.write_text(report_text, encoding="utf-8")
+    REPORT_PATH.write_text(report_text, encoding="utf-8")
 
     print("\n" + "=" * 48)
     print(report_text, end="")

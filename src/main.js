@@ -18,10 +18,10 @@ const CONFIG = {
     SECTOR_MIN_ZOOM: 10,
     MAX_ALERTS_RENDER: 50,
     CQI_THRESHOLD: 8,
-    HEATMAP_RADIUS: 30,
-    HEATMAP_INTENSITY: 1,
     HEATMAP_OPACITY: 0.8,
     PLAY_INTERVAL_MS: 500,
+    SECTOR_ARC_STEPS_DEFAULT: 16,
+    SECTOR_ARC_STEPS_PLAYBACK: 6,
 
     BAND_RADIUS: {
         20: 1500,
@@ -91,9 +91,12 @@ const state = {
     isPlaying: false,
     playInterval: null,
     playSpeed: 1,
+    isLoadingSlice: false,
+    analyticsModalOpen: false,
+    currentSectorArcSteps: 24,
     
     filters: {
-        status: { congested: true, 'high-load': true, normal: true, idle: true, 'no-data': true, 'poor-cqi': true },
+        status: { congested: true, 'high-load': true, normal: true, idle: true, 'no-data': false, 'poor-cqi': true },
         bands: {},
         issueTypes: {},
         loadRange: [0, 100],
@@ -110,7 +113,11 @@ const state = {
         severity: null,
         bands: null,
         load: null
-    }
+    },
+    cellGeometryMeta: {},
+    needsSectorGeometrySync: false,
+    lastCongestedCount: null,
+    lastVisibleFilterSignature: null
 };
 
 let hasInitialized = false;
@@ -118,6 +125,9 @@ const geometryCache = {};
 const MAX_GEOMETRY_CACHE_ENTRIES = 10000;
 const REQUIRED_OBSERVATION_KEYS = ['load', 'throughput', 'traffic', 'ta', 'cqi'];
 let hasObservationSchemaWarning = false;
+const featureStateCache = {
+    cells: new Map()
+};
 
 function pruneGeometryCache() {
     const keys = Object.keys(geometryCache);
@@ -144,15 +154,15 @@ function parseTimestamp(ts) {
     return new Date(y, m - 1, d, hh, mm, 0, 0);
 }
 
-function createSectorPolygon(center, radiusMeters, azimuth, beamwidth) {
+function createSectorPolygon(center, radiusMeters, azimuth, beamwidth, steps = CONFIG.SECTOR_ARC_STEPS_DEFAULT) {
     // Use geodesic destination for each point on the sector arc for higher accuracy
-    const steps = 24;
+    const stepsCount = Math.max(3, Number(steps) || CONFIG.SECTOR_ARC_STEPS_DEFAULT);
     const startAzimuth = azimuth - beamwidth / 2;
     const endAzimuth = azimuth + beamwidth / 2;
     const coordinates = [center];
 
-    for (let i = 0; i <= steps; i++) {
-        const currentAzimuth = startAzimuth + (i / steps) * (endAzimuth - startAzimuth);
+    for (let i = 0; i <= stepsCount; i++) {
+        const currentAzimuth = startAzimuth + (i / stepsCount) * (endAzimuth - startAzimuth);
         const dest = destination(center, radiusMeters / 1000, currentAzimuth, { units: 'kilometers' });
         coordinates.push(dest.geometry.coordinates);
     }
@@ -202,10 +212,19 @@ function formatLargeNumber(num) {
 
 function calculateCellRadius(band, ta) {
     let baseRadius = CONFIG.BAND_RADIUS[band] || CONFIG.DEFAULT_RADIUS_METERS;
-    if (ta && ta > 0) {
-        baseRadius = Math.max(baseRadius, ta * CONFIG.TA_TO_METERS);
+    const taMetersRaw = Number(ta) * CONFIG.TA_TO_METERS;
+    if (Number.isFinite(taMetersRaw) && taMetersRaw > 0) {
+        // Blend static band footprint with live TA so radius changes stay visible but stable.
+        const blended = baseRadius * 0.55 + taMetersRaw * 0.9;
+        baseRadius = Math.round(blended / 10) * 10;
     }
     return Math.max(CONFIG.MIN_RADIUS, Math.min(CONFIG.MAX_RADIUS, baseRadius));
+}
+
+function getObservationTA(obs) {
+    const taCandidate = obs?.ta ?? obs?.timing_advance ?? obs?.avg_ta ?? obs?.ta_avg ?? null;
+    const ta = Number(taCandidate);
+    return Number.isFinite(ta) ? ta : null;
 }
 
 function parseCellName(cellName) {
@@ -418,29 +437,136 @@ function buildSiteHierarchy() {
     state.siteHierarchy = hierarchy;
 }
 
+function getLivePointProperties(mapFeature) {
+    const featureId = Number(mapFeature?.id ?? mapFeature?.properties?.id);
+    if (!Number.isInteger(featureId) || featureId < 0 || featureId >= state.pointFeatures.length) {
+        return mapFeature?.properties || {};
+    }
+    return state.pointFeatures[featureId]?.properties || mapFeature?.properties || {};
+}
+
+function computeSiteLiveStats(site) {
+    let totalCells = 0;
+    let congestedCells = 0;
+    let lowCQI = 0;
+    let avgLoad = 0;
+    let avgCQI = 0;
+    let loadCount = 0;
+    let cqiCount = 0;
+
+    Object.values(site.antennas).forEach(ant => {
+        ant.cells.forEach(cell => {
+            totalCells++;
+            const obs = state.currentObservations[cell.cellName];
+            if (obs) {
+                if (obs.congested) congestedCells++;
+                if (obs.cqi !== null && obs.cqi < CONFIG.CQI_THRESHOLD) lowCQI++;
+                if (obs.load !== null && obs.load !== undefined) {
+                    avgLoad += obs.load;
+                    loadCount++;
+                }
+                if (obs.cqi !== null && obs.cqi !== undefined) {
+                    avgCQI += obs.cqi;
+                    cqiCount++;
+                }
+            }
+        });
+    });
+
+    return {
+        totalCells,
+        congestedCells,
+        lowCQI,
+        avgLoad: loadCount ? avgLoad / loadCount : 0,
+        avgCQI: cqiCount ? avgCQI / cqiCount : 0
+    };
+}
+
 // --- Data Processing ---
-function buildFeaturesForTime(observations) {
-    if (!observations) observations = {};
+function updateFeatureProperties(pointProperties, sectorProperties, obs, options = {}) {
+    const { isForecast = false, confidence = null } = options;
+    const cqi = obs?.cqi ?? null;
+    const hasLowCQI = cqi !== null && cqi < CONFIG.CQI_THRESHOLD;
+    const status = getCellStatus(obs);
+    const load = obs?.load ?? null;
+    const severity = obs?.severity ?? 0;
+    const issueType = obs?.issue_type || 'Normal';
+    const color = getLoadColor(load, obs?.congested, cqi);
+    const taValue = getObservationTA(obs);
+    const pointOpacity = obs ? 0.75 : 0.35;
+    const sectorOpacity = obs ? 0.58 : 0.04;
+
+    pointProperties.status = status;
+    pointProperties.color = color;
+    pointProperties.opacity = pointOpacity;
+    pointProperties.load = load;
+    pointProperties.congested = obs?.congested || false;
+    pointProperties.issue_type = issueType;
+    pointProperties.root_cause = obs?.root_cause || '-';
+    pointProperties.severity = severity;
+    pointProperties.health_score = obs?.health_score ?? 100;
+    pointProperties.throughput = obs?.throughput;
+    pointProperties.cqi = cqi;
+    pointProperties.has_low_cqi = hasLowCQI;
+    pointProperties.traffic = obs?.traffic;
+    pointProperties.ta = taValue;
+    pointProperties.signal_power = obs?.signal_power;
+    pointProperties.is_forecast = isForecast;
+    if (isForecast && confidence !== null && confidence !== undefined) {
+        pointProperties.confidence = confidence;
+    } else {
+        delete pointProperties.confidence;
+    }
+
+    sectorProperties.status = status;
+    sectorProperties.color = color;
+    sectorProperties.opacity = sectorOpacity;
+    sectorProperties.load = load;
+    sectorProperties.cqi = cqi;
+    sectorProperties.has_low_cqi = hasLowCQI;
+    sectorProperties.congested = obs?.congested || false;
+    sectorProperties.severity = severity;
+    sectorProperties.issue_type = issueType;
+    sectorProperties.is_forecast = isForecast;
+    if (isForecast && confidence !== null && confidence !== undefined) {
+        sectorProperties.confidence = confidence;
+    } else {
+        delete sectorProperties.confidence;
+    }
+}
+
+function buildFeaturesForTime() {
     const pointFeatures = [];
     const sectorFeatures = [];
     const sites = new Map();
+    state.cellGeometryMeta = {};
     
     let index = 0;
     for (const [cellName, baseInfo] of Object.entries(state.baseline)) {
-        const obs = observations[cellName] || null;
         const center = [baseInfo.longitude, baseInfo.latitude];
         const azimuth = baseInfo.azimuth || 0;
         const band = baseInfo.frequency_band;
         const { siteName, antenna, cellNum } = parseCellName(cellName);
-        const cqi = obs?.cqi ?? null;
-        const hasLowCQI = cqi !== null && cqi < CONFIG.CQI_THRESHOLD;
-        
-        const status = getCellStatus(obs);
-        const load = obs?.load ?? null;
-        const color = getLoadColor(load, obs?.congested, cqi);
-        const opacity = obs ? 0.7 : 0.4;
-        const severity = obs?.severity ?? 0;
-        const issueType = obs?.issue_type || 'Normal';
+        const radius = calculateCellRadius(band, null);
+        const cacheKey = `${cellName}_${radius}_${CONFIG.SECTOR_ARC_STEPS_DEFAULT}`;
+        const geometry = geometryCache[cacheKey] || createSectorPolygon(
+            center,
+            radius,
+            azimuth,
+            CONFIG.DEFAULT_BEAMWIDTH,
+            CONFIG.SECTOR_ARC_STEPS_DEFAULT
+        );
+        geometryCache[cacheKey] = geometry;
+
+        state.cellGeometryMeta[cellName] = {
+            center,
+            azimuth,
+            radius,
+            band,
+            siteName,
+            antenna,
+            cellNum
+        };
         
         pointFeatures.push({
             type: 'Feature',
@@ -452,34 +578,29 @@ function buildFeaturesForTime(observations) {
                 antenna_id: antenna,
                 cell_num: cellNum,
                 enodeb_name: baseInfo.enodeb_name,
-                status,
-                color,
-                opacity,
-                load,
-                congested: obs?.congested || false,
-                issue_type: issueType,
-                root_cause: obs?.root_cause || '-',
-                severity,
-                health_score: obs?.health_score ?? 100,
-                throughput: obs?.throughput,
-                cqi,
-                has_low_cqi: hasLowCQI,
-                traffic: obs?.traffic,
-                ta: obs?.ta,
-                signal_power: obs?.signal_power,
+                status: 'no-data',
+                color: CONFIG.COLORS.NO_DATA,
+                opacity: 0.4,
+                load: null,
+                congested: false,
+                issue_type: 'Normal',
+                root_cause: '-',
+                severity: 0,
+                health_score: 100,
+                throughput: null,
+                cqi: null,
+                has_low_cqi: false,
+                traffic: null,
+                ta: null,
+                signal_power: null,
                 band,
                 azimuth,
                 localcell_id: baseInfo.localcell_id,
-                duplex: baseInfo.cell_fdd_tdd_indication || 'FDD'
+                duplex: baseInfo.cell_fdd_tdd_indication || 'FDD',
+                is_forecast: false
             },
             geometry: { type: 'Point', coordinates: center }
         });
-        
-        const radius = calculateCellRadius(band, obs?.ta);
-        const cacheKey = `${cellName}_${radius}`;
-        const geometry = geometryCache[cacheKey] || createSectorPolygon(center, radius, azimuth, CONFIG.DEFAULT_BEAMWIDTH);
-        geometryCache[cacheKey] = geometry;
-        pruneGeometryCache();
         
         sectorFeatures.push({
             type: 'Feature',
@@ -490,18 +611,20 @@ function buildFeaturesForTime(observations) {
                 site_name: siteName,
                 antenna_id: antenna,
                 enodeb_name: baseInfo.enodeb_name,
-                status,
-                color,
-                opacity,
-                load,
-                cqi,
-                has_low_cqi: hasLowCQI,
-                congested: obs?.congested || false,
+                status: 'no-data',
+                color: CONFIG.COLORS.NO_DATA,
+                opacity: 0.4,
+                load: null,
+                cqi: null,
+                has_low_cqi: false,
+                congested: false,
                 band,
                 azimuth,
                 radius,
-                severity,
-                issue_type: issueType
+                arc_steps: CONFIG.SECTOR_ARC_STEPS_DEFAULT,
+                severity: 0,
+                issue_type: 'Normal',
+                is_forecast: false
             },
             geometry: { type: 'Polygon', coordinates: geometry }
         });
@@ -513,8 +636,80 @@ function buildFeaturesForTime(observations) {
         
         index++;
     }
+
+    pruneGeometryCache();
     
     return { pointFeatures, sectorFeatures, sites: Array.from(sites.values()) };
+}
+
+function syncSectorGeometryForObservations(observations = {}) {
+    let geometryChanged = false;
+    const steps = Math.max(3, Number(state.currentSectorArcSteps) || CONFIG.SECTOR_ARC_STEPS_DEFAULT);
+
+    state.sectorFeatures.forEach((feature) => {
+        const cellName = feature?.properties?.cell_name;
+        const meta = cellName ? state.cellGeometryMeta[cellName] : null;
+        if (!meta) return;
+
+        const obs = observations[cellName] || null;
+        const radius = calculateCellRadius(meta.band, getObservationTA(obs));
+        const previousRadius = Number(feature?.properties?.radius);
+        const previousSteps = Number(feature?.properties?.arc_steps);
+        const mustRebuild =
+            !Number.isFinite(previousRadius) ||
+            previousRadius !== radius ||
+            !Number.isFinite(previousSteps) ||
+            previousSteps !== steps;
+
+        if (!mustRebuild) {
+            return;
+        }
+
+        const cacheKey = `${cellName}_${radius}_${steps}`;
+        const geometry = geometryCache[cacheKey] || createSectorPolygon(
+            meta.center,
+            radius,
+            meta.azimuth,
+            CONFIG.DEFAULT_BEAMWIDTH,
+            steps
+        );
+
+        geometryCache[cacheKey] = geometry;
+        feature.geometry.coordinates = geometry;
+        feature.properties.radius = radius;
+        feature.properties.arc_steps = steps;
+        geometryChanged = true;
+    });
+
+    if (geometryChanged) {
+        pruneGeometryCache();
+    }
+
+    return geometryChanged;
+}
+
+function updateFeaturesForTime(observations = {}, options = {}) {
+    const featuresCount = Math.min(state.pointFeatures.length, state.sectorFeatures.length);
+    for (let i = 0; i < featuresCount; i++) {
+        const pointFeature = state.pointFeatures[i];
+        const sectorFeature = state.sectorFeatures[i];
+        const cellName = pointFeature?.properties?.cell_name;
+        if (!cellName || !sectorFeature) continue;
+        const obs = observations[cellName] || null;
+        updateFeatureProperties(pointFeature.properties, sectorFeature.properties, obs, options);
+    }
+
+    syncSectorGeometryForObservations(observations);
+    state.needsSectorGeometrySync = true;
+}
+
+function setSectorGeometryResolution(steps) {
+    const targetSteps = Math.max(3, Number(steps) || CONFIG.SECTOR_ARC_STEPS_DEFAULT);
+    if (state.currentSectorArcSteps === targetSteps) return;
+
+    state.currentSectorArcSteps = targetSteps;
+    syncSectorGeometryForObservations(state.currentObservations);
+    state.needsSectorGeometrySync = true;
 }
 
 // --- Search Functionality ---
@@ -579,23 +774,13 @@ function showSiteInfoPanel(siteName, focusCell = null) {
     panel.classList.remove('hidden');
     document.getElementById('cell-info-name').textContent = site.name;
 
-    let totalCells = 0, congestedCells = 0, lowCQI = 0, avgLoad = 0, avgCQI = 0, loadCount = 0, cqiCount = 0;
-
-    Object.values(site.antennas).forEach(ant => {
-        ant.cells.forEach(cell => {
-            totalCells++;
-            const obs = state.currentObservations[cell.cellName];
-            if (obs) {
-                if (obs.congested) congestedCells++;
-                if (obs.cqi !== null && obs.cqi < CONFIG.CQI_THRESHOLD) lowCQI++;
-                if (obs.load !== null && obs.load !== undefined) { avgLoad += obs.load; loadCount++; }
-                if (obs.cqi !== null && obs.cqi !== undefined) { avgCQI += obs.cqi; cqiCount++; }
-            }
-        });
-    });
-
-    avgLoad = loadCount ? avgLoad / loadCount : 0;
-    avgCQI = cqiCount ? avgCQI / cqiCount : 0;
+    const {
+        totalCells,
+        congestedCells,
+        lowCQI,
+        avgLoad,
+        avgCQI
+    } = computeSiteLiveStats(site);
 
     const statusEl = document.getElementById('cell-status');
     let statusClass = 'normal', statusText = 'Normal';
@@ -611,8 +796,8 @@ function showSiteInfoPanel(siteName, focusCell = null) {
     let html = `
         <div class="site-info-section">
             <div class="site-info-row"><span>Location</span><span>${escapeHtml(site.latitude.toFixed(5))}, ${escapeHtml(site.longitude.toFixed(5))}</span></div>
-            <div class="site-info-row"><span>Avg Load</span><span>${avgLoad.toFixed(1)}%</span></div>
-            <div class="site-info-row"><span>Avg CQI</span><span class="${avgCQI < CONFIG.CQI_THRESHOLD ? 'text-danger' : ''}">${avgCQI.toFixed(1)}</span></div>
+            <div class="site-info-row"><span>Avg Load</span><span id="site-avg-load">${avgLoad.toFixed(1)}%</span></div>
+            <div class="site-info-row"><span>Avg CQI</span><span id="site-avg-cqi" class="${avgCQI < CONFIG.CQI_THRESHOLD ? 'text-danger' : ''}">${avgCQI.toFixed(1)}</span></div>
         </div>
         <div class="site-antennas">
     `;
@@ -678,1294 +863,356 @@ function showSiteInfoPanel(siteName, focusCell = null) {
     if (focusCell) selectCell(focusCell, false);
 }
 
+function refreshSiteInfoStats(siteName) {
+    if (!siteName || state.selectedSite !== siteName) return;
+    const panel = document.getElementById('cell-info-panel');
+    if (!panel || panel.classList.contains('hidden')) return;
+    const site = state.siteHierarchy[siteName];
+    if (!site) return;
+
+    const {
+        totalCells,
+        congestedCells,
+        lowCQI,
+        avgLoad,
+        avgCQI
+    } = computeSiteLiveStats(site);
+
+    const statusEl = document.getElementById('cell-status');
+    if (statusEl) {
+        let statusClass = 'normal';
+        let statusText = 'Normal';
+        if (congestedCells > 0) {
+            statusClass = 'congested';
+            statusText = `${congestedCells} congested`;
+        } else if (lowCQI > 0) {
+            statusClass = 'poor-cqi';
+            statusText = `${lowCQI} low CQI`;
+        }
+        statusEl.className = `cell-status ${statusClass}`;
+        statusEl.textContent = statusText;
+    }
+
+    const healthEl = document.getElementById('cell-health');
+    if (healthEl) healthEl.textContent = `Cells: ${totalCells}`;
+
+    const avgLoadEl = document.getElementById('site-avg-load');
+    if (avgLoadEl) avgLoadEl.textContent = `${avgLoad.toFixed(1)}%`;
+
+    const avgCqiEl = document.getElementById('site-avg-cqi');
+    if (avgCqiEl) {
+        avgCqiEl.textContent = avgCQI.toFixed(1);
+        avgCqiEl.classList.toggle('text-danger', avgCQI < CONFIG.CQI_THRESHOLD);
+    }
+}
+
 function hideSiteInfoPanel() {
     state.selectedSite = null;
     document.getElementById('cell-info-panel')?.classList.add('hidden');
     applyFilters();
 }
 
-// --- Smart Recommendation Engine (Orange DRS Standards) ---
+// --- Backend Recommendation Engine ---
 
-/**
- * Orange Action Recovery Rates (Taux de récupération)
- * Based on Orange DRS engineering guidelines
- */
-const ORANGE_ACTIONS = {
-    // === COURT TERME (OPEX) ===
-    tilt: {
-        name: 'Ajustement Tilt mécanique/électrique',
-        recoveryRate: 0.15,  // 15%
-        timeline: 'court_terme',
-        capex: false,
-        effect: 'Réduction footprint, moins d\'interférence'
-    },
-    power: {
-        name: 'Ajustement puissance (Tx Power)',
-        recoveryRate: 0.20,  // 20%
-        timeline: 'court_terme',
-        capex: false,
-        effect: 'Optimisation RSRP/SINR, réduction interférence'
-    },
-    redistribute: {
-        name: 'Équilibrage MLB (Mobility Load Balancing)',
-        recoveryRate: 0.40,  // 40%
-        timeline: 'court_terme',
-        capex: false,
-        effect: 'Déplacement UE vers cellules voisines moins chargées'
-    },
-    neighbor_optimization: {
-        name: 'Optimisation voisinage (ANR/HO params)',
-        recoveryRate: 0.35,  // 35%
-        timeline: 'court_terme',
-        capex: false,
-        effect: 'Meilleur handover, réduction ping-pong'
-    },
-    parameter_tuning: {
-        name: 'Tuning paramètres radio (CIO/Hysteresis)',
-        recoveryRate: 0.25,  // 25%
-        timeline: 'court_terme',
-        capex: false,
-        effect: 'Optimisation seuils HO, réduction RLF'
-    },
-    // === MOYEN TERME (OPEX/CAPEX léger) ===
-    add_carrier: {
-        name: 'Activation bande supplémentaire (CA)',
-        recoveryRate: 0.50,  // 50%
-        timeline: 'moyen_terme',
-        capex: true,
-        effect: 'Capacité +50%, Carrier Aggregation'
-    },
-    mimo_upgrade: {
-        name: 'Upgrade MIMO (2T2R → 4T4R/8T8R)',
-        recoveryRate: 0.35,  // 35%
-        timeline: 'moyen_terme',
-        capex: true,
-        effect: 'Débit ×1.5-2, meilleur SINR'
-    },
-    small_cell: {
-        name: 'Déploiement Small Cell / Micro',
-        recoveryRate: 0.45,  // 45%
-        timeline: 'moyen_terme',
-        capex: true,
-        effect: 'Capacité locale +45%, indoor/hotspot'
-    },
-    // === LONG TERME (CAPEX) ===
-    add_sector: {
-        name: 'Ajout 4ème secteur (sectorisation)',
-        recoveryRate: 0.85,  // 85%
-        timeline: 'long_terme',
-        capex: true,
-        effect: 'Capacité site ×1.33, meilleure répartition'
-    },
-    add_site: {
-        name: 'Nouveau site macro capacitaire',
-        recoveryRate: 0.90,  // 90%
-        timeline: 'long_terme',
-        capex: true,
-        effect: 'Réduction UE/cellule, nouvelle capacité zone'
-    },
-    split_cell: {
-        name: 'Cell Split (subdivision cellule)',
-        recoveryRate: 0.70,  // 70%
-        timeline: 'long_terme',
-        capex: true,
-        effect: 'Divise zone en 2+ cellules, capacité ×2'
+const BACKEND_ACTION_TO_SIM_ACTION = Object.freeze({
+    'Équilibrage MLB': 'redistribute',
+    'Ajustement Tilt': 'tilt',
+    'Ajustement Puissance': 'power',
+    'Activation carrier (CA)': 'add_carrier',
+    'Tuning paramètres radio': 'parameter_tuning',
+    'Upgrade MIMO': 'mimo_upgrade',
+    'Small Cell / Micro': 'small_cell',
+    'Ajout 4ème secteur': 'add_sector',
+    'Nouveau site macro': 'add_site',
+    'Cell Split': 'split_cell',
+    'Aucune action requise': null,
+    'Data too stale for decision': null,
+});
+
+const ACTION_UI_METADATA = Object.freeze({
+    tilt: { name: 'Ajustement Tilt', timeline: 'court_terme', recoveryRate: 15, capex: false, effect: 'Optimisation couverture et interférences' },
+    power: { name: 'Ajustement Puissance', timeline: 'court_terme', recoveryRate: 20, capex: false, effect: 'Réduction interférence et empreinte radio' },
+    redistribute: { name: 'Équilibrage MLB', timeline: 'court_terme', recoveryRate: 40, capex: false, effect: 'Déplacement charge vers voisins moins chargés' },
+    parameter_tuning: { name: 'Tuning paramètres radio', timeline: 'court_terme', recoveryRate: 25, capex: false, effect: 'Ajustement paramètres handover/scheduler' },
+    add_carrier: { name: 'Activation carrier (CA)', timeline: 'moyen_terme', recoveryRate: 50, capex: true, effect: 'Ajout capacité spectrale' },
+    mimo_upgrade: { name: 'Upgrade MIMO', timeline: 'moyen_terme', recoveryRate: 35, capex: true, effect: 'Amélioration efficacité spectrale' },
+    small_cell: { name: 'Small Cell / Micro', timeline: 'moyen_terme', recoveryRate: 45, capex: true, effect: 'Décharge locale hotspot' },
+    add_sector: { name: 'Ajout 4ème secteur', timeline: 'long_terme', recoveryRate: 85, capex: true, effect: 'Augmentation capacité sectorielle' },
+    add_site: { name: 'Nouveau site macro', timeline: 'long_terme', recoveryRate: 90, capex: true, effect: 'Nouvelle capacité de zone' },
+    split_cell: { name: 'Cell Split', timeline: 'long_terme', recoveryRate: 70, capex: true, effect: 'Subdivision cellule haute charge' },
+});
+
+const TIER_TO_UI = Object.freeze({
+    court_terme: { label: 'Court terme', className: 'timeline-short' },
+    moyen_terme: { label: 'Moyen terme', className: 'timeline-medium' },
+    long_terme: { label: 'Long terme', className: 'timeline-long' },
+    none: { label: 'Info', className: '' },
+});
+
+let recommendationRequestSeq = 0;
+const recommendationCache = new Map();
+
+function toRecoveryPercent(rawValue, fallbackValue = 0) {
+    const parsed = Number(rawValue);
+    if (!Number.isFinite(parsed)) {
+        return Math.max(0, Math.min(100, Number(fallbackValue) || 0));
     }
-};
-
-/**
- * Calculate "Manque à gagner" (Lost traffic/revenue)
- * Based on Orange model: Perte actuelle, Taux de récupération, Gain estimé
- */
-function calculateTrafficLoss(obs) {
-    const load = obs.load || 0;
-    const throughput = obs.throughput || 10000;
-    const activeUsers = obs.traffic || 2;
-    
-    // Perte actuelle = excess capacity being denied
-    const excessLoad = Math.max(0, load - 70);
-    const throughputGap = Math.max(0, 10000 - throughput) / 10000; // Gap to 10 Mbps target
-    
-    // Estimated UE affected (users in queue or degraded)
-    const affectedUE = Math.round(activeUsers * (excessLoad / 100) * 0.6);
-    
-    // Estimated GB lost per month (2.4 GB per UE average)
-    const lostGB = Math.round(affectedUE * 2.4);
-    
-    return {
-        affectedUE,
-        lostGB,
-        excessLoad,
-        throughputGap: Math.round(throughputGap * 100)
-    };
+    return Math.max(0, Math.min(100, Math.round(parsed)));
 }
 
-/**
- * Calculate optimal tilt adjustment based on cell metrics
- */
-function calculateOptimalTilt(obs, baseline) {
-    const load = obs.load || 0;
-    const cqi = obs.cqi || 10;
-    const ta = obs.ta || 5;
-    
-    let optimalDegrees = 0;
-    let direction = 'downtilt';
-    
-    if (cqi < CONFIG.CQI_THRESHOLD) {
-        // Low CQI - interference, downtilt to reduce overlap
-        optimalDegrees = Math.min(5, Math.max(1, (CONFIG.CQI_THRESHOLD - cqi) * 0.8));
-        direction = 'downtilt';
-    } else if (load > 80) {
-        // High load - shed edge users
-        const excessLoad = load - 70;
-        optimalDegrees = Math.min(4, Math.max(1, excessLoad * 0.1));
-        direction = 'downtilt';
-    } else if (ta > 20) {
-        // High TA - distant users, uptilt for better reach
-        optimalDegrees = Math.min(2, (ta - 15) * 0.1);
-        direction = 'uptilt';
+function confidenceToPercent(confidence) {
+    const normalized = String(confidence || '').trim().toLowerCase();
+    if (normalized === 'high') return 85;
+    if (normalized === 'medium') return 65;
+    if (normalized === 'low') return 45;
+    return 50;
+}
+
+function getSuggestedCarrierBand(cellName) {
+    const bands = (state.globalStats?.frequency_bands || []).map(b => String(b));
+    if (!bands.length) return '';
+
+    const { siteName } = parseCellName(cellName || '');
+    const site = state.siteHierarchy[siteName];
+    const existingBands = new Set();
+    if (site?.antennas) {
+        Object.values(site.antennas).forEach(ant => existingBands.add(String(ant.band)));
     }
-    
-    optimalDegrees = Math.round(optimalDegrees * 2) / 2;
-    if (optimalDegrees < 0.5) optimalDegrees = 1;
-    
-    const signedDegrees = direction === 'uptilt' ? -optimalDegrees : optimalDegrees;
-    const loadReduction = direction === 'downtilt' ? Math.round(optimalDegrees * 4) : Math.round(optimalDegrees * -2);
-    const cqiGain = direction === 'downtilt' ? Math.round(optimalDegrees * 0.4 * 10) / 10 : 0;
-    const throughputGain = Math.round((loadReduction * 0.5 + cqiGain * 3) * 100) / 100;
-    
-    // Efficiency based on how well-suited tilt is for this problem
-    let efficiency = 50;
-    if (cqi < CONFIG.CQI_THRESHOLD && direction === 'downtilt') efficiency = 85;
-    else if (load > 85 && direction === 'downtilt') efficiency = 70;
-    else if (ta > 20 && direction === 'uptilt') efficiency = 60;
-    
-    return {
-        degrees: signedDegrees,
-        direction,
-        optimalDegrees,
-        expectedLoadReduction: loadReduction,
-        expectedCqiGain: cqiGain,
-        expectedThroughputGain: throughputGain,
-        efficiency,
-        recoveryRate: ORANGE_ACTIONS.tilt.recoveryRate,
-        timeline: ORANGE_ACTIONS.tilt.timeline
-    };
+
+    return bands.find(b => !existingBands.has(String(b))) || bands[0];
 }
 
-/**
- * Calculate optimal redistribution ratio based on load imbalance
- */
-function calculateOptimalRedistribution(obs, baseline) {
-    const load = obs.load || 0;
-    
-    // Target load after redistribution: 65%
-    const targetLoad = 65;
-    const excessLoad = Math.max(0, load - targetLoad);
-    
-    // Ratio = how much to offload (max 0.4 = 40%)
-    let optimalRatio = Math.min(0.4, excessLoad / 100 * 0.8);
-    optimalRatio = Math.round(optimalRatio * 100) / 100;
-    if (optimalRatio < 0.1) optimalRatio = 0.15;
-    
-    const expectedLoadReduction = Math.round(excessLoad * optimalRatio * 1.5);
-    const throughputGain = Math.round(expectedLoadReduction * 0.8);
-    
-    let efficiency = 60;
-    if (load > 90) efficiency = 80;
-    else if (load > 80) efficiency = 70;
-    else if (load > 70) efficiency = 60;
-    
-    return {
-        ratio: optimalRatio,
-        expectedLoadReduction,
-        expectedThroughputGain: throughputGain,
-        efficiency,
-        recoveryRate: ORANGE_ACTIONS.redistribute.recoveryRate,
-        timeline: ORANGE_ACTIONS.redistribute.timeline
-    };
-}
-
-/**
- * Calculate best carrier band to add
- */
-function calculateOptimalCarrier(obs, baseline) {
-    const currentBand = parseInt(obs.frequency_band) || 3;
-    const load = obs.load || 0;
-    
-    const bandInfo = {
-        7:  { name: 'L2600', capacity: 200, coverage: 'small', priority: 1 },
-        3:  { name: 'L1800', capacity: 150, coverage: 'medium', priority: 2 },
-        1:  { name: 'L2100', capacity: 150, coverage: 'medium', priority: 3 },
-        20: { name: 'L800',  capacity: 75,  coverage: 'large', priority: 4 },
-    };
-    
-    let bestBand = null;
-    let bestScore = 0;
-    
-    for (const [band, info] of Object.entries(bandInfo)) {
-        if (parseInt(band) === currentBand) continue;
-        let score = info.capacity;
-        if (currentBand === 20 && (band === '7' || band === '3')) score += 50;
-        if (currentBand === 7 && band === '3') score += 30;
-        if (score > bestScore) {
-            bestScore = score;
-            bestBand = { band, ...info };
-        }
+function getRecommendationDefaultParams(simAction, cellName) {
+    switch (simAction) {
+        case 'tilt':
+            return { degrees: 2 };
+        case 'redistribute':
+            return { ratio: 0.2 };
+        case 'add_carrier':
+            return { band: getSuggestedCarrierBand(cellName) };
+        case 'power':
+            return { reduction: 3 };
+        case 'parameter_tuning':
+            return { cio: -3, hysteresis: 2 };
+        case 'mimo_upgrade':
+            return { targetMimo: '4T4R' };
+        case 'small_cell':
+            return { type: 'micro' };
+        case 'add_sector':
+            return { targetSectors: 4 };
+        case 'add_site':
+            return { siteType: 'macro' };
+        case 'split_cell':
+            return { newCellCount: 2 };
+        default:
+            return {};
     }
-    
-    if (!bestBand) bestBand = { band: '7', name: 'L2600', capacity: 200 };
-    
-    const expectedLoadReduction = Math.round(Math.min(35, load * 0.35));
-    const expectedThroughputGain = Math.round(bestBand.capacity * 0.4);
-    const efficiency = load > 85 ? 90 : (load > 75 ? 80 : 70);
-    
+}
+
+function mapBackendRecommendation(payload, recommendation, cellName, idx) {
+    const actionLabel = String(recommendation?.action || '').trim();
+    const simAction = BACKEND_ACTION_TO_SIM_ACTION[actionLabel] ?? null;
+    const actionMeta = simAction ? ACTION_UI_METADATA[simAction] : null;
+    const recoveryPct = toRecoveryPercent(
+        recommendation?.estimated_recovery_pct,
+        actionMeta?.recoveryRate || 0
+    );
+
     return {
-        band: bestBand.band,
-        bandName: bestBand.name,
-        expectedLoadReduction,
-        expectedThroughputGain,
-        efficiency,
-        recoveryRate: ORANGE_ACTIONS.add_carrier.recoveryRate,
-        timeline: ORANGE_ACTIONS.add_carrier.timeline
+        id: `${cellName}-${idx}-${simAction || 'none'}`,
+        cellName,
+        actionLabel,
+        simAction,
+        title: actionMeta?.name || actionLabel || 'Recommendation',
+        reason: String(recommendation?.reason || '').trim() || 'No reason provided by backend',
+        confidence: String(recommendation?.confidence || 'medium').toLowerCase(),
+        confidencePct: confidenceToPercent(recommendation?.confidence),
+        timeline: String(recommendation?.tier || actionMeta?.timeline || 'none'),
+        recoveryRate: recoveryPct,
+        estimatedRecoveryPct: recoveryPct,
+        priorityRank: Number.parseInt(recommendation?.priority_rank, 10) || idx + 1,
+        currentMetrics: payload?.current_kpis || {},
+        predictedMetrics: payload?.predicted_next_hour || {},
+        computedParams: getRecommendationDefaultParams(simAction, cellName),
     };
 }
 
-/**
- * Calculate neighbor optimization potential
- */
-function calculateNeighborOptimization(obs, baseline) {
-    const load = obs.load || 0;
-    const cqi = obs.cqi || 10;
-    
-    // Neighbors can absorb users if we optimize handover params
-    const expectedLoadReduction = Math.round(Math.min(20, load * 0.15));
-    const cqiGain = cqi < 10 ? 0.5 : 0;
-    
-    return {
-        expectedLoadReduction,
-        expectedCqiGain: cqiGain,
-        efficiency: 65,
-        recoveryRate: ORANGE_ACTIONS.neighbor_optimization.recoveryRate,
-        timeline: ORANGE_ACTIONS.neighbor_optimization.timeline
-    };
-}
-
-/**
- * Calculate add sector potential
- */
-function calculateAddSector(obs, baseline) {
-    const load = obs.load || 0;
-    const activeUsers = obs.traffic || 2;
-    
-    // Adding a sector splits capacity
-    const expectedLoadReduction = Math.round(load * 0.4);
-    const userReduction = Math.round(activeUsers * 0.35);
-    
-    return {
-        expectedLoadReduction,
-        expectedUserReduction: userReduction,
-        capacityMultiplier: 1.5,
-        efficiency: 85,
-        recoveryRate: ORANGE_ACTIONS.add_sector.recoveryRate,
-        timeline: ORANGE_ACTIONS.add_sector.timeline
-    };
-}
-
-/**
- * Calculate power adjustment potential
- */
-function calculatePowerAdjustment(obs, baseline) {
-    const load = obs.load || 0;
-    const cqi = obs.cqi || 10;
-    const rsrp = obs.signal_power || -85;
-    
-    // Power reduction helps reduce interference to neighbors
-    const currentPower = 46; // dBm typical
-    let optimalReduction = 0;
-    
-    if (load > 85 && cqi < 9) {
-        // High load + moderate CQI = reduce power to limit cell edge
-        optimalReduction = Math.min(6, Math.round((load - 70) * 0.15));
-    } else if (cqi < 7) {
-        // Poor CQI likely from interference = reduce power
-        optimalReduction = Math.min(4, Math.round((10 - cqi) * 0.8));
-    }
-    
-    const expectedLoadReduction = Math.round(optimalReduction * 2);
-    const cqiGain = optimalReduction > 0 ? 0.3 : 0;
-    
-    return {
-        reduction: optimalReduction,
-        newPower: currentPower - optimalReduction,
-        expectedLoadReduction,
-        expectedCqiGain: cqiGain,
-        efficiency: optimalReduction > 3 ? 75 : 60,
-        recoveryRate: ORANGE_ACTIONS.power.recoveryRate,
-        timeline: ORANGE_ACTIONS.power.timeline
-    };
-}
-
-/**
- * Calculate MIMO upgrade potential
- */
-function calculateMimoUpgrade(obs, baseline) {
-    const load = obs.load || 0;
-    const throughput = obs.throughput || 10000;
-    
-    // MIMO upgrade doubles spectral efficiency in good conditions
-    const expectedThroughputGain = Math.round(throughput * 0.4);
-    const expectedLoadReduction = Math.round(load * 0.2);
-    
-    return {
-        currentMimo: '2T2R',
-        targetMimo: '4T4R',
-        expectedLoadReduction,
-        expectedThroughputGain,
-        efficiency: 75,
-        recoveryRate: ORANGE_ACTIONS.mimo_upgrade.recoveryRate,
-        timeline: ORANGE_ACTIONS.mimo_upgrade.timeline
-    };
-}
-
-/**
- * Calculate small cell deployment potential
- */
-function calculateSmallCell(obs, baseline) {
-    const load = obs.load || 0;
-    const activeUsers = obs.traffic || 2;
-    const ta = obs.ta || 5;
-    
-    // Small cell offloads nearby high-density users
-    const expectedLoadReduction = Math.round(load * 0.35);
-    const userReduction = Math.round(activeUsers * 0.3);
-    
-    // More effective if users are close (low TA)
-    const efficiency = ta < 10 ? 80 : (ta < 20 ? 70 : 55);
-    
-    return {
-        expectedLoadReduction,
-        expectedUserReduction: userReduction,
-        recommendedType: ta < 5 ? 'Femto indoor' : 'Micro outdoor',
-        efficiency,
-        recoveryRate: ORANGE_ACTIONS.small_cell.recoveryRate,
-        timeline: ORANGE_ACTIONS.small_cell.timeline
-    };
-}
-
-/**
- * Calculate parameter tuning potential
- */
-function calculateParameterTuning(obs, baseline) {
-    const load = obs.load || 0;
-    const cqi = obs.cqi || 10;
-    
-    // CIO and Hysteresis tuning helps balance load
-    const expectedLoadReduction = Math.round(Math.min(15, load * 0.12));
-    const cqiGain = cqi < 9 ? 0.4 : 0.1;
-    const cio = load >= 85 ? -4 : (load >= 70 ? -3 : -2);
-    const hysteresis = cqi < 8 ? 1 : 2;
-    
-    return {
-        expectedLoadReduction,
-        expectedCqiGain: cqiGain,
-        cio,
-        hysteresis,
-        efficiency: 55,
-        recoveryRate: ORANGE_ACTIONS.parameter_tuning.recoveryRate,
-        timeline: ORANGE_ACTIONS.parameter_tuning.timeline
-    };
-}
-
-/**
- * Calculate cell split potential
- */
-function calculateCellSplit(obs, baseline) {
-    const load = obs.load || 0;
-    const activeUsers = obs.traffic || 2;
-    
-    // Cell split divides capacity
-    const expectedLoadReduction = Math.round(load * 0.45);
-    const userReduction = Math.round(activeUsers * 0.5);
-    
-    return {
-        expectedLoadReduction,
-        expectedUserReduction: userReduction,
-        newCellCount: 2,
-        efficiency: 80,
-        recoveryRate: ORANGE_ACTIONS.split_cell.recoveryRate,
-        timeline: ORANGE_ACTIONS.split_cell.timeline
-    };
-}
-
-/**
- * Calculate add site potential
- */
-function calculateAddSite(obs, baseline) {
-    const load = obs.load || 0;
-    const activeUsers = obs.traffic || 2;
-    
-    const expectedLoadReduction = Math.round(load * 0.5);
-    const userReduction = Math.round(activeUsers * 0.45);
-    
-    return {
-        expectedLoadReduction,
-        expectedUserReduction: userReduction,
-        efficiency: 90,
-        recoveryRate: ORANGE_ACTIONS.add_site.recoveryRate,
-        timeline: ORANGE_ACTIONS.add_site.timeline
-    };
-}
-
-/**
- * Generate dynamic recommendations with Orange DRS-standard actions
- * Includes: recovery rates, timelines, manque à gagner
- */
-function generateSmartRecommendations(cellName) {
-    const obs = state.currentObservations[cellName];
-    const baseline = state.baseline[cellName] || {};
-    
-    if (!obs) return [];
-    
-    const recommendations = [];
-    const load = obs.load || 0;
-    const cqi = obs.cqi ?? 10;
-    const congested = obs.congested;
-    const ta = obs.ta || 5;
-    const throughput = obs.throughput || 10000;
-    const activeUsers = obs.traffic || 2;
-    
-    // Calculate traffic loss for this cell
-    const trafficLoss = calculateTrafficLoss(obs);
-    
-    // --- CRITICAL CONGESTION: PRB ≥90% (Saturé) ---
-    if (load >= 90) {
-        // Long terme: Ajout site (90%)
-        const site = calculateAddSite(obs, baseline);
-        const siteGain = Math.round(trafficLoss.affectedUE * site.recoveryRate);
-        recommendations.push({
-            action: 'add_site',
-            title: ORANGE_ACTIONS.add_site.name,
-            icon: 'densify',
-            priority: 'critical',
-            efficiency: site.efficiency,
-            timeline: site.timeline,
-            recoveryRate: site.recoveryRate,
-            description: `Déployer un nouveau site pour absorber ${site.expectedUserReduction} UE. PRB actuel: ${load.toFixed(1)}% (saturé)`,
-            expectedGain: { 
-                load: -site.expectedLoadReduction, 
-                users: -site.expectedUserReduction 
-            },
-            trafficLoss,
-            estimatedRecovery: { ue: siteGain, gb: Math.round(siteGain * 2.4) },
-            computedParams: {},
-            cellName,
-            currentMetrics: { load, cqi, congested, activeUsers }
-        });
-        
-        // Long terme: Ajout secteur (85%)
-        const sector = calculateAddSector(obs, baseline);
-        const sectorGain = Math.round(trafficLoss.affectedUE * sector.recoveryRate);
-        recommendations.push({
-            action: 'add_sector',
-            title: ORANGE_ACTIONS.add_sector.name,
-            icon: 'densify',
-            priority: 'critical',
-            efficiency: sector.efficiency,
-            timeline: sector.timeline,
-            recoveryRate: sector.recoveryRate,
-            description: `Ajouter un 4ème secteur pour capacité ×${sector.capacityMultiplier}. Réduction charge: ${sector.expectedLoadReduction}%`,
-            expectedGain: { 
-                load: -sector.expectedLoadReduction, 
-                capacity: '+50%' 
-            },
-            trafficLoss,
-            estimatedRecovery: { ue: sectorGain, gb: Math.round(sectorGain * 2.4) },
-            computedParams: {},
-            cellName,
-            currentMetrics: { load, cqi, congested, activeUsers }
-        });
-        
-        // Long terme: Cell Split (70%)
-        const split = calculateCellSplit(obs, baseline);
-        const splitGain = Math.round(trafficLoss.affectedUE * split.recoveryRate);
-        recommendations.push({
-            action: 'split_cell',
-            title: ORANGE_ACTIONS.split_cell.name,
-            icon: 'densify',
-            priority: 'critical',
-            efficiency: split.efficiency,
-            timeline: split.timeline,
-            recoveryRate: split.recoveryRate,
-            description: `Subdiviser cellule saturée en ${split.newCellCount} cellules. PRB cible: ${(load / split.newCellCount).toFixed(0)}%`,
-            expectedGain: { 
-                load: -split.expectedLoadReduction, 
-                capacity: `×${split.newCellCount}` 
-            },
-            trafficLoss,
-            estimatedRecovery: { ue: splitGain, gb: Math.round(splitGain * 2.4) },
-            computedParams: { newCellCount: split.newCellCount },
-            cellName,
-            currentMetrics: { load, cqi, congested, activeUsers }
-        });
-        
-        // Moyen terme: Ajout carrier (50%)
-        const carrier = calculateOptimalCarrier(obs, baseline);
-        const carrierGain = Math.round(trafficLoss.affectedUE * carrier.recoveryRate);
-        recommendations.push({
-            action: 'add_carrier',
-            title: `${ORANGE_ACTIONS.add_carrier.name} (${carrier.bandName})`,
-            icon: 'carrier',
-            priority: 'high',
-            efficiency: carrier.efficiency,
-            timeline: carrier.timeline,
-            recoveryRate: carrier.recoveryRate,
-            description: `Activer bande ${carrier.band} (${carrier.bandName}). Capacité +50%, PRB cible: ${(load - carrier.expectedLoadReduction).toFixed(0)}%`,
-            expectedGain: { 
-                load: -carrier.expectedLoadReduction, 
-                throughput: carrier.expectedThroughputGain 
-            },
-            trafficLoss,
-            estimatedRecovery: { ue: carrierGain, gb: Math.round(carrierGain * 2.4) },
-            computedParams: { band: carrier.band },
-            cellName,
-            currentMetrics: { load, cqi, congested }
-        });
-        
-        // Moyen terme: MIMO Upgrade (35%)
-        const mimo = calculateMimoUpgrade(obs, baseline);
-        const mimoGain = Math.round(trafficLoss.affectedUE * mimo.recoveryRate);
-        recommendations.push({
-            action: 'mimo_upgrade',
-            title: ORANGE_ACTIONS.mimo_upgrade.name,
-            icon: 'carrier',
-            priority: 'high',
-            efficiency: mimo.efficiency,
-            timeline: mimo.timeline,
-            recoveryRate: mimo.recoveryRate,
-            description: `Upgrade ${mimo.currentMimo} → ${mimo.targetMimo}. Gain débit estimé: +${mimo.expectedThroughputGain} kbps`,
-            expectedGain: { 
-                throughput: mimo.expectedThroughputGain, 
-                load: -mimo.expectedLoadReduction
-            },
-            trafficLoss,
-            estimatedRecovery: { ue: mimoGain, gb: Math.round(mimoGain * 2.4) },
-            computedParams: { targetMimo: mimo.targetMimo },
-            cellName,
-            currentMetrics: { load, cqi, congested }
-        });
-        
-        // Moyen terme: Small Cell (45%)
-        const smallCell = calculateSmallCell(obs, baseline);
-        const smallCellGain = Math.round(trafficLoss.affectedUE * smallCell.recoveryRate);
-        recommendations.push({
-            action: 'small_cell',
-            title: ORANGE_ACTIONS.small_cell.name,
-            icon: 'densify',
-            priority: 'high',
-            efficiency: smallCell.efficiency,
-            timeline: smallCell.timeline,
-            recoveryRate: smallCell.recoveryRate,
-            description: `Déployer small cell (${smallCell.recommendedType}) pour décharger ${smallCell.expectedUserReduction} UE`,
-            expectedGain: { 
-                load: -smallCell.expectedLoadReduction, 
-                users: -smallCell.expectedUserReduction 
-            },
-            trafficLoss,
-            estimatedRecovery: { ue: smallCellGain, gb: Math.round(smallCellGain * 2.4) },
-            computedParams: { type: smallCell.recommendedType },
-            cellName,
-            currentMetrics: { load, cqi, congested, activeUsers }
-        });
-        
-        // Court terme: Rebalancing (40%)
-        const redist = calculateOptimalRedistribution(obs, baseline);
-        const redistGain = Math.round(trafficLoss.affectedUE * redist.recoveryRate);
-        recommendations.push({
-            action: 'redistribute',
-            title: ORANGE_ACTIONS.redistribute.name,
-            icon: 'redistribute',
-            priority: 'high',
-            efficiency: redist.efficiency,
-            timeline: redist.timeline,
-            recoveryRate: redist.recoveryRate,
-            description: `Équilibrer ${Math.round(redist.ratio * 100)}% du trafic vers cellules voisines. Charge cible: ${(load - redist.expectedLoadReduction).toFixed(0)}%`,
-            expectedGain: { 
-                load: -redist.expectedLoadReduction, 
-                throughput: redist.expectedThroughputGain 
-            },
-            trafficLoss,
-            estimatedRecovery: { ue: redistGain, gb: Math.round(redistGain * 2.4) },
-            computedParams: { ratio: redist.ratio },
-            cellName,
-            currentMetrics: { load, cqi, congested }
-        });
-        
-        // Court terme: Power Adjustment (20%)
-        const power = calculatePowerAdjustment(obs, baseline);
-        const powerGain = Math.round(trafficLoss.affectedUE * power.recoveryRate);
-        recommendations.push({
-            action: 'power',
-            title: ORANGE_ACTIONS.power.name,
-            icon: 'tilt',
-            priority: 'medium',
-            efficiency: power.efficiency,
-            timeline: power.timeline,
-            recoveryRate: power.recoveryRate,
-            description: `Réduire puissance de ${Math.abs(power.reduction)} dB. Puissance cible: ${power.newPower} dBm`,
-            expectedGain: { 
-                load: -power.expectedLoadReduction,
-                cqi: power.expectedCqiGain
-            },
-            trafficLoss,
-            estimatedRecovery: { ue: powerGain, gb: Math.round(powerGain * 2.4) },
-            computedParams: { reduction: power.reduction, newPower: power.newPower },
-            cellName,
-            currentMetrics: { load, cqi, congested }
-        });
-        
-        // Court terme: Tilt (15%)
-        const tilt = calculateOptimalTilt(obs, baseline);
-        const tiltGain = Math.round(trafficLoss.affectedUE * tilt.recoveryRate);
-        recommendations.push({
-            action: 'tilt',
-            title: ORANGE_ACTIONS.tilt.name,
-            icon: 'tilt',
-            priority: 'medium',
-            efficiency: tilt.efficiency,
-            timeline: tilt.timeline,
-            recoveryRate: tilt.recoveryRate,
-            description: `${tilt.direction === 'downtilt' ? 'Downtilt' : 'Uptilt'} ${tilt.optimalDegrees}° pour ${tilt.direction === 'downtilt' ? 'réduire empreinte' : 'étendre couverture'}`,
-            expectedGain: { 
-                load: -tilt.expectedLoadReduction, 
-                cqi: tilt.expectedCqiGain 
-            },
-            trafficLoss,
-            estimatedRecovery: { ue: tiltGain, gb: Math.round(tiltGain * 2.4) },
-            computedParams: { degrees: tilt.degrees },
-            cellName,
-            currentMetrics: { load, cqi, congested }
-        });
-        
-        // Court terme: Parameter Tuning (25%)
-        const params = calculateParameterTuning(obs, baseline);
-        const paramsGain = Math.round(trafficLoss.affectedUE * params.recoveryRate);
-        recommendations.push({
-            action: 'parameter_tuning',
-            title: ORANGE_ACTIONS.parameter_tuning.name,
-            icon: 'redistribute',
-            priority: 'medium',
-            efficiency: params.efficiency,
-            timeline: params.timeline,
-            recoveryRate: params.recoveryRate,
-            description: `Optimiser CIO=${params.cio}dB, Hysteresis=${params.hysteresis}dB pour améliorer handover`,
-            expectedGain: { 
-                load: -params.expectedLoadReduction, 
-                handover: '+amélioration' 
-            },
-            trafficLoss,
-            estimatedRecovery: { ue: paramsGain, gb: Math.round(paramsGain * 2.4) },
-            computedParams: { cio: params.cio, hysteresis: params.hysteresis },
-            cellName,
-            currentMetrics: { load, cqi, congested }
-        });
-    }
-    // --- HIGH CONGESTION: PRB ≥80% ---
-    else if (congested && load >= 80) {
-        // Moyen terme: Carrier (50%)
-        const carrier = calculateOptimalCarrier(obs, baseline);
-        const carrierGain = Math.round(trafficLoss.affectedUE * carrier.recoveryRate);
-        recommendations.push({
-            action: 'add_carrier',
-            title: `${ORANGE_ACTIONS.add_carrier.name} (${carrier.bandName})`,
-            icon: 'carrier',
-            priority: 'high',
-            efficiency: carrier.efficiency,
-            timeline: carrier.timeline,
-            recoveryRate: carrier.recoveryRate,
-            description: `PRB ${load.toFixed(1)}% élevé. Ajouter ${carrier.bandName} pour capacité +50%`,
-            expectedGain: { 
-                load: -carrier.expectedLoadReduction, 
-                throughput: carrier.expectedThroughputGain 
-            },
-            trafficLoss,
-            estimatedRecovery: { ue: carrierGain, gb: Math.round(carrierGain * 2.4) },
-            computedParams: { band: carrier.band },
-            cellName,
-            currentMetrics: { load, cqi, congested }
-        });
-        
-        // Moyen terme: MIMO Upgrade (35%)
-        const mimo = calculateMimoUpgrade(obs, baseline);
-        const mimoGain = Math.round(trafficLoss.affectedUE * mimo.recoveryRate);
-        recommendations.push({
-            action: 'mimo_upgrade',
-            title: ORANGE_ACTIONS.mimo_upgrade.name,
-            icon: 'carrier',
-            priority: 'medium',
-            efficiency: mimo.efficiency,
-            timeline: mimo.timeline,
-            recoveryRate: mimo.recoveryRate,
-            description: `Upgrade ${mimo.currentMimo} → ${mimo.targetMimo}. Gain débit estimé: +${mimo.expectedThroughputGain} kbps`,
-            expectedGain: { 
-                throughput: mimo.expectedThroughputGain, 
-                load: -mimo.expectedLoadReduction
-            },
-            trafficLoss,
-            estimatedRecovery: { ue: mimoGain, gb: Math.round(mimoGain * 2.4) },
-            computedParams: { targetMimo: mimo.targetMimo },
-            cellName,
-            currentMetrics: { load, cqi, congested }
-        });
-        
-        // Moyen terme: Small Cell (45%) - for high user density
-        if (activeUsers > 4) {
-            const smallCell = calculateSmallCell(obs, baseline);
-            const smallCellGain = Math.round(trafficLoss.affectedUE * smallCell.recoveryRate);
-            recommendations.push({
-                action: 'small_cell',
-                title: ORANGE_ACTIONS.small_cell.name,
-                icon: 'densify',
-                priority: 'medium',
-                efficiency: smallCell.efficiency,
-                timeline: smallCell.timeline,
-                recoveryRate: smallCell.recoveryRate,
-                description: `Densité trafic élevée (${activeUsers}). Déployer small cell (${smallCell.recommendedType})`,
-                expectedGain: { 
-                    load: -smallCell.expectedLoadReduction, 
-                    users: -smallCell.expectedUserReduction 
-                },
-                trafficLoss,
-                estimatedRecovery: { ue: smallCellGain, gb: Math.round(smallCellGain * 2.4) },
-                computedParams: { type: smallCell.recommendedType },
-                cellName,
-                currentMetrics: { load, cqi, congested, activeUsers }
-            });
-        }
-        
-        // Court terme: Rebalancing (40%)
-        const redist = calculateOptimalRedistribution(obs, baseline);
-        const redistGain = Math.round(trafficLoss.affectedUE * redist.recoveryRate);
-        recommendations.push({
-            action: 'redistribute',
-            title: ORANGE_ACTIONS.redistribute.name,
-            icon: 'redistribute',
-            priority: 'high',
-            efficiency: redist.efficiency,
-            timeline: redist.timeline,
-            recoveryRate: redist.recoveryRate,
-            description: `Redistribuer ${Math.round(redist.ratio * 100)}% vers voisins. Taux récupération: ${Math.round(redist.recoveryRate * 100)}%`,
-            expectedGain: { 
-                load: -redist.expectedLoadReduction, 
-                throughput: redist.expectedThroughputGain 
-            },
-            trafficLoss,
-            estimatedRecovery: { ue: redistGain, gb: Math.round(redistGain * 2.4) },
-            computedParams: { ratio: redist.ratio },
-            cellName,
-            currentMetrics: { load, cqi, congested }
-        });
-        
-        // Court terme: Power Adjustment (20%)
-        const power = calculatePowerAdjustment(obs, baseline);
-        const powerGain = Math.round(trafficLoss.affectedUE * power.recoveryRate);
-        recommendations.push({
-            action: 'power',
-            title: ORANGE_ACTIONS.power.name,
-            icon: 'tilt',
-            priority: 'medium',
-            efficiency: power.efficiency,
-            timeline: power.timeline,
-            recoveryRate: power.recoveryRate,
-            description: `Réduire puissance de ${Math.abs(power.reduction)} dB`,
-            expectedGain: { 
-                load: -power.expectedLoadReduction,
-                cqi: power.expectedCqiGain
-            },
-            trafficLoss,
-            estimatedRecovery: { ue: powerGain, gb: Math.round(powerGain * 2.4) },
-            computedParams: { reduction: power.reduction, newPower: power.newPower },
-            cellName,
-            currentMetrics: { load, cqi, congested }
-        });
-        
-        // Court terme: Neighbor optimization (35%)
-        const neighbor = calculateNeighborOptimization(obs, baseline);
-        const neighborGain = Math.round(trafficLoss.affectedUE * neighbor.recoveryRate);
-        recommendations.push({
-            action: 'neighbor_optimization',
-            title: ORANGE_ACTIONS.neighbor_optimization.name,
-            icon: 'redistribute',
-            priority: 'medium',
-            efficiency: neighbor.efficiency,
-            timeline: neighbor.timeline,
-            recoveryRate: neighbor.recoveryRate,
-            description: `Optimiser paramètres handover vers voisins. Réduction charge: ${neighbor.expectedLoadReduction}%`,
-            expectedGain: { 
-                load: -neighbor.expectedLoadReduction, 
-                cqi: neighbor.expectedCqiGain 
-            },
-            trafficLoss,
-            estimatedRecovery: { ue: neighborGain, gb: Math.round(neighborGain * 2.4) },
-            computedParams: {},
-            cellName,
-            currentMetrics: { load, cqi, congested }
-        });
-        
-        // Court terme: Parameter Tuning (25%)
-        const params = calculateParameterTuning(obs, baseline);
-        const paramsGain = Math.round(trafficLoss.affectedUE * params.recoveryRate);
-        recommendations.push({
-            action: 'parameter_tuning',
-            title: ORANGE_ACTIONS.parameter_tuning.name,
-            icon: 'redistribute',
-            priority: 'low',
-            efficiency: params.efficiency,
-            timeline: params.timeline,
-            recoveryRate: params.recoveryRate,
-            description: `Tuning CIO/Hysteresis pour améliorer handover et réduire charge`,
-            expectedGain: { 
-                load: -params.expectedLoadReduction, 
-                handover: '+amélioration' 
-            },
-            trafficLoss,
-            estimatedRecovery: { ue: paramsGain, gb: Math.round(paramsGain * 2.4) },
-            computedParams: { cio: params.cio, hysteresis: params.hysteresis },
-            cellName,
-            currentMetrics: { load, cqi, congested }
-        });
-        
-        // Court terme: Tilt (15%)
-        const tilt = calculateOptimalTilt(obs, baseline);
-        const tiltGain = Math.round(trafficLoss.affectedUE * tilt.recoveryRate);
-        recommendations.push({
-            action: 'tilt',
-            title: ORANGE_ACTIONS.tilt.name,
-            icon: 'tilt',
-            priority: 'medium',
-            efficiency: tilt.efficiency,
-            timeline: tilt.timeline,
-            recoveryRate: tilt.recoveryRate,
-            description: `${tilt.direction === 'downtilt' ? 'Réduire' : 'Étendre'} couverture de ${tilt.optimalDegrees}°`,
-            expectedGain: { 
-                load: -tilt.expectedLoadReduction, 
-                cqi: tilt.expectedCqiGain 
-            },
-            trafficLoss,
-            estimatedRecovery: { ue: tiltGain, gb: Math.round(tiltGain * 2.4) },
-            computedParams: { degrees: tilt.degrees },
-            cellName,
-            currentMetrics: { load, cqi, congested }
-        });
-    }
-    // --- MODERATE CONGESTION or DEGRADED QUALITY ---
-    else if (congested || throughput < 4000 || activeUsers > 4) {
-        // Moyen terme: MIMO for throughput issues
-        if (throughput < 4000) {
-            const mimo = calculateMimoUpgrade(obs, baseline);
-            const mimoGain = Math.round(trafficLoss.affectedUE * mimo.recoveryRate);
-            recommendations.push({
-                action: 'mimo_upgrade',
-                title: ORANGE_ACTIONS.mimo_upgrade.name,
-                icon: 'carrier',
-                priority: 'high',
-                efficiency: mimo.efficiency,
-                timeline: mimo.timeline,
-                recoveryRate: mimo.recoveryRate,
-                description: `Débit faible (${(throughput/1000).toFixed(1)} Mbps). Upgrade MIMO ${mimo.currentMimo} → ${mimo.targetMimo}`,
-                expectedGain: { 
-                    throughput: mimo.expectedThroughputGain, 
-                    load: -mimo.expectedLoadReduction
-                },
-                trafficLoss,
-                estimatedRecovery: { ue: mimoGain, gb: Math.round(mimoGain * 2.4) },
-                computedParams: { targetMimo: mimo.targetMimo },
-                cellName,
-                currentMetrics: { load, cqi, congested, throughput }
-            });
-        }
-        
-        // Court terme: Rebalancing (40%)
-        const redist = calculateOptimalRedistribution(obs, baseline);
-        const redistGain = Math.round(trafficLoss.affectedUE * redist.recoveryRate);
-        recommendations.push({
-            action: 'redistribute',
-            title: ORANGE_ACTIONS.redistribute.name,
-            icon: 'redistribute',
-            priority: 'high',
-            efficiency: redist.efficiency,
-            timeline: redist.timeline,
-            recoveryRate: redist.recoveryRate,
-            description: `Équilibrer charge vers cellules voisines (${Math.round(redist.ratio * 100)}%)`,
-            expectedGain: { 
-                load: -redist.expectedLoadReduction, 
-                throughput: redist.expectedThroughputGain 
-            },
-            trafficLoss,
-            estimatedRecovery: { ue: redistGain, gb: Math.round(redistGain * 2.4) },
-            computedParams: { ratio: redist.ratio },
-            cellName,
-            currentMetrics: { load, cqi, congested }
-        });
-        
-        // Court terme: Power Adjustment (20%)
-        const power = calculatePowerAdjustment(obs, baseline);
-        const powerGain = Math.round(trafficLoss.affectedUE * power.recoveryRate);
-        recommendations.push({
-            action: 'power',
-            title: ORANGE_ACTIONS.power.name,
-            icon: 'tilt',
-            priority: 'medium',
-            efficiency: power.efficiency,
-            timeline: power.timeline,
-            recoveryRate: power.recoveryRate,
-            description: `Ajuster puissance Tx: -${Math.abs(power.reduction)} dB`,
-            expectedGain: { 
-                load: -power.expectedLoadReduction,
-                cqi: power.expectedCqiGain
-            },
-            trafficLoss,
-            estimatedRecovery: { ue: powerGain, gb: Math.round(powerGain * 2.4) },
-            computedParams: { reduction: power.reduction, newPower: power.newPower },
-            cellName,
-            currentMetrics: { load, cqi, congested }
-        });
-        
-        // Court terme: Tilt (15%)
-        const tilt = calculateOptimalTilt(obs, baseline);
-        const tiltGain = Math.round(trafficLoss.affectedUE * tilt.recoveryRate);
-        recommendations.push({
-            action: 'tilt',
-            title: ORANGE_ACTIONS.tilt.name,
-            icon: 'tilt',
-            priority: 'medium',
-            efficiency: tilt.efficiency,
-            timeline: tilt.timeline,
-            recoveryRate: tilt.recoveryRate,
-            description: `Ajustement ${tilt.direction} ${tilt.optimalDegrees}° pour optimiser couverture`,
-            expectedGain: { 
-                load: -tilt.expectedLoadReduction, 
-                cqi: tilt.expectedCqiGain 
-            },
-            trafficLoss,
-            estimatedRecovery: { ue: tiltGain, gb: Math.round(tiltGain * 2.4) },
-            computedParams: { degrees: tilt.degrees },
-            cellName,
-            currentMetrics: { load, cqi, congested }
-        });
-    }
-    // --- POOR CQI (interference) ---
-    else if (cqi < CONFIG.CQI_THRESHOLD) {
-        const tilt = calculateOptimalTilt(obs, baseline);
-        const interferenceAngle = Math.max(2, tilt.optimalDegrees);
-        const expectedCqiGain = Math.round((15 - cqi) * 0.25 * 10) / 10;
-        
-        recommendations.push({
-            action: 'tilt',
-            title: `Downtilt anti-interférence`,
-            icon: 'tilt',
-            priority: 'high',
-            efficiency: 85,
-            timeline: 'court_terme',
-            recoveryRate: ORANGE_ACTIONS.tilt.recoveryRate,
-            description: `CQI ${cqi.toFixed(1)} dégradé. Downtilt ${interferenceAngle}° pour réduire overlap. CQI cible: ${(cqi + expectedCqiGain).toFixed(1)}`,
-            expectedGain: { 
-                cqi: expectedCqiGain, 
-                throughput: Math.round(expectedCqiGain * 8) 
-            },
-            computedParams: { degrees: interferenceAngle },
-            cellName,
-            currentMetrics: { load, cqi, congested }
-        });
-        
-        // Court terme: Neighbor optimization
-        const neighbor = calculateNeighborOptimization(obs, baseline);
-        recommendations.push({
-            action: 'neighbor_optimization',
-            title: ORANGE_ACTIONS.neighbor_optimization.name,
-            icon: 'redistribute',
-            priority: 'medium',
-            efficiency: neighbor.efficiency,
-            timeline: neighbor.timeline,
-            recoveryRate: neighbor.recoveryRate,
-            description: `Optimiser voisinage pour réduire interférences inter-cellules`,
-            expectedGain: { cqi: 0.5, throughput: 10 },
-            computedParams: {},
-            cellName,
-            currentMetrics: { load, cqi, congested }
-        });
-    }
-    // --- HIGH LOAD (preventive) ---
-    else if (load > 70) {
-        const redist = calculateOptimalRedistribution(obs, baseline);
-        recommendations.push({
-            action: 'redistribute',
-            title: 'Équilibrage préventif',
-            icon: 'redistribute',
-            priority: 'medium',
-            efficiency: redist.efficiency - 10,
-            timeline: 'court_terme',
-            recoveryRate: redist.recoveryRate,
-            description: `Charge ${load.toFixed(1)}% approche seuil. Préempter avec ${Math.round(redist.ratio * 100)}% redistribution`,
-            expectedGain: { 
-                load: -redist.expectedLoadReduction, 
-                throughput: Math.round(redist.expectedThroughputGain * 0.7)
-            },
-            computedParams: { ratio: Math.max(0.1, redist.ratio - 0.05) },
-            cellName,
-            currentMetrics: { load, cqi, congested }
-        });
-    }
-    // --- COVERAGE ISSUE (high TA) ---
-    if (ta > 20) {
-        const uptiltDegrees = Math.min(2, Math.round((ta - 15) * 0.15 * 2) / 2);
-        recommendations.push({
-            action: 'tilt',
-            title: `Uptilt couverture (+${uptiltDegrees}°)`,
-            icon: 'tilt',
-            priority: 'medium',
-            efficiency: 55,
-            timeline: 'court_terme',
-            recoveryRate: ORANGE_ACTIONS.tilt.recoveryRate,
-            description: `TA élevé (${ta.toFixed(1)}) = utilisateurs distants. Uptilt pour meilleure portée`,
-            expectedGain: { coverage: 15, throughput: 5 },
-            computedParams: { degrees: -uptiltDegrees },
-            cellName,
-            currentMetrics: { load, cqi, ta }
-        });
-        
-        const site = calculateAddSite(obs, baseline);
-        recommendations.push({
-            action: 'add_site',
-            title: 'Densification couverture',
-            icon: 'densify',
-            priority: 'high',
-            efficiency: site.efficiency,
-            timeline: site.timeline,
-            recoveryRate: site.recoveryRate,
-            description: `TA ${ta.toFixed(1)} indique trou couverture. Nouveau site améliorerait débit +50%`,
-            expectedGain: { coverage: 35, throughput: 50 },
-            computedParams: {},
-            cellName,
-            currentMetrics: { load, cqi, ta }
-        });
-    }
-    
-    // Sort by timeline (court_terme first) then priority then efficiency
-    const timelineOrder = { court_terme: 0, moyen_terme: 1, long_terme: 2 };
-    const priorityOrder = { critical: 0, high: 1, medium: 2, low: 3 };
-    recommendations.sort((a, b) => {
-        const tDiff = (timelineOrder[a.timeline] || 2) - (timelineOrder[b.timeline] || 2);
-        if (tDiff !== 0) return tDiff;
-        const pDiff = priorityOrder[a.priority] - priorityOrder[b.priority];
-        if (pDiff !== 0) return pDiff;
-        return b.efficiency - a.efficiency;
+async function fetchBackendDecision(cellName) {
+    const response = await fetchWithAuth('/api/recommend', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cell_name: cellName }),
     });
-    
-    return recommendations;
+
+    let payload = null;
+    try {
+        payload = await response.json();
+    } catch {
+        payload = null;
+    }
+
+    if (!response.ok) {
+        const message = payload?.detail || payload?.error || `Recommendation API failed (${response.status})`;
+        throw new Error(message);
+    }
+
+    if (!payload || typeof payload !== 'object') {
+        throw new Error('Recommendation API returned an invalid payload');
+    }
+
+    return payload;
 }
 
-function renderRecommendationsPanel(cellName) {
+async function renderRecommendationsPanel(cellName) {
     const container = document.getElementById('reco-list');
     const badge = document.getElementById('reco-count');
     if (!container) return;
-    
+
     if (!cellName) {
+        state.currentRecommendations = [];
         container.innerHTML = '<div class="reco-placeholder">Sélectionner une cellule pour les recommandations</div>';
         if (badge) badge.textContent = '0';
         return;
     }
-    
-    const recommendations = generateSmartRecommendations(cellName);
-    
-    if (badge) badge.textContent = recommendations.length;
-    
-    if (recommendations.length === 0) {
-        const obs = state.currentObservations[cellName];
-        container.innerHTML = `
-            <div class="reco-placeholder" style="color: var(--success);">
-                <span class="material-symbols-outlined" style="font-size: 24px; margin-bottom: 8px;">check_circle</span><br>
-                Cellule saine. Aucune action requise.
-            </div>
-        `;
-        return;
-    }
-    
-    container.innerHTML = sanitizeRichHtml(recommendations.map((reco, idx) => {
-        const gains = reco.expectedGain || {};
-        const metrics = reco.currentMetrics || {};
-        const safeEfficiency = Math.max(0, Math.min(100, Number(reco.efficiency) || 0));
-        
-        // Timeline badge
-        const timelineLabels = {
-            court_terme: { label: 'Court terme', class: 'timeline-short' },
-            moyen_terme: { label: 'Moyen terme', class: 'timeline-medium' },
-            long_terme: { label: 'Long terme', class: 'timeline-long' }
-        };
-        const timeline = timelineLabels[reco.timeline] || { label: '', class: '' };
-        
-        // Build dynamic metrics display
-        let metricsHtml = '';
-        if (gains.load) {
-            const newLoad = (metrics.load || 0) + gains.load;
-            metricsHtml += `<div class="reco-metric"><span class="reco-metric-label">Charge:</span><span class="reco-metric-value">${escapeHtml(metrics.load?.toFixed(0) || '--')}% → ${escapeHtml(newLoad.toFixed(0))}%</span></div>`;
+
+    const requestSeq = ++recommendationRequestSeq;
+    container.innerHTML = '<div class="reco-placeholder">Chargement des recommandations backend…</div>';
+
+    try {
+        const payload = recommendationCache.get(cellName) || await fetchBackendDecision(cellName);
+        recommendationCache.set(cellName, payload);
+
+        if (requestSeq !== recommendationRequestSeq) {
+            return;
         }
-        if (gains.cqi) {
-            const newCqi = (metrics.cqi || 0) + gains.cqi;
-            metricsHtml += `<div class="reco-metric"><span class="reco-metric-label">CQI:</span><span class="reco-metric-value">${escapeHtml(metrics.cqi?.toFixed(1) || '--')} → ${escapeHtml(newCqi.toFixed(1))}</span></div>`;
+
+        const rawRecommendations = Array.isArray(payload?.recommended_actions) ? payload.recommended_actions : [];
+        const recommendations = rawRecommendations
+            .map((recommendation, idx) => mapBackendRecommendation(payload, recommendation, cellName, idx))
+            .sort((a, b) => a.priorityRank - b.priorityRank);
+
+        state.currentRecommendations = recommendations;
+        if (badge) badge.textContent = String(recommendations.length);
+
+        if (!recommendations.length) {
+            container.innerHTML = '<div class="reco-placeholder">Aucune recommandation disponible</div>';
+            return;
         }
-        if (gains.throughput) {
-            metricsHtml += `<div class="reco-metric"><span class="reco-metric-label">Débit:</span><span class="reco-metric-value">+${escapeHtml(gains.throughput)}</span></div>`;
-        }
-        if (gains.coverage) {
-            metricsHtml += `<div class="reco-metric"><span class="reco-metric-label">Couverture:</span><span class="reco-metric-value">+${escapeHtml(gains.coverage)}%</span></div>`;
-        }
-        if (gains.users) {
-            metricsHtml += `<div class="reco-metric"><span class="reco-metric-label">UE:</span><span class="reco-metric-value">${escapeHtml(gains.users)} utilisateurs</span></div>`;
-        }
-        
-        // Manque à gagner display
-        let trafficLossHtml = '';
-        if (reco.trafficLoss && reco.estimatedRecovery) {
-            trafficLossHtml = `
-                <div class="reco-traffic-loss">
-                    <div class="traffic-loss-title">📉 Manque à gagner</div>
-                    <div class="traffic-loss-row">
-                        <span>Perte actuelle:</span>
-                        <span>${escapeHtml(reco.trafficLoss.affectedUE)} UE / ${escapeHtml(reco.trafficLoss.lostGB)} Go/mois</span>
+
+        container.innerHTML = sanitizeRichHtml(recommendations.map((recommendation, idx) => {
+            const timeline = TIER_TO_UI[recommendation.timeline] || TIER_TO_UI.none;
+            const isSimulatable = Boolean(recommendation.simAction);
+            const currentLoad = Number(recommendation.currentMetrics?.prb_load);
+            const predictedLoad = Number(recommendation.predictedMetrics?.prb_load);
+            const hasLoadDelta = Number.isFinite(currentLoad) && Number.isFinite(predictedLoad);
+
+            const kpiSummary = hasLoadDelta
+                ? `<div class="reco-metric"><span class="reco-metric-label">PRB:</span><span class="reco-metric-value">${escapeHtml(currentLoad.toFixed(1))}% → ${escapeHtml(predictedLoad.toFixed(1))}%</span></div>`
+                : '';
+
+            const buttonHtml = isSimulatable
+                ? `<button class="reco-apply-btn" data-reco-idx="${idx}"><span class="material-symbols-outlined">bolt</span>Simuler cette action</button>`
+                : '<div class="reco-capex-note">Aucune simulation requise</div>';
+
+            return `
+                <div class="reco-item" data-reco-idx="${idx}">
+                    <div class="reco-header">
+                        <div class="reco-icon">
+                            <span class="material-symbols-outlined">${escapeHtml(getRecoIcon(recommendation.simAction))}</span>
+                        </div>
+                        <div class="reco-header-content">
+                            <div class="reco-title">${escapeHtml(recommendation.title)}</div>
+                            <div class="reco-badges">
+                                <span class="reco-priority-badge">#${escapeHtml(recommendation.priorityRank)}</span>
+                                <span class="reco-timeline-badge ${escapeHtml(timeline.className)}">${escapeHtml(timeline.label)}</span>
+                                <span class="reco-recovery-badge">↑${escapeHtml(recommendation.recoveryRate)}%</span>
+                            </div>
+                        </div>
                     </div>
-                    <div class="traffic-loss-row recovery">
-                        <span>Gain estimé (${Math.round(reco.recoveryRate * 100)}%):</span>
-                        <span class="recovery-value">+${escapeHtml(reco.estimatedRecovery.ue)} UE / +${escapeHtml(reco.estimatedRecovery.gb)} Go</span>
+                    <div class="reco-body">${escapeHtml(recommendation.reason)}</div>
+                    <div class="reco-metrics">
+                        ${kpiSummary}
+                        <div class="reco-metric"><span class="reco-metric-label">Confiance:</span><span class="reco-metric-value">${escapeHtml(recommendation.confidencePct)}%</span></div>
                     </div>
+                    ${buttonHtml}
                 </div>
             `;
-        }
-        
-        // Show optimal parameter in title
-        let paramHint = '';
-        if (reco.action === 'tilt' && reco.computedParams.degrees !== undefined) {
-            const deg = reco.computedParams.degrees;
-            paramHint = `<span class="reco-param-hint">${deg > 0 ? '↓' : '↑'} ${Math.abs(deg)}°</span>`;
-        } else if (reco.action === 'redistribute' && reco.computedParams.ratio) {
-            paramHint = `<span class="reco-param-hint">${Math.round(reco.computedParams.ratio * 100)}%</span>`;
-        } else if (reco.action === 'add_carrier' && reco.computedParams.band) {
-            paramHint = `<span class="reco-param-hint">B${reco.computedParams.band}</span>`;
-        }
-        
-        // Recovery rate badge
-        const recoveryHtml = reco.recoveryRate 
-            ? `<span class="reco-recovery-badge">↑${Math.round(reco.recoveryRate * 100)}%</span>` 
-            : '';
-        
-        // Determine if action is simulatable
-        const simulatable = ['tilt', 'redistribute', 'add_carrier'].includes(reco.action);
-        const buttonHtml = simulatable 
-            ? `<button class="reco-apply-btn" data-reco-idx="${idx}">
-                <span class="material-symbols-outlined">bolt</span>
-                Simuler cette action
-               </button>`
-            : `<div class="reco-capex-note">⚠️ Action CAPEX - Planification requise</div>`;
-        
-        return `
-        <div class="reco-item priority-${escapeHtml(reco.priority)}" data-reco-idx="${idx}">
-            <div class="reco-header">
-                <div class="reco-icon ${escapeHtml(reco.icon)}">
-                    <span class="material-symbols-outlined">${escapeHtml(getRecoIcon(reco.icon))}</span>
-                </div>
-                <div class="reco-header-content">
-                    <div class="reco-title">${escapeHtml(reco.title)} ${paramHint} ${recoveryHtml}</div>
-                    <div class="reco-badges">
-                        <span class="reco-priority-badge priority-${escapeHtml(reco.priority)}">${escapeHtml(reco.priority.toUpperCase())}</span>
-                        ${timeline.label ? `<span class="reco-timeline-badge ${escapeHtml(timeline.class)}">${escapeHtml(timeline.label)}</span>` : ''}
-                    </div>
-                </div>
-            </div>
-            <div class="reco-body">${escapeHtml(reco.description)}</div>
-            <div class="reco-metrics">${metricsHtml}</div>
-            ${trafficLossHtml}
-            <div class="reco-efficiency">
-                <span class="efficiency-label">Efficacité:</span>
-                <div class="efficiency-bar"><div class="efficiency-fill" style="width: ${safeEfficiency}%"></div></div>
-                <span class="efficiency-value">${safeEfficiency}%</span>
-            </div>
-            ${buttonHtml}
-        </div>
-    `}).join(''));
-    container.querySelectorAll('.reco-apply-btn[data-reco-idx]').forEach((btn) => {
-        btn.addEventListener('click', () => {
-            const idx = Number(btn.dataset.recoIdx);
-            if (!Number.isNaN(idx)) {
-                window.applyRecommendation(idx);
-            }
+        }).join(''));
+
+        container.querySelectorAll('.reco-apply-btn[data-reco-idx]').forEach((button) => {
+            button.addEventListener('click', () => {
+                const idx = Number(button.dataset.recoIdx);
+                if (!Number.isNaN(idx)) {
+                    window.applyRecommendation(idx);
+                }
+            });
         });
-    });
-    
-    // Store recommendations in state for apply function
-    state.currentRecommendations = recommendations;
+    } catch (err) {
+        if (requestSeq !== recommendationRequestSeq) {
+            return;
+        }
+        state.currentRecommendations = [];
+        if (badge) badge.textContent = '0';
+        container.innerHTML = `<div class="reco-placeholder">Backend indisponible: ${escapeHtml(err?.message || 'unknown error')}</div>`;
+    }
 }
 
-function getRecoIcon(type) {
+function getRecoIcon(simAction) {
     const icons = {
         tilt: 'cell_tower',
-        carrier: 'add_circle',
+        power: 'tune',
         redistribute: 'sync_alt',
-        densify: 'add_location',
-        add_site: 'add_location',
+        parameter_tuning: 'tune',
+        add_carrier: 'add_circle',
+        mimo_upgrade: 'network_cell',
+        small_cell: 'add_location_alt',
         add_sector: 'settings_input_antenna',
-        neighbor_optimization: 'hub'
+        add_site: 'add_location',
+        split_cell: 'call_split',
     };
-    return icons[type] || 'lightbulb';
+    return icons[simAction] || 'lightbulb';
 }
 
 window.applyRecommendation = function(idx) {
-    const reco = state.currentRecommendations?.[idx];
-    if (!reco) return;
-    
-    // Set the action selector
-    const actionSelect = document.getElementById('action-select');
-    if (actionSelect && reco.action !== 'densify') {
-        actionSelect.value = reco.action;
-        buildActionParamsUI(reco.action);
-        
-        // Fill in the recommended parameters
-        setTimeout(() => {
-            if (reco.action === 'tilt' && reco.computedParams.degrees !== undefined) {
-                const input = document.getElementById('param-tilt-deg');
-                if (input) input.value = reco.computedParams.degrees;
-            }
-            if (reco.action === 'redistribute' && reco.computedParams.ratio !== undefined) {
-                const input = document.getElementById('param-redistribute-ratio');
-                if (input) input.value = reco.computedParams.ratio;
-            }
-            if (reco.action === 'add_carrier' && reco.computedParams.band) {
-                const input = document.getElementById('param-carrier-band');
-                if (input) input.value = reco.computedParams.band;
-            }
-            
-            // Auto-run the simulation
-            runSimulation(reco.cellName, reco.action);
-        }, 100);
-    } else if (reco.action === 'densify') {
-        // Densification is a special case - show recommendation only
+    const recommendation = state.currentRecommendations?.[idx];
+    if (!recommendation) return;
+
+    if (!recommendation.simAction) {
         const resultEl = document.getElementById('action-result');
         if (resultEl) {
-            resultEl.innerHTML = `
-                <div class="action-mode-badge" style="background: var(--orange-primary); color: white;">📍 Site Densification Recommended</div>
-                <div style="margin-top: 10px; font-size: 13px; color: var(--text-secondary);">
-                    <p><strong>Analysis:</strong> High Timing Advance values indicate users at the cell edge experiencing poor signal quality.</p>
-                    <p style="margin-top: 8px;"><strong>Recommendation:</strong></p>
-                    <ul style="margin: 8px 0; padding-left: 20px;">
-                        <li>Deploy a new macro site in the coverage gap</li>
-                        <li>Or install small cells for targeted capacity</li>
-                        <li>Estimated capacity gain: +50% throughput</li>
-                        <li>Estimated coverage improvement: +30%</li>
-                    </ul>
-                    <p style="margin-top: 8px; color: var(--warning);">⚠️ This requires CAPEX investment and site acquisition.</p>
-                </div>
-            `;
+            resultEl.innerHTML = '<div class="action-hint">Aucune simulation requise pour cette recommandation.</div>';
         }
+        return;
     }
+
+    const actionSelect = document.getElementById('action-select');
+    if (!actionSelect) return;
+
+    actionSelect.value = recommendation.simAction;
+    buildActionParamsUI(recommendation.simAction);
+
+    setTimeout(() => {
+        const defaults = recommendation.computedParams || {};
+
+        if (recommendation.simAction === 'tilt' && defaults.degrees !== undefined) {
+            const input = document.getElementById('param-tilt-deg');
+            if (input) input.value = defaults.degrees;
+        }
+        if (recommendation.simAction === 'redistribute' && defaults.ratio !== undefined) {
+            const input = document.getElementById('param-redistribute-ratio');
+            if (input) input.value = defaults.ratio;
+        }
+        if (recommendation.simAction === 'add_carrier' && defaults.band !== undefined) {
+            const input = document.getElementById('param-carrier-band');
+            if (input) input.value = defaults.band;
+        }
+        if (recommendation.simAction === 'power' && defaults.reduction !== undefined) {
+            const input = document.getElementById('param-power-delta');
+            if (input) input.value = defaults.reduction;
+        }
+
+        runSimulation(recommendation.cellName, recommendation.simAction);
+    }, 100);
 };
 
 // --- Action Simulator ---
@@ -2009,14 +1256,14 @@ function buildActionParamsUI(action) {
     }
 
     // Get action info for timeline/recovery display
-    const actionInfo = ORANGE_ACTIONS[action];
+    const actionInfo = ACTION_UI_METADATA[action];
     const infoBox = actionInfo ? `
         <div class="action-info-box">
             <span class="timeline-badge ${actionInfo.timeline}">${
                 actionInfo.timeline === 'court_terme' ? '⚡ Court terme' :
                 actionInfo.timeline === 'moyen_terme' ? '📅 Moyen terme' : '🏗️ Long terme'
             }</span>
-            <span class="recovery-badge">↑${Math.round(actionInfo.recoveryRate * 100)}% récup.</span>
+            <span class="recovery-badge">↑${Math.round(actionInfo.recoveryRate)}% récup.</span>
             ${actionInfo.capex ? '<span class="capex-badge">💰 CAPEX</span>' : '<span class="opex-badge">OPEX</span>'}
         </div>
         <div class="action-effect">${actionInfo.effect}</div>
@@ -2274,32 +1521,18 @@ async function runSimulation(cellName, action) {
         }
 
         const requestBody = { cell_name: cellName, action, params, time_entry: timeEntry, mode };
-        let payload = null;
-
-        try {
-            const queued = await enqueueJob('simulate', requestBody);
-            const statusPayload = await waitForJobResult(queued.jobId, {
-                pollIntervalMs: 2000,
-                timeoutMs: 120000,
-                onStatus: (statusLabel) => {
-                    if (resultEl) {
-                        resultEl.innerHTML = `<div class="action-hint">⚡ Simulating... (${escapeHtml(statusLabel)})</div>`;
-                    }
-                }
-            });
-            payload = statusPayload?.result || null;
-        } catch (queueErr) {
-            console.warn('Queue-based simulation failed; falling back to /api/simulate:', queueErr);
-            const fallbackRes = await fetchWithAuth('/api/simulate', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(requestBody)
-            });
-            payload = await fallbackRes.json();
-            if (!fallbackRes.ok) {
-                throw new Error(payload?.error || 'Simulation failed');
+        let lastStatusLabel = '';
+        const queued = await enqueueJob('simulate', requestBody);
+        const statusPayload = await waitForJobResult(queued.jobId, {
+            pollIntervalMs: 3000,
+            timeoutMs: 120000,
+            onStatus: (statusLabel) => {
+                if (!resultEl || statusLabel === lastStatusLabel) return;
+                lastStatusLabel = statusLabel;
+                resultEl.innerHTML = `<div class="action-hint">⚡ Simulating... (${escapeHtml(statusLabel)})</div>`;
             }
-        }
+        });
+        const payload = statusPayload?.result || null;
 
         if (!payload || typeof payload !== 'object') {
             throw new Error('Simulation returned invalid payload');
@@ -2404,7 +1637,9 @@ function applyFilters() {
     state.filteredPointFeatures = points;
     state.filteredSectorFeatures = sectors;
     updateMapData();
-    updateAnalyticsCharts(points);
+    if (state.analyticsModalOpen) {
+        updateAnalyticsCharts(points);
+    }
 }
 
 function populateFrequencyFilters(bandsList = []) {
@@ -2467,6 +1702,9 @@ function collectIssueTypesFromCurrent() {
 
 function resetFiltersUI() {
     document.querySelectorAll('input[data-filter]').forEach(cb => { cb.checked = true; state.filters.status[cb.dataset.filter] = true; });
+    state.filters.status['no-data'] = false;
+    const noDataFilter = document.querySelector('input[data-filter="no-data"]');
+    if (noDataFilter instanceof HTMLInputElement) noDataFilter.checked = false;
     Object.keys(state.filters.bands).forEach(k => state.filters.bands[k] = true);
     document.querySelectorAll('#frequency-filters input[type="checkbox"]').forEach(cb => cb.checked = true);
     Object.keys(state.filters.issueTypes).forEach(k => state.filters.issueTypes[k] = true);
@@ -2969,7 +2207,16 @@ function getDataForIndex(index) {
 }
 
 async function loadUnifiedTimeSlice(index) {
+    return loadUnifiedTimeSliceInternal(index, { skipIfLoading: false });
+}
+
+async function loadUnifiedTimeSliceInternal(index, options = {}) {
+    const { skipIfLoading = false } = options;
     if (index < 0 || index >= unifiedTimeline.totalCount) return;
+
+    if (skipIfLoading && state.isLoadingSlice) {
+        return;
+    }
     
     if (activeSliceAbortController) {
         activeSliceAbortController.abort();
@@ -2977,21 +2224,28 @@ async function loadUnifiedTimeSlice(index) {
     activeSliceAbortController = new AbortController();
     const requestId = ++activeSliceRequestId;
     const { signal } = activeSliceAbortController;
+    state.isLoadingSlice = true;
 
-    unifiedTimeline.currentIndex = index;
-    const data = getDataForIndex(index);
-    
-    if (data.type === 'forecast') {
-        await loadForecastSliceInternal(data.entry, data.localIndex, { signal, requestId });
-    } else {
-        await loadHistoricalSliceInternal(data.entry, data.localIndex, { signal, requestId });
+    try {
+        unifiedTimeline.currentIndex = index;
+        const data = getDataForIndex(index);
+        
+        if (data.type === 'forecast') {
+            await loadForecastSliceInternal(data.entry, data.localIndex, { signal, requestId });
+        } else {
+            await loadHistoricalSliceInternal(data.entry, data.localIndex, { signal, requestId });
+        }
+
+        if (signal.aborted || requestId !== activeSliceRequestId) return;
+        
+        // Update slider position
+        const slider = document.getElementById('time-slider');
+        if (slider) slider.value = index;
+    } finally {
+        if (requestId === activeSliceRequestId) {
+            state.isLoadingSlice = false;
+        }
     }
-
-    if (signal.aborted || requestId !== activeSliceRequestId) return;
-    
-    // Update slider position
-    const slider = document.getElementById('time-slider');
-    if (slider) slider.value = index;
 }
 
 async function loadHistoricalSliceInternal(timeEntry, localIndex, requestContext = {}) {
@@ -2999,7 +2253,7 @@ async function loadHistoricalSliceInternal(timeEntry, localIndex, requestContext
     const { signal, requestId } = requestContext;
     
     try {
-        const res = await fetchWithAuth(`${buildDataUrl('time_data', timeEntry.filename)}?t=${Date.now()}`, { signal });
+        const res = await fetchWithAuth(buildDataUrl('time_data', timeEntry.filename), { signal });
         const sliceData = await res.json();
         if (!res.ok) {
             throw new Error(sliceData.error || `HTTP error ${res.status}`);
@@ -3010,11 +2264,8 @@ async function loadHistoricalSliceInternal(timeEntry, localIndex, requestContext
         warnIfObservationSchemaMismatch(sliceData.observations, `historical slice ${timeEntry.timestamp || timeEntry.filename}`);
         state.currentObservations = sliceData.observations;
         state.currentStats = sliceData.stats;
-        
-        const { pointFeatures, sectorFeatures } = buildFeaturesForTime(sliceData.observations);
-        state.pointFeatures = pointFeatures;
-        state.sectorFeatures = sectorFeatures;
-        state.features = pointFeatures;
+
+        updateFeaturesForTime(sliceData.observations, { isForecast: false });
         applyFilters();
         
         updateTimeSliderUI();
@@ -3022,7 +2273,7 @@ async function loadHistoricalSliceInternal(timeEntry, localIndex, requestContext
         updateAlertsUI(state.filteredPointFeatures);
         
         if (state.selectedSite) {
-            showSiteInfoPanel(state.selectedSite);
+            refreshSiteInfoStats(state.selectedSite);
         }
     } catch (err) {
         if (err?.name === 'AbortError') return;
@@ -3035,7 +2286,7 @@ async function loadForecastSliceInternal(forecastEntry, localIndex, requestConte
     const { signal, requestId } = requestContext;
     
     try {
-        const res = await fetchWithAuth(`${buildDataUrl('forecast_data', forecastEntry.filename)}?t=${Date.now()}`, { signal });
+        const res = await fetchWithAuth(buildDataUrl('forecast_data', forecastEntry.filename), { signal });
         const sliceData = await res.json();
         if (!res.ok) {
             throw new Error(sliceData.error || `HTTP error ${res.status}`);
@@ -3046,21 +2297,9 @@ async function loadForecastSliceInternal(forecastEntry, localIndex, requestConte
         state.currentObservations = sliceData.observations || {};
         state.currentStats = sliceData.stats || forecastEntry.stats;
         
-        const { pointFeatures, sectorFeatures } = buildFeaturesForTime(sliceData.observations || {});
-        
-        // Mark features as forecast
         const confidence = sliceData.confidence || forecastEntry.confidence || 0.75;
-        pointFeatures.forEach(f => {
-            f.properties.is_forecast = true;
-            f.properties.confidence = confidence;
-        });
-        sectorFeatures.forEach(f => {
-            f.properties.is_forecast = true;
-        });
-        
-        state.pointFeatures = pointFeatures;
-        state.sectorFeatures = sectorFeatures;
-        state.features = pointFeatures;
+
+        updateFeaturesForTime(sliceData.observations || {}, { isForecast: true, confidence });
         applyFilters();
         
         updateTimeSliderUI();
@@ -3068,7 +2307,7 @@ async function loadForecastSliceInternal(forecastEntry, localIndex, requestConte
         updateAlertsUI(state.filteredPointFeatures);
         
         if (state.selectedSite) {
-            showSiteInfoPanel(state.selectedSite);
+            refreshSiteInfoStats(state.selectedSite);
         }
     } catch (err) {
         if (err?.name === 'AbortError') return;
@@ -3095,31 +2334,18 @@ async function generateForecast() {
             btn.innerHTML = '<span class="material-symbols-outlined">sync</span> Generating... (queued)';
         }
 
-        let data = null;
-        try {
-            const queued = await enqueueJob('forecast', { days });
-            const statusPayload = await waitForJobResult(queued.jobId, {
-                pollIntervalMs: 2000,
-                timeoutMs: 180000,
-                onStatus: (statusLabel) => {
-                    if (btn) {
-                        btn.innerHTML = `<span class="material-symbols-outlined">sync</span> Generating... (${escapeHtml(statusLabel)})`;
-                    }
-                }
-            });
-            data = statusPayload?.result || null;
-        } catch (queueErr) {
-            console.warn('Queue-based forecast failed; falling back to /api/forecast:', queueErr);
-            const fallbackRes = await fetchWithAuth('/api/forecast', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ days: days })
-            });
-            data = await fallbackRes.json();
-            if (!fallbackRes.ok) {
-                throw new Error(data?.error || 'Forecast generation failed');
+        let lastStatusLabel = '';
+        const queued = await enqueueJob('forecast', { days });
+        const statusPayload = await waitForJobResult(queued.jobId, {
+            pollIntervalMs: 3000,
+            timeoutMs: 180000,
+            onStatus: (statusLabel) => {
+                if (!btn || statusLabel === lastStatusLabel) return;
+                lastStatusLabel = statusLabel;
+                btn.innerHTML = `<span class="material-symbols-outlined">sync</span> Generating... (${escapeHtml(statusLabel)})`;
             }
-        }
+        });
+        const data = statusPayload?.result || null;
 
         if (data?.success) {
             // Reload forecast data and update unified timeline
@@ -3216,18 +2442,23 @@ function setupUnifiedTimelineControls() {
         if (state.isPlaying) {
             playBtn.classList.add('playing');
             if (icon) icon.textContent = 'pause';
+            setSectorGeometryResolution(CONFIG.SECTOR_ARC_STEPS_PLAYBACK);
             const interval = CONFIG.PLAY_INTERVAL_MS / Math.max(0.25, state.playSpeed);
             state.playInterval = setInterval(() => {
+                if (state.isLoadingSlice) return;
                 if (unifiedTimeline.currentIndex < unifiedTimeline.totalCount - 1) {
-                    loadUnifiedTimeSlice(unifiedTimeline.currentIndex + 1);
+                    loadUnifiedTimeSliceInternal(unifiedTimeline.currentIndex + 1, { skipIfLoading: true });
                 } else {
-                    loadUnifiedTimeSlice(0);  // Loop back
+                    loadUnifiedTimeSliceInternal(0, { skipIfLoading: true });  // Loop back
                 }
             }, interval);
         } else {
             playBtn.classList.remove('playing');
             if (icon) icon.textContent = 'play_arrow';
             clearInterval(state.playInterval);
+            state.playInterval = null;
+            setSectorGeometryResolution(CONFIG.SECTOR_ARC_STEPS_DEFAULT);
+            updateMapData();
         }
     });
     
@@ -3247,16 +2478,62 @@ async function loadTimeSlice(index) {
 
 function updateMapData() {
     if (!state.map) return;
-    
-    const pointsGeojson = { type: 'FeatureCollection', features: state.filteredPointFeatures };
-    const sectorsGeojson = { type: 'FeatureCollection', features: state.filteredSectorFeatures };
-    
-    if (state.map.getSource('cells')) {
-        state.map.getSource('cells').setData(pointsGeojson);
+
+    const cellsSource = state.map.getSource('cells');
+    const sectorsSource = state.map.getSource('sectors');
+    if (!cellsSource || !sectorsSource) return;
+
+    const sectorsVisible = !state.layers.heatmap;
+    if (sectorsVisible || state.needsSectorGeometrySync) {
+        const sectorsGeojson = { type: 'FeatureCollection', features: state.filteredSectorFeatures };
+        sectorsSource.setData(sectorsGeojson);
+        state.needsSectorGeometrySync = false;
     }
-    if (state.map.getSource('sectors')) {
-        state.map.getSource('sectors').setData(sectorsGeojson);
+
+    const visibleIds = state.filteredPointFeatures
+        .map(feature => Number(feature.id))
+        .filter(id => Number.isInteger(id));
+
+    const visibleSignature = visibleIds.join(',');
+    if (state.lastVisibleFilterSignature !== visibleSignature) {
+        state.lastVisibleFilterSignature = visibleSignature;
+        const filterExpr = visibleIds.length
+            ? ['in', ['id'], ['literal', visibleIds]]
+            : ['==', ['id'], -1];
+
+        ['cells-heatmap', 'cells-points', 'cells-labels', 'cells-congested-ring']
+            .forEach((layerId) => {
+                if (state.map.getLayer(layerId)) {
+                    state.map.setFilter(layerId, filterExpr);
+                }
+            });
     }
+
+    state.pointFeatures.forEach((feature) => {
+        const id = Number(feature?.id);
+        if (!Number.isInteger(id)) return;
+        const props = feature?.properties || {};
+        const nextState = {
+            color: props.color ?? CONFIG.COLORS.NO_DATA,
+            opacity: Number.isFinite(Number(props.opacity)) ? Number(props.opacity) : 0.4,
+            congested: Boolean(props.congested),
+            load: Number.isFinite(Number(props.load)) ? Number(props.load) : 0
+        };
+
+        const prevState = featureStateCache.cells.get(id);
+        if (
+            prevState &&
+            prevState.color === nextState.color &&
+            prevState.opacity === nextState.opacity &&
+            prevState.congested === nextState.congested &&
+            prevState.load === nextState.load
+        ) {
+            return;
+        }
+
+        state.map.setFeatureState({ source: 'cells', id }, nextState);
+        featureStateCache.cells.set(id, nextState);
+    });
 }
 
 function updateTimeSliderUI() {
@@ -3330,6 +2607,11 @@ function updateAlertsUI(features) {
     
     const badge = document.getElementById('alert-count');
     if (badge) badge.textContent = String(congested.length);
+
+    if (state.lastCongestedCount === congested.length) {
+        return;
+    }
+    state.lastCongestedCount = congested.length;
     
     if (congested.length === 0) {
         alertsList.innerHTML = '<div class="alert-placeholder">✓ No active alerts</div>';
@@ -3385,6 +2667,18 @@ function destroyCharts() {
     });
 }
 
+function upsertAnalyticsChart(chartKey, ctx, config) {
+    const existing = state.charts[chartKey];
+    if (existing) {
+        existing.config.type = config.type;
+        existing.data = config.data;
+        existing.options = config.options;
+        existing.update('none');
+        return;
+    }
+    state.charts[chartKey] = new Chart(ctx, config);
+}
+
 function updateAnalyticsCharts(features) {
     const issueCtx = document.getElementById('chart-issues');
     const sevCtx = document.getElementById('chart-severity');
@@ -3392,16 +2686,14 @@ function updateAnalyticsCharts(features) {
     const loadCtx = document.getElementById('chart-load');
     if (!issueCtx || !sevCtx || !bandCtx || !loadCtx) return;
 
-    destroyCharts();
-
     // Issue distribution
     const issueCounts = {};
     features.forEach(f => {
         const type = f.properties.issue_type || 'Normal';
         issueCounts[type] = (issueCounts[type] || 0) + 1;
     });
-    
-    state.charts.issues = new Chart(issueCtx, {
+
+    upsertAnalyticsChart('issues', issueCtx, {
         type: 'doughnut',
         data: {
             labels: Object.keys(issueCounts),
@@ -3431,7 +2723,7 @@ function updateAnalyticsCharts(features) {
         else severityBuckets['High (70-100)']++;
     });
 
-    state.charts.severity = new Chart(sevCtx, {
+    upsertAnalyticsChart('severity', sevCtx, {
         type: 'bar',
         data: {
             labels: Object.keys(severityBuckets),
@@ -3459,7 +2751,7 @@ function updateAnalyticsCharts(features) {
         bandCounts[b] = (bandCounts[b] || 0) + 1;
     });
 
-    state.charts.bands = new Chart(bandCtx, {
+    upsertAnalyticsChart('bands', bandCtx, {
         type: 'bar',
         data: {
             labels: Object.keys(bandCounts).map(b => 'B' + b),
@@ -3491,7 +2783,7 @@ function updateAnalyticsCharts(features) {
         else loadBuckets['85-100%']++;
     });
 
-    state.charts.load = new Chart(loadCtx, {
+    upsertAnalyticsChart('load', loadCtx, {
         type: 'bar',
         data: {
             labels: Object.keys(loadBuckets),
@@ -3519,6 +2811,12 @@ function toggleModal(id, show) {
     const modal = document.getElementById(id);
     if (!modal) return;
     modal.classList.toggle('hidden', !show);
+    if (id === 'analytics-modal') {
+        state.analyticsModalOpen = !!show;
+        if (state.analyticsModalOpen) {
+            updateAnalyticsCharts(state.filteredPointFeatures);
+        }
+    }
 }
 
 function toggleTheme() {
@@ -3581,7 +2879,7 @@ function initMap() {
         zoom: CONFIG.MAP_ZOOM,
         pitch: 45,
         bearing: 0,
-        antialias: true
+        antialias: false
     });
     
     map.addControl(new maplibregl.NavigationControl(), 'bottom-right');
@@ -3606,7 +2904,7 @@ function addMapLayers(map, sites) {
         minzoom: CONFIG.SECTOR_MIN_ZOOM,
         paint: {
             'fill-color': ['get', 'color'],
-            'fill-opacity': ['interpolate', ['linear'], ['zoom'], 10, 0.4, 14, 0.6]
+            'fill-opacity': ['coalesce', ['get', 'opacity'], 0.45]
         }
     });
     
@@ -3614,11 +2912,16 @@ function addMapLayers(map, sites) {
         id: 'sectors-outline',
         type: 'line',
         source: 'sectors',
-        minzoom: CONFIG.SECTOR_MIN_ZOOM,
+        minzoom: 12,
         paint: {
-            'line-color': '#ffffff',
-            'line-width': ['interpolate', ['linear'], ['zoom'], 10, 1, 14, 2],
-            'line-opacity': 0.5
+            'line-color': '#f3f3f3',
+            'line-width': ['interpolate', ['linear'], ['zoom'], 12, 0.5, 15, 1.1],
+            'line-opacity': [
+                'case',
+                ['==', ['get', 'status'], 'no-data'],
+                0.03,
+                ['interpolate', ['linear'], ['zoom'], 12, 0.09, 15, 0.2]
+            ]
         }
     });
     
@@ -3632,10 +2935,29 @@ function addMapLayers(map, sites) {
         maxzoom: 22,
         layout: { 'visibility': 'none' },
         paint: {
-            'heatmap-weight': ['interpolate', ['linear'], ['coalesce', ['get', 'load'], 0], 0, 0.1, 100, 1],
-            'heatmap-radius': CONFIG.HEATMAP_RADIUS,
-            'heatmap-intensity': CONFIG.HEATMAP_INTENSITY,
-            'heatmap-opacity': CONFIG.HEATMAP_OPACITY,
+            'heatmap-weight': ['interpolate', ['linear'], ['coalesce', ['feature-state', 'load'], ['get', 'load'], 0], 0, 0.1, 100, 1],
+            'heatmap-radius': [
+                'interpolate',
+                ['exponential', 2],
+                ['zoom'],
+                0, 1,
+                10, 10,
+                15, 100
+            ],
+            'heatmap-intensity': [
+                'interpolate',
+                ['linear'],
+                ['zoom'],
+                10, 1,
+                15, 5
+            ],
+            'heatmap-opacity': [
+                'interpolate',
+                ['linear'],
+                ['zoom'],
+                8, CONFIG.HEATMAP_OPACITY,
+                15, 0.95
+            ],
             'heatmap-color': [
                 'interpolate', ['linear'], ['heatmap-density'],
                 0.0, 'rgba(0,0,0,0)',
@@ -3653,8 +2975,8 @@ function addMapLayers(map, sites) {
         source: 'cells',
         paint: {
             'circle-radius': ['interpolate', ['linear'], ['zoom'], 8, 4, 12, 6, 16, 10],
-            'circle-color': ['get', 'color'],
-            'circle-opacity': 0.8,
+            'circle-color': ['coalesce', ['feature-state', 'color'], ['get', 'color'], CONFIG.COLORS.NO_DATA],
+            'circle-opacity': ['coalesce', ['feature-state', 'opacity'], ['get', 'opacity'], 0.8],
             'circle-stroke-color': '#ffffff',
             'circle-stroke-width': 1.5
         }
@@ -3682,12 +3004,17 @@ function addMapLayers(map, sites) {
         id: 'cells-congested-ring',
         type: 'circle',
         source: 'cells',
-        filter: ['==', ['get', 'congested'], true],
         paint: {
             'circle-radius': ['interpolate', ['linear'], ['zoom'], 8, 6, 12, 9, 16, 14],
             'circle-color': 'rgba(0,0,0,0)',
             'circle-stroke-color': CONFIG.COLORS.CONGESTED,
-            'circle-stroke-width': 3
+            'circle-stroke-width': 3,
+            'circle-stroke-opacity': [
+                'case',
+                ['coalesce', ['feature-state', 'congested'], ['get', 'congested'], false],
+                1,
+                0
+            ]
         }
     });
     
@@ -3720,7 +3047,7 @@ function setupMapInteractions(map) {
     map.on('click', 'cells-points', (e) => {
         const feature = e.features?.[0];
         if (!feature) return;
-        const p = feature.properties;
+        const p = getLivePointProperties(feature);
         showSiteInfoPanel(p.site_name, p.cell_name);
         map.flyTo({ center: feature.geometry.coordinates, zoom: 14, pitch: 45 });
     });
@@ -3735,7 +3062,9 @@ function setupMapInteractions(map) {
     
     map.on('mouseenter', 'cells-points', (e) => {
         map.getCanvas().style.cursor = 'pointer';
-        const p = e.features[0].properties;
+        const feature = e.features?.[0];
+        if (!feature) return;
+        const p = getLivePointProperties(feature);
         const popupRoot = document.createElement('div');
         popupRoot.style.padding = '10px';
         popupRoot.style.fontFamily = 'Inter, sans-serif';
@@ -3795,6 +3124,32 @@ function setVisualizationMode(mode) {
     document.querySelectorAll('.toggle-btn[data-viz]').forEach(b => {
         b.classList.toggle('active', b.dataset.viz === mode);
     });
+
+    updateMapData();
+}
+
+function switchBasemap(basemapKey) {
+    const basemap = CONFIG.BASEMAPS[basemapKey];
+    if (!basemap || !state.map) return;
+
+    const source = state.map.getSource('basemap');
+    if (!source) {
+        console.warn('Basemap source is not available yet');
+        return;
+    }
+
+    if (typeof source.setTiles === 'function') {
+        source.setTiles(basemap.tiles);
+        return;
+    }
+
+    // Fallback for environments without setTiles support.
+    const style = state.map.getStyle();
+    if (style?.sources?.basemap && style.sources.basemap.type === 'raster') {
+        style.sources.basemap.tiles = [...basemap.tiles];
+        style.sources.basemap.attribution = basemap.attribution;
+        state.map.setStyle(style, { diff: true });
+    }
 }
 
 // --- Event Handlers ---
@@ -3808,13 +3163,8 @@ function setupEventHandlers() {
     });
     
     document.getElementById('basemap-select')?.addEventListener('change', (e) => {
-        const basemap = CONFIG.BASEMAPS[e.target.value];
-        if (basemap && state.map) {
-            state.map.getSource('basemap').tiles = basemap.tiles;
-            state.map.style.sourceCaches['basemap'].clearTiles();
-            state.map.style.sourceCaches['basemap'].update(state.map.transform);
-            state.map.triggerRepaint();
-        }
+        const selectedKey = e.target instanceof HTMLSelectElement ? e.target.value : '';
+        switchBasemap(selectedKey);
     });
     
     document.getElementById('toggle-left')?.addEventListener('click', () => {
@@ -3954,9 +3304,9 @@ async function init() {
         setLoading(true, 'Loading baseline...');
         
         const [baselineRes, timeIndexRes, statsRes] = await Promise.all([
-            fetchWithAuth(`${buildDataUrl('baseline.json')}?t=${Date.now()}`),
-            fetchWithAuth(`${buildDataUrl('time_index.json')}?t=${Date.now()}`),
-            fetchWithAuth(`${buildDataUrl('stats.json')}?t=${Date.now()}`)
+            fetchWithAuth(buildDataUrl('baseline.json')),
+            fetchWithAuth(buildDataUrl('time_index.json')),
+            fetchWithAuth(buildDataUrl('stats.json'))
         ]);
 
         if (!baselineRes.ok || !timeIndexRes.ok) {
@@ -3990,6 +3340,13 @@ async function init() {
         buildSiteHierarchy();
 
         populateFrequencyFilters(state.globalStats?.frequency_bands || []);
+        const { pointFeatures, sectorFeatures, sites } = buildFeaturesForTime();
+        state.pointFeatures = pointFeatures;
+        state.sectorFeatures = sectorFeatures;
+        state.features = pointFeatures;
+        state.filteredPointFeatures = pointFeatures;
+        state.filteredSectorFeatures = sectorFeatures;
+        state.currentSectorArcSteps = CONFIG.SECTOR_ARC_STEPS_DEFAULT;
         
         console.log(`Loaded ${Object.keys(state.baseline).length} cells, ${state.timeIndex.length} time slices`);
         
@@ -4005,18 +3362,13 @@ async function init() {
         
         setLoading(true, 'Initializing map...');
         
-        const { pointFeatures, sectorFeatures, sites } = buildFeaturesForTime(state.currentObservations);
-        state.pointFeatures = pointFeatures;
-        state.sectorFeatures = sectorFeatures;
-        state.filteredPointFeatures = pointFeatures;
-        state.filteredSectorFeatures = sectorFeatures;
-        
         const map = initMap();
         
         map.on('load', () => {
             try {
                 addMapLayers(map, sites);
                 setupMapInteractions(map);
+                updateMapData();
                 
                 if (pointFeatures.length > 0) {
                     const bounds = new maplibregl.LngLatBounds();

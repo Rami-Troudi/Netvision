@@ -383,7 +383,7 @@ const worker = new Worker(
   },
   {
     connection,
-    concurrency: Math.max(1, Number.parseInt(process.env.JOB_WORKER_CONCURRENCY || '1', 10) || 1),
+    concurrency: Math.max(1, Number.parseInt(process.env.JOB_WORKER_CONCURRENCY || '2', 10) || 2),
   }
 )
 
