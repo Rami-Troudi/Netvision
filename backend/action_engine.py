@@ -9,6 +9,10 @@ from typing import Any
 import duckdb
 import pandas as pd
 
+from backend.common import normalize_band as _normalize_band
+from backend.common import to_bool as _to_bool
+from backend.common import to_float as _to_float
+
 
 MODULE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = MODULE_DIR.parent
@@ -35,7 +39,6 @@ CELL_CONGESTION_PROFILE = _load_profile(CELL_PROFILE_PATH)
 
 
 TIER_ORDER = {"court_terme": 0, "moyen_terme": 1, "long_terme": 2, "none": 3}
-ENCODED_BAND_MAP = {0: "B1", 1: "B3", 2: "B20"}
 
 
 def _find_column(
@@ -51,46 +54,6 @@ def _find_column(
     if required:
         raise KeyError(f"{df_name} missing required column. Expected one of: {candidates}")
     return None
-
-
-def _to_float(value: Any, default: float = 0.0) -> float:
-    try:
-        out = float(value)
-    except (TypeError, ValueError):
-        return default
-    if pd.isna(out):
-        return default
-    return out
-
-
-def _to_bool(value: Any) -> bool:
-    if isinstance(value, bool):
-        return value
-    if value is None or pd.isna(value):
-        return False
-    if isinstance(value, str):
-        return value.strip().lower() in {"1", "true", "t", "yes", "y"}
-    return bool(value)
-
-
-def _normalize_band(value: Any) -> str:
-    if value is None or pd.isna(value):
-        return ""
-
-    if isinstance(value, (int, float)):
-        if int(value) in ENCODED_BAND_MAP:
-            return ENCODED_BAND_MAP[int(value)]
-
-    text = str(value).strip().upper().replace(".0", "")
-    if text in {"B1", "1"}:
-        return "B1"
-    if text in {"B3", "3"}:
-        return "B3"
-    if text in {"B20", "20"}:
-        return "B20"
-    if text in {"0", "2"}:
-        return ENCODED_BAND_MAP[int(text)]
-    return text
 
 
 def _latest_row(df: pd.DataFrame, timestamp_col: str | None) -> pd.Series:
