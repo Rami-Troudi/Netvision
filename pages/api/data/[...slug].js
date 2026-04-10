@@ -33,6 +33,7 @@ function sanitizeSlugParts(rawParts) {
 }
 
 function resolveDataPath(projectRoot, slugParts) {
+  const dataRoot = path.resolve(projectRoot, 'runtime_data')
   const [head, ...tail] = slugParts
 
   if (!tail.length) {
@@ -40,7 +41,7 @@ function resolveDataPath(projectRoot, slugParts) {
       throw new Error('File is not allowed')
     }
     return {
-      filePath: path.resolve(projectRoot, head),
+      filePath: path.resolve(dataRoot, head),
       kind: 'json',
       dataDir: null,
     }
@@ -50,7 +51,7 @@ function resolveDataPath(projectRoot, slugParts) {
     throw new Error('Directory is not allowed')
   }
 
-  const baseDir = path.resolve(projectRoot, head)
+  const baseDir = path.resolve(dataRoot, head)
   const targetPath = path.resolve(baseDir, ...tail)
   if (!isPathInsideDirectory(targetPath, baseDir)) {
     throw new Error('Invalid path')
@@ -94,9 +95,14 @@ async function readParquetObservations(filePath) {
     }
     return observations
   } finally {
-    await reader.close()
+    try {
+      await reader.close()
+    } catch (ignore) {
+      // Ignore errors on close
+    }
   }
 }
+
 
 function normalizeObservationValue(key, value) {
   if (value === null || value === undefined) return null
@@ -121,9 +127,10 @@ const _metadataCache = {
 }
 
 async function loadSliceMetadata(projectRoot, dataDir, filename) {
+  const dataRoot = path.resolve(projectRoot, 'runtime_data')
   if (dataDir === 'time_data' || dataDir === 'forecast_data') {
     const indexFileName = dataDir === 'time_data' ? 'time_index.json' : 'forecast_index.json'
-    const indexPath = path.resolve(projectRoot, indexFileName)
+    const indexPath = path.resolve(dataRoot, indexFileName)
     
     let currentMtime = 0
     try {
@@ -179,10 +186,13 @@ export default async function handler(req, res) {
   try {
     const info = await stat(filePath)
     if (!info.isFile()) {
-      return res.status(404).json({ error: 'Data file not found' })
+      return res.status(404).json({ error: 'Data file not found (not a file)' })
     }
-  } catch {
-    return res.status(404).json({ error: 'Data file not found' })
+  } catch (err) {
+    if (path.basename(filePath).includes('forecast')) {
+      return res.status(404).json({ error: 'Forecast data unavailable currently', code: 'FORECAST_NOT_READY' })
+    }
+    return res.status(404).json({ error: 'Data file not found on disk' })
   }
 
   res.setHeader('Content-Type', 'application/json; charset=utf-8')

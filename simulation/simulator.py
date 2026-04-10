@@ -258,8 +258,12 @@ def read_parquet_dataframe(path: Path) -> pd.DataFrame:
         con.close()
 
 
+def get_runtime_data_dir(base_dir: Path) -> Path:
+    return (base_dir / "runtime_data").resolve()
+
+
 def load_time_index_entries(base_dir: Path) -> List[Dict[str, Any]]:
-    index_path = base_dir / "time_index.json"
+    index_path = get_runtime_data_dir(base_dir) / "time_index.json"
     if not index_path.exists():
         return []
     idx = load_json_file(index_path)
@@ -489,7 +493,7 @@ def resolve_time_file_path(time_data_dir: Path, time_file: str) -> Path:
 
 
 def load_time_entry(base_dir: Path, time_file: Optional[str] = None) -> Tuple[str, Dict[str, Any]]:
-    time_data_dir = (base_dir / "time_data").resolve()
+    time_data_dir = get_runtime_data_dir(base_dir) / "time_data"
     index_entries = load_time_index_entries(base_dir)
     entry_by_filename = {
         str(entry.get("filename")): entry
@@ -570,9 +574,9 @@ def simulate_action(base_dir: Path, cell_name: str, action: str, params: Dict[st
     
     Returns calibrated predictions with appropriate confidence levels
     """
-    baseline_path = base_dir / "baseline.json"
+    baseline_path = get_runtime_data_dir(base_dir) / "baseline.json"
     if not baseline_path.exists():
-        raise FileNotFoundError("baseline.json not found")
+        raise FileNotFoundError("runtime_data/baseline.json not found")
     baseline = load_json_file(baseline_path)
 
     if cell_name not in baseline:
@@ -697,7 +701,7 @@ def main() -> None:
     parser.add_argument("--cell", required=True, help="Cell name")
     parser.add_argument("--action", required=True, help="Action type: tilt|add_carrier|redistribute|new_site")
     parser.add_argument("--params", default="{}", help="JSON string of parameters")
-    parser.add_argument("--time-file", default=None, help="Time-slice filename (from time_data)")
+    parser.add_argument("--time-file", default=None, help="Time-slice filename (from runtime_data/time_data)")
     parser.add_argument("--mode", default="fast", choices=["fast"], help="Simulation mode (fast only; ns-3 removed)")
     args = parser.parse_args()
 

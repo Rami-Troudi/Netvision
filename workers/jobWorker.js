@@ -19,8 +19,8 @@ const PROJECT_ROOT = process.cwd()
 const RUNTIME_DIR = path.resolve(PROJECT_ROOT, '.runtime')
 const DB_PATH = path.resolve(RUNTIME_DIR, 'jobs.sqlite')
 const JOB_RESULTS_DIR = path.resolve(RUNTIME_DIR, 'job-results')
-const FORECAST_DIR = path.resolve(PROJECT_ROOT, 'forecast_data')
-const FORECAST_INDEX_PATH = path.resolve(PROJECT_ROOT, 'forecast_index.json')
+const FORECAST_DIR = path.resolve(PROJECT_ROOT, 'runtime_data', 'forecast_data')
+const FORECAST_INDEX_PATH = path.resolve(PROJECT_ROOT, 'runtime_data', 'forecast_index.json')
 
 let db = null
 let allowTimeFileSet = null
@@ -134,7 +134,7 @@ function isPathInsideDirectory(targetPath, directoryPath) {
 async function loadAllowedTimeFiles() {
   if (allowTimeFileSet) return allowTimeFileSet
 
-  const indexPath = path.resolve(PROJECT_ROOT, 'time_index.json')
+  const indexPath = path.resolve(PROJECT_ROOT, 'runtime_data', 'time_index.json')
   const raw = await fsPromises.readFile(indexPath, 'utf8')
   const parsed = parseJsonString(raw, {})
   const timestamps = Array.isArray(parsed?.timestamps) ? parsed.timestamps : []
@@ -185,7 +185,7 @@ async function resolveSimulationTimeFile(timeEntry) {
     throw new Error('time_entry.filename is not in allowed time_index.json')
   }
 
-  const timeDataRoot = path.resolve(PROJECT_ROOT, 'time_data')
+  const timeDataRoot = path.resolve(PROJECT_ROOT, 'runtime_data', 'time_data')
   const resolved = path.resolve(timeDataRoot, requestedTimeFile)
   if (!isPathInsideDirectory(resolved, timeDataRoot)) {
     throw new Error('Invalid time_entry.filename path')
@@ -244,10 +244,7 @@ async function clearForecastData() {
   }
 
   if (await fileExists(FORECAST_DIR)) {
-    const entries = await fsPromises.readdir(FORECAST_DIR)
-    await Promise.all(
-      entries.map((entry) => fsPromises.unlink(path.join(FORECAST_DIR, entry)))
-    )
+    await fsPromises.rm(FORECAST_DIR, { recursive: true, force: true })
   }
 }
 
