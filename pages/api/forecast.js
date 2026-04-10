@@ -12,11 +12,11 @@ export const config = {
 }
 
 function getForecastDir(projectRoot) {
-  return path.resolve(projectRoot, 'forecast_data')
+  return path.resolve(projectRoot, 'runtime_data', 'forecast_data')
 }
 
 function getForecastIndexPath(projectRoot) {
-  return path.resolve(projectRoot, 'forecast_index.json')
+  return path.resolve(projectRoot, 'runtime_data', 'forecast_index.json')
 }
 
 async function fileExists(filePath) {

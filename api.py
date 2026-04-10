@@ -1,25 +1,26 @@
-# Requirements: fastapi, uvicorn, pandas, lightgbm, joblib, pyarrow
+# Requirements: fastapi, uvicorn, pandas, numpy, duckdb, joblib, pyarrow
 
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
 import importlib
 import json
+import sys
 from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
-import joblib
 import numpy as np
 import pandas as pd
 from pydantic import BaseModel
 
 
 ROOT_DIR = Path(__file__).resolve().parent
+SCRIPTS_DIR = ROOT_DIR / "scripts"
 NO_ACTION_LABEL = "Aucune action requise"
 STALE_ACTION_LABEL = "Data too stale for decision"
-MODEL_VERSIONS = ["prb", "users", "thrput"]
+MODEL_VERSIONS = ["forecast_model"]
 ENCODED_BAND_MAP = {0: "B1", 1: "B3", 2: "B20"}
 
 
@@ -82,38 +83,33 @@ def _load_feature_columns(meta_path: Path) -> list[str]:
     return feature_cols
 
 
-def _predict_with_model(model: Any, feature_frame: pd.DataFrame) -> np.ndarray:
-    best_iteration = getattr(model, "best_iteration_", None)
-    if isinstance(best_iteration, (int, np.integer)) and int(best_iteration) > 0:
-        try:
-            return model.predict(feature_frame, num_iteration=int(best_iteration))
-        except TypeError:
-            pass
-    return model.predict(feature_frame)
-
-
-def _align_model_features(
-    model: Any,
-    base_feature_frame: pd.DataFrame,
-    meta_feature_cols: list[str],
-    model_label: str,
-) -> pd.DataFrame:
-    model_feature_names = getattr(model, "feature_name_", None)
-    if isinstance(model_feature_names, (list, tuple)) and model_feature_names:
-        missing = [col for col in model_feature_names if col not in base_feature_frame.columns]
-        if missing:
-            raise ValueError(f"{model_label} expects missing feature columns: {missing}")
-        not_in_meta = [col for col in model_feature_names if col not in meta_feature_cols]
-        if not_in_meta:
-            raise ValueError(f"{model_label} has features not present in features_meta.json: {not_in_meta}")
-        return base_feature_frame[list(model_feature_names)]
-
-    expected_n = getattr(model, "n_features_in_", None)
-    if isinstance(expected_n, (int, np.integer)) and int(expected_n) != base_feature_frame.shape[1]:
-        raise ValueError(
-            f"{model_label} expects {int(expected_n)} features but features_meta.json provides {base_feature_frame.shape[1]}."
+def _predict_next_with_forecaster(
+    forecaster: Any,
+    cellname: str,
+    target_dt: Any,
+    baseline_info: dict[str, Any],
+) -> dict[str, Any]:
+    try:
+        out = forecaster.forecast_cell(
+            cell_name=cellname,
+            target_dt=target_dt,
+            baseline_info=baseline_info,
+            confidence_decay=0.003,
+            hours_ahead=1,
+            stochastic=False,
         )
-    return base_feature_frame
+    except TypeError:
+        out = forecaster.forecast_cell(
+            cell_name=cellname,
+            target_dt=target_dt,
+            baseline_info=baseline_info,
+            confidence_decay=0.003,
+            hours_ahead=1,
+        )
+
+    if not isinstance(out, dict):
+        raise ValueError("Forecast model returned an invalid prediction payload.")
+    return out
 
 
 def _normalize_cellname(cellname: str) -> str:
@@ -160,9 +156,7 @@ async def lifespan(app: FastAPI):
     paths = {
         "features": ROOT_DIR / "features_with_score.parquet",
         "meta": ROOT_DIR / "features_meta.json",
-        "model_prb": ROOT_DIR / "models" / "model_prb.pkl",
-        "model_users": ROOT_DIR / "models" / "model_users.pkl",
-        "model_thrput": ROOT_DIR / "models" / "model_thrput.pkl",
+        "forecast_model": ROOT_DIR / "models" / "forecast_model.pkl",
         "profile": ROOT_DIR / "cell_congestion_profile.parquet",
         "thresholds": ROOT_DIR / "thresholds.json",
         "recommendations_parquet": ROOT_DIR / "all_cell_recommendations.parquet",
@@ -171,7 +165,17 @@ async def lifespan(app: FastAPI):
     }
 
     try:
-        missing = [f"{name}: {path}" for name, path in paths.items() if not path.exists()]
+        required_path_keys = [
+            "features",
+            "meta",
+            "forecast_model",
+            "profile",
+            "thresholds",
+            "recommendations_parquet",
+            "recommendations_csv",
+            "action_engine",
+        ]
+        missing = [f"{name}: {paths[name]}" for name in required_path_keys if not paths[name].exists()]
         if missing:
             raise FileNotFoundError("Missing startup files: " + "; ".join(missing))
 
@@ -219,10 +223,6 @@ async def lifespan(app: FastAPI):
             if required_col not in recommendations_df.columns:
                 raise ValueError(f"all_cell_recommendations.parquet missing required column: {required_col}")
 
-        missing_model_features = [col for col in feature_cols if col not in features_df.columns]
-        if missing_model_features:
-            raise ValueError(f"Missing feature columns in features_with_score.parquet: {missing_model_features}")
-
         features_df = features_df.copy()
         profile_df = profile_df.copy()
         recommendations_df = recommendations_df.copy()
@@ -237,17 +237,24 @@ async def lifespan(app: FastAPI):
             profile_df.reset_index(drop=True).groupby("CELLNAME", as_index=False, sort=False).tail(1).reset_index(drop=True)
         )
 
-        model_prb = joblib.load(paths["model_prb"])
-        model_users = joblib.load(paths["model_users"])
-        model_thrput = joblib.load(paths["model_thrput"])
+        prediction_backend = "trained_forecaster"
+        forecast_model = None
+        forecast_model_baseline: dict[str, Any] = {}
+
+        if str(SCRIPTS_DIR) not in sys.path:
+            sys.path.append(str(SCRIPTS_DIR))
+
+        from forecast_hf import load_trained_forecaster  # type: ignore
+
+        forecast_model, forecast_model_baseline, _ = load_trained_forecaster(paths["forecast_model"])
 
         app.state.paths = paths
         app.state.thresholds = thresholds
         app.state.feature_cols = feature_cols
         app.state.action_engine = action_engine_module
-        app.state.model_prb = model_prb
-        app.state.model_users = model_users
-        app.state.model_thrput = model_thrput
+        app.state.prediction_backend = prediction_backend
+        app.state.forecast_model = forecast_model
+        app.state.forecast_model_baseline = forecast_model_baseline
         app.state.features_df = features_df
         app.state.features_by_cell = features_df.set_index("CELLNAME", drop=False)
         app.state.profile_df = profile_latest
@@ -277,6 +284,7 @@ def health() -> dict[str, Any]:
         "status": "ok",
         "n_cells_loaded": int(app.state.n_cells_loaded),
         "model_versions": MODEL_VERSIONS,
+        "prediction_backend": str(getattr(app.state, "prediction_backend", "unknown")),
     }
 
 
@@ -305,15 +313,34 @@ def predict(body: PredictRequest) -> dict[str, Any]:
 
     latest_frame = _latest_non_imputed_frame(cell_hist)
     latest = latest_frame.iloc[0]
-    base_features = latest_frame[app.state.feature_cols].apply(pd.to_numeric, errors="coerce").fillna(0.0)
+    prediction_backend = str(getattr(app.state, "prediction_backend", "trained_forecaster"))
 
-    x_prb = _align_model_features(app.state.model_prb, base_features, app.state.feature_cols, "model_prb")
-    x_users = _align_model_features(app.state.model_users, base_features, app.state.feature_cols, "model_users")
-    x_thrput = _align_model_features(app.state.model_thrput, base_features, app.state.feature_cols, "model_thrput")
+    latest_ts = pd.to_datetime(latest.get("DATE_ID"), errors="coerce")
+    if pd.isna(latest_ts):
+        latest_ts = pd.Timestamp.utcnow().floor("h")
+    target_dt = (latest_ts + pd.Timedelta(hours=1)).to_pydatetime()
 
-    pred_prb = float(np.clip(_predict_with_model(app.state.model_prb, x_prb)[0], 0.0, 100.0))
-    pred_users = float(np.clip(_predict_with_model(app.state.model_users, x_users)[0], 0.0, 500.0))
-    pred_thrput = float(np.clip(_predict_with_model(app.state.model_thrput, x_thrput)[0], 0.0, 500000.0))
+    baseline_lookup = getattr(app.state, "forecast_model_baseline", {})
+    baseline_info = baseline_lookup.get(cellname, {}) if isinstance(baseline_lookup, dict) else {}
+    if not isinstance(baseline_info, dict):
+        baseline_info = {}
+
+    pred_obs = _predict_next_with_forecaster(
+        forecaster=app.state.forecast_model,
+        cellname=cellname,
+        target_dt=target_dt,
+        baseline_info=baseline_info,
+    )
+
+    pred_prb = float(np.clip(_to_float(pred_obs.get("load"), _to_float(latest.get("prb_load"))), 0.0, 100.0))
+    pred_users_raw = pred_obs.get(
+        "active_users",
+        pred_obs.get("traffic", _to_float(latest.get("active_users"), 0.0)),
+    )
+    pred_users = float(np.clip(_to_float(pred_users_raw), 0.0, 500.0))
+    pred_thrput = float(
+        np.clip(_to_float(pred_obs.get("throughput"), _to_float(latest.get("throughput"))), 0.0, 500000.0)
+    )
 
     cell_state = app.state.action_engine.get_cell_state(
         cellname=cellname,

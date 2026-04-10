@@ -442,7 +442,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         '--output',
-        default='.',
+        default='runtime_data',
         help='Output directory for baseline.json, time_index.json, stats.json, and time_data/'
     )
     args = parser.parse_args()
