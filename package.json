@@ -22,5 +22,8 @@
     "parquetjs-lite": "^0.8.7",
     "react": "latest",
     "react-dom": "latest"
+  },
+  "devDependencies": {
+    "eslint-config-next": "^15.5.9"
   }
 }

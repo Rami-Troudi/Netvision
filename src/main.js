@@ -74,6 +74,22 @@ const state = {
     currentObservations: {},
     currentStats: null,
     globalStats: null,
+    peakHoursByCell: {},
+    driftByCell: {},
+    driftAlerts: [],
+    driftThresholds: {
+        absPrbDelta: 15,
+        pctPrbDelta: 30,
+    },
+    customDataset: {
+        active: false,
+        sessionId: '',
+        createdAt: '',
+        sourceFile: '',
+        importedFiles: [],
+        slices: [],
+    },
+    liveDatasetSnapshot: null,
     
     siteHierarchy: {},
     selectedSite: null,
@@ -115,9 +131,40 @@ const state = {
         load: null
     },
     cellGeometryMeta: {},
+    needsPointGeometrySync: false,
     needsSectorGeometrySync: false,
     lastCongestedCount: null,
     lastVisibleFilterSignature: null
+};
+
+const importState = {
+    headers: [],
+    allRows: [],
+    previewRows: [],
+    inferredMapping: {},
+    inferredMappingMeta: {},
+    matchScores: {},
+    mapping: {},
+    mappingSource: {},
+    columnAssignments: {},
+    columnSource: {},
+    selectedFileName: '',
+    detectedType: 'unknown',
+    selectedType: 'reference',
+    detectionReasons: [],
+    totalRows: 0,
+    profileSuggestion: null,
+    profileBannerDismissed: false,
+    sessionMode: 'new',
+    summaryVisible: false,
+    parseInProgress: false,
+};
+
+const dataWorkerBridge = {
+    worker: null,
+    requestSeq: 0,
+    pending: new Map(),
+    disabled: false,
 };
 
 let hasInitialized = false;
@@ -304,6 +351,162 @@ function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+function formatTimestampFromDate(date) {
+    const d = date instanceof Date ? date : new Date(date);
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    const hour = String(d.getHours()).padStart(2, '0');
+    const minute = String(d.getMinutes()).padStart(2, '0');
+    return `${day}-${month}-${year} ${hour}:${minute}`;
+}
+
+function ensureDataWorker() {
+    if (dataWorkerBridge.disabled || typeof window === 'undefined' || typeof Worker === 'undefined') {
+        return null;
+    }
+
+    if (dataWorkerBridge.worker) {
+        return dataWorkerBridge.worker;
+    }
+
+    try {
+        const worker = new Worker('/workers/dataWorker.js');
+        worker.onmessage = (event) => {
+            const { id, ok, data, error } = event.data || {};
+            const pending = dataWorkerBridge.pending.get(id);
+            if (!pending) return;
+            clearTimeout(pending.timer);
+            dataWorkerBridge.pending.delete(id);
+            if (ok) pending.resolve(data);
+            else pending.reject(new Error(error || 'Worker request failed'));
+        };
+        worker.onerror = (event) => {
+            console.error('Data worker crashed:', event?.message || event);
+            dataWorkerBridge.disabled = true;
+            dataWorkerBridge.pending.forEach((pending) => {
+                clearTimeout(pending.timer);
+                pending.reject(new Error('Data worker is unavailable'));
+            });
+            dataWorkerBridge.pending.clear();
+            try {
+                worker.terminate();
+            } catch {
+                // ignore
+            }
+            dataWorkerBridge.worker = null;
+        };
+        dataWorkerBridge.worker = worker;
+        return worker;
+    } catch (err) {
+        dataWorkerBridge.disabled = true;
+        console.warn('Web Worker is unavailable in this browser context:', err);
+        return null;
+    }
+}
+
+async function callDataWorker(action, payload = {}, timeoutMs = 30000) {
+    const worker = ensureDataWorker();
+    if (!worker) {
+        throw new Error('Web Worker unavailable');
+    }
+
+    const id = `${Date.now()}_${++dataWorkerBridge.requestSeq}`;
+    return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+            dataWorkerBridge.pending.delete(id);
+            reject(new Error(`Worker request timed out (${action})`));
+        }, timeoutMs);
+
+        dataWorkerBridge.pending.set(id, { resolve, reject, timer });
+        worker.postMessage({ id, action, payload });
+    });
+}
+
+async function loadPeakHoursIndex() {
+    try {
+        const res = await fetchWithAuth('/api/peak-hours');
+        const payload = await res.json();
+        if (!res.ok) {
+            throw new Error(payload?.error || `Peak-hours API error (${res.status})`);
+        }
+        const rows = Array.isArray(payload?.rows) ? payload.rows : [];
+        const map = {};
+        rows.forEach((row) => {
+            const cellName = String(row?.cell_name || '').trim();
+            if (!cellName) return;
+            map[cellName] = {
+                peak_hour: row?.peak_hour || null,
+                peak_avg_prb: Number.isFinite(Number(row?.peak_avg_prb)) ? Number(row.peak_avg_prb) : null,
+                samples: Number.isFinite(Number(row?.samples)) ? Number(row.samples) : 0,
+            };
+        });
+        state.peakHoursByCell = map;
+        return map;
+    } catch (err) {
+        console.warn('Peak-hours index unavailable:', err?.message || err);
+        state.peakHoursByCell = {};
+        return {};
+    }
+}
+
+function applyPeakAndDriftMetadataToFeatures() {
+    state.pointFeatures.forEach((feature) => {
+        const cellName = feature?.properties?.cell_name;
+        if (!cellName) return;
+
+        const peak = state.peakHoursByCell[cellName] || null;
+        const drift = state.driftByCell[cellName] || null;
+
+        feature.properties.peak_hour = peak?.peak_hour || null;
+        feature.properties.peak_avg_prb = Number.isFinite(Number(peak?.peak_avg_prb)) ? Number(peak.peak_avg_prb) : null;
+        feature.properties.drift_abs_delta = Number.isFinite(Number(drift?.last_abs_delta)) ? Number(drift.last_abs_delta) : null;
+        feature.properties.drift_pct_delta = Number.isFinite(Number(drift?.last_pct_delta)) ? Number(drift.last_pct_delta) : null;
+        feature.properties.has_drift_alert = Boolean(drift?.is_alert);
+    });
+}
+
+function buildDriftAlertCellMap(alerts) {
+    const byCell = {};
+    (alerts || []).forEach((alert) => {
+        const cellName = String(alert?.cell_name || '').trim();
+        if (!cellName) return;
+        byCell[cellName] = alert;
+    });
+    return byCell;
+}
+
+async function loadDriftAlerts() {
+    const abs = Number(state.driftThresholds.absPrbDelta || 15);
+    const pct = Number(state.driftThresholds.pctPrbDelta || 30);
+    const query = new URLSearchParams({
+        abs_threshold: String(abs),
+        pct_threshold: String(pct),
+        limit: '150',
+    });
+
+    try {
+        const res = await fetchWithAuth(`/api/drift?${query.toString()}`);
+        const payload = await res.json();
+        if (!res.ok) {
+            throw new Error(payload?.error || `Drift API error (${res.status})`);
+        }
+        const alerts = Array.isArray(payload?.alerts) ? payload.alerts : [];
+        state.driftAlerts = alerts;
+        state.driftByCell = buildDriftAlertCellMap(alerts);
+        applyPeakAndDriftMetadataToFeatures();
+        updateDriftAlertsUI();
+        return alerts;
+    } catch (err) {
+        console.warn('Drift alerts unavailable:', err?.message || err);
+        state.driftAlerts = [];
+        state.driftByCell = {};
+        applyPeakAndDriftMetadataToFeatures();
+        updateDriftAlertsUI();
+        return [];
+    }
+}
+
 async function enqueueJob(jobType, payload) {
     const body = { ...(payload || {}), job_type: jobType };
     const res = await fetchWithAuth('/api/jobs', {
@@ -397,7 +600,7 @@ function warnIfObservationSchemaMismatch(observations, sourceLabel = 'observatio
     showNotification('Data schema mismatch detected. See console for missing KPI keys.', 'error');
 }
 
-function buildSiteHierarchy() {
+function buildSiteHierarchyLocal() {
     const hierarchy = {};
     for (const [cellName, info] of Object.entries(state.baseline)) {
         const { siteName, antenna, cellNum } = parseCellName(cellName);
@@ -435,6 +638,20 @@ function buildSiteHierarchy() {
     });
 
     state.siteHierarchy = hierarchy;
+}
+
+async function buildSiteHierarchy() {
+    try {
+        const hierarchy = await callDataWorker('buildSiteHierarchy', { baseline: state.baseline }, 60000);
+        if (hierarchy && typeof hierarchy === 'object') {
+            state.siteHierarchy = hierarchy;
+            return;
+        }
+    } catch (err) {
+        console.warn('Falling back to main-thread site hierarchy build:', err?.message || err);
+    }
+
+    buildSiteHierarchyLocal();
 }
 
 function getLivePointProperties(mapFeature) {
@@ -546,6 +763,8 @@ function buildFeaturesForTime() {
         const center = [baseInfo.longitude, baseInfo.latitude];
         const azimuth = baseInfo.azimuth || 0;
         const band = baseInfo.frequency_band;
+        const peak = state.peakHoursByCell[cellName] || null;
+        const drift = state.driftByCell[cellName] || null;
         const { siteName, antenna, cellNum } = parseCellName(cellName);
         const radius = calculateCellRadius(band, null);
         const cacheKey = `${cellName}_${radius}_${CONFIG.SECTOR_ARC_STEPS_DEFAULT}`;
@@ -593,6 +812,11 @@ function buildFeaturesForTime() {
                 traffic: null,
                 ta: null,
                 signal_power: null,
+                peak_hour: peak?.peak_hour || null,
+                peak_avg_prb: Number.isFinite(Number(peak?.peak_avg_prb)) ? Number(peak.peak_avg_prb) : null,
+                drift_abs_delta: Number.isFinite(Number(drift?.last_abs_delta)) ? Number(drift.last_abs_delta) : null,
+                drift_pct_delta: Number.isFinite(Number(drift?.last_pct_delta)) ? Number(drift.last_pct_delta) : null,
+                has_drift_alert: Boolean(drift?.is_alert),
                 band,
                 azimuth,
                 localcell_id: baseInfo.localcell_id,
@@ -688,7 +912,59 @@ function syncSectorGeometryForObservations(observations = {}) {
     return geometryChanged;
 }
 
-function updateFeaturesForTime(observations = {}, options = {}) {
+function applyWorkerFeatureUpdates(featureUpdates = [], options = {}) {
+    const featuresCount = Math.min(state.pointFeatures.length, state.sectorFeatures.length, featureUpdates.length);
+    for (let i = 0; i < featuresCount; i++) {
+        const pointFeature = state.pointFeatures[i];
+        const sectorFeature = state.sectorFeatures[i];
+        const update = featureUpdates[i];
+        if (!pointFeature || !sectorFeature || !update) continue;
+
+        pointFeature.properties.status = update.status;
+        pointFeature.properties.color = update.color;
+        pointFeature.properties.opacity = update.opacity;
+        pointFeature.properties.load = update.load;
+        pointFeature.properties.congested = update.congested;
+        pointFeature.properties.issue_type = update.issue_type;
+        pointFeature.properties.root_cause = update.root_cause;
+        pointFeature.properties.severity = update.severity;
+        pointFeature.properties.health_score = update.health_score;
+        pointFeature.properties.throughput = update.throughput;
+        pointFeature.properties.cqi = update.cqi;
+        pointFeature.properties.has_low_cqi = update.has_low_cqi;
+        pointFeature.properties.traffic = update.traffic;
+        pointFeature.properties.ta = update.ta;
+        pointFeature.properties.signal_power = update.signal_power;
+        pointFeature.properties.is_forecast = update.is_forecast;
+        if (update.confidence !== null && update.confidence !== undefined) {
+            pointFeature.properties.confidence = update.confidence;
+        } else {
+            delete pointFeature.properties.confidence;
+        }
+
+        sectorFeature.properties.status = update.status;
+        sectorFeature.properties.color = update.color;
+        sectorFeature.properties.opacity = update.sector_opacity;
+        sectorFeature.properties.load = update.load;
+        sectorFeature.properties.cqi = update.cqi;
+        sectorFeature.properties.has_low_cqi = update.has_low_cqi;
+        sectorFeature.properties.congested = update.congested;
+        sectorFeature.properties.severity = update.severity;
+        sectorFeature.properties.issue_type = update.issue_type;
+        sectorFeature.properties.is_forecast = update.is_forecast;
+        if (update.confidence !== null && update.confidence !== undefined) {
+            sectorFeature.properties.confidence = update.confidence;
+        } else {
+            delete sectorFeature.properties.confidence;
+        }
+    }
+
+    applyPeakAndDriftMetadataToFeatures();
+    syncSectorGeometryForObservations(state.currentObservations);
+    state.needsSectorGeometrySync = true;
+}
+
+function updateFeaturesForTimeLocal(observations = {}, options = {}) {
     const featuresCount = Math.min(state.pointFeatures.length, state.sectorFeatures.length);
     for (let i = 0; i < featuresCount; i++) {
         const pointFeature = state.pointFeatures[i];
@@ -699,8 +975,36 @@ function updateFeaturesForTime(observations = {}, options = {}) {
         updateFeatureProperties(pointFeature.properties, sectorFeature.properties, obs, options);
     }
 
+    applyPeakAndDriftMetadataToFeatures();
     syncSectorGeometryForObservations(observations);
     state.needsSectorGeometrySync = true;
+}
+
+async function updateFeaturesForTime(observations = {}, options = {}) {
+    const cellNames = state.pointFeatures.map((feature) => feature?.properties?.cell_name || '');
+    try {
+        const updates = await callDataWorker(
+            'buildFeatureUpdates',
+            {
+                cellNames,
+                observations,
+                cqiThreshold: CONFIG.CQI_THRESHOLD,
+                colors: CONFIG.COLORS,
+                isForecast: options?.isForecast || false,
+                confidence: options?.confidence ?? null,
+            },
+            45000
+        );
+
+        if (Array.isArray(updates) && updates.length === state.pointFeatures.length) {
+            applyWorkerFeatureUpdates(updates, options);
+            return;
+        }
+    } catch (err) {
+        console.warn('Feature updates moved to local thread:', err?.message || err);
+    }
+
+    updateFeaturesForTimeLocal(observations, options);
 }
 
 function setSectorGeometryResolution(steps) {
@@ -1587,6 +1891,9 @@ window.selectCell = (cellName, fly = true) => {
             ['Load', `${formatNumber(p.load)}%`],
             ['CQI', formatNumber(p.cqi)],
             ['Throughput', formatThroughput(p.throughput)],
+            ['Peak Hour', p.peak_hour || 'N/A'],
+            ['Peak Avg PRB', p.peak_avg_prb !== null && p.peak_avg_prb !== undefined ? `${formatNumber(p.peak_avg_prb, 1)}%` : 'N/A'],
+            ['Drift Delta', p.drift_abs_delta !== null && p.drift_abs_delta !== undefined ? `${formatNumber(p.drift_abs_delta, 1)} PRB` : 'N/A'],
         ];
         rows.forEach(([label, value]) => {
             const row = document.createElement('div');
@@ -1735,11 +2042,25 @@ function exportJSON(filteredOnly = false) {
 
 function exportCSV(filteredOnly = false) {
     const rows = filteredOnly ? state.filteredPointFeatures : state.pointFeatures;
-    const header = ['cell_name','site_name','band','load','cqi','throughput','issue_type','severity','congested'];
+    const header = ['cell_name','site_name','band','load','cqi','throughput','issue_type','severity','congested','peak_hour','peak_avg_prb','drift_abs_delta','drift_pct_delta'];
     const lines = [header.join(',')];
     rows.forEach(f => {
         const p = f.properties;
-        lines.push([p.cell_name, p.site_name, p.band, p.load ?? '', p.cqi ?? '', p.throughput ?? '', p.issue_type ?? '', p.severity ?? '', p.congested ? 'true' : 'false'].join(','));
+        lines.push([
+            p.cell_name,
+            p.site_name,
+            p.band,
+            p.load ?? '',
+            p.cqi ?? '',
+            p.throughput ?? '',
+            p.issue_type ?? '',
+            p.severity ?? '',
+            p.congested ? 'true' : 'false',
+            p.peak_hour ?? '',
+            p.peak_avg_prb ?? '',
+            p.drift_abs_delta ?? '',
+            p.drift_pct_delta ?? '',
+        ].join(','));
     });
     downloadBlob('netvision-data.csv', lines.join('\n'), 'text/csv');
 }
@@ -1886,7 +2207,39 @@ function computeTimelineData(metric) {
     return { labels, values };
 }
 
-function renderExploreCharts() {
+async function computeExploreDataWithWorker(duration, metric) {
+    try {
+        const result = await callDataWorker(
+            'computeExploreData',
+            { duration, metric, timeIndex: state.timeIndex },
+            30000
+        );
+        if (result && Array.isArray(result.labels) && Array.isArray(result.values)) {
+            return result;
+        }
+    } catch (err) {
+        console.warn('Explore aggregation moved to local thread:', err?.message || err);
+    }
+    return computeExploreData(duration, metric);
+}
+
+async function computeTimelineDataWithWorker(metric) {
+    try {
+        const result = await callDataWorker(
+            'computeTimelineData',
+            { metric, timeIndex: state.timeIndex },
+            30000
+        );
+        if (result && Array.isArray(result.labels) && Array.isArray(result.values)) {
+            return result;
+        }
+    } catch (err) {
+        console.warn('Timeline aggregation moved to local thread:', err?.message || err);
+    }
+    return computeTimelineData(metric);
+}
+
+async function renderExploreCharts() {
     const duration = document.getElementById('explore-duration')?.value || 'hour';
     const metric = document.getElementById('explore-metric')?.value || 'congested';
     
@@ -1915,8 +2268,8 @@ function renderExploreCharts() {
     if (exploreCharts.main) { exploreCharts.main.destroy(); exploreCharts.main = null; }
     if (exploreCharts.timeline) { exploreCharts.timeline.destroy(); exploreCharts.timeline = null; }
     
-    const { labels, values, insights } = computeExploreData(duration, metric);
-    const timeline = computeTimelineData(metric);
+    const { labels, values, insights } = await computeExploreDataWithWorker(duration, metric);
+    const timeline = await computeTimelineDataWithWorker(metric);
     
     // Main chart
     const isBar = duration === 'hour' || duration === 'all';
@@ -2084,6 +2437,1620 @@ function setupExploreModal() {
     document.getElementById('explore-metric')?.addEventListener('change', renderExploreCharts);
 }
 
+const IMPORT_TYPE_REFERENCE = 'reference';
+const IMPORT_TYPE_KPI = 'kpi';
+const IMPORT_TYPE_UNKNOWN = 'unknown';
+const IMPORT_PROFILE_STORAGE_KEY = 'netvision_csv_import_profiles_v1';
+const IMPORT_AUTO_MATCH_THRESHOLD = 0.56;
+const IMPORT_PREVIEW_ROW_LIMIT = 7;
+const IMPORT_MAX_SAVED_PROFILES = 20;
+
+const IMPORT_FIELD_CONFIG = {
+    [IMPORT_TYPE_REFERENCE]: [
+        { key: 'cell_name', label: 'Cell Identifier', required: true },
+        { key: 'longitude', label: 'Longitude', required: true },
+        { key: 'latitude', label: 'Latitude', required: true },
+        { key: 'enodeb_name', label: 'Site / eNodeB', required: false },
+        { key: 'azimuth', label: 'Azimuth', required: false },
+        { key: 'frequency_band', label: 'Frequency Band', required: false },
+        { key: 'localcell_id', label: 'Local Cell ID', required: false },
+        { key: 'cell_fdd_tdd_indication', label: 'Duplex Mode', required: false },
+        { key: 'load', label: 'PRB Load', required: false },
+        { key: 'throughput', label: 'Throughput', required: false },
+        { key: 'cqi', label: 'CQI', required: false },
+        { key: 'active_users', label: 'Active Users', required: false },
+        { key: 'ta', label: 'Timing Advance', required: false },
+        { key: 'signal_power', label: 'Signal Power', required: false },
+    ],
+    [IMPORT_TYPE_KPI]: [
+        { key: 'cell_name', label: 'Cell Identifier', required: true },
+        { key: 'localcell_id', label: 'Local Cell ID', required: false },
+        { key: 'enodeb_name', label: 'Site / eNodeB', required: false },
+        { key: 'cell_fdd_tdd_indication', label: 'Duplex Mode', required: false },
+        { key: 'traffic', label: 'Traffic', required: false },
+        { key: 'active_users', label: 'Active Users', required: false },
+        { key: 'load', label: 'PRB Load', required: false },
+        { key: 'throughput', label: 'Throughput', required: false },
+        { key: 'cqi', label: 'CQI', required: false },
+    ],
+};
+
+function normalizeImportType(type, allowUnknown = false) {
+    const value = String(type || '').trim().toLowerCase();
+    if (value === IMPORT_TYPE_KPI) return IMPORT_TYPE_KPI;
+    if (value === IMPORT_TYPE_REFERENCE) return IMPORT_TYPE_REFERENCE;
+    return allowUnknown ? IMPORT_TYPE_UNKNOWN : IMPORT_TYPE_REFERENCE;
+}
+
+function getImportTypeLabel(type) {
+    const normalizedType = normalizeImportType(type, true);
+    if (normalizedType === IMPORT_TYPE_KPI) return 'KPI Hourly Data';
+    if (normalizedType === IMPORT_TYPE_REFERENCE) return 'Reference Data';
+    return 'Unknown';
+}
+
+function getImportFieldsForType(type = importState.selectedType) {
+    const normalizedType = normalizeImportType(type);
+    return IMPORT_FIELD_CONFIG[normalizedType] || IMPORT_FIELD_CONFIG[IMPORT_TYPE_REFERENCE];
+}
+
+function normalizeImportSessionMode(mode) {
+    return String(mode || '').trim().toLowerCase() === 'current' ? 'current' : 'new';
+}
+
+function deepClone(value) {
+    if (typeof structuredClone === 'function') {
+        try {
+            return structuredClone(value);
+        } catch {
+            // fallback to JSON clone below
+        }
+    }
+    try {
+        return JSON.parse(JSON.stringify(value));
+    } catch {
+        return value;
+    }
+}
+
+function createLiveDatasetSnapshot() {
+    return {
+        baseline: deepClone(state.baseline),
+        timeIndex: deepClone(state.timeIndex),
+        currentTimeIndex: Number.isInteger(state.currentTimeIndex) ? state.currentTimeIndex : 0,
+        currentObservations: deepClone(state.currentObservations),
+        currentStats: deepClone(state.currentStats),
+        globalStats: deepClone(state.globalStats),
+        peakHoursByCell: deepClone(state.peakHoursByCell),
+        driftByCell: deepClone(state.driftByCell),
+        driftAlerts: deepClone(state.driftAlerts),
+        forecastIndex: deepClone(forecastState.forecastIndex),
+        forecastAvailable: Boolean(forecastState.available),
+        capturedAt: new Date().toISOString(),
+    };
+}
+
+function captureLiveDatasetSnapshot(force = false) {
+    if (!force && state.liveDatasetSnapshot) return;
+    if (!force && state.customDataset.active) return;
+    state.liveDatasetSnapshot = createLiveDatasetSnapshot();
+}
+
+function getBaselineForImportSession(importType, sessionMode = importState.sessionMode) {
+    if (normalizeImportType(importType) !== IMPORT_TYPE_KPI) {
+        return {};
+    }
+
+    const mode = normalizeImportSessionMode(sessionMode);
+    if (mode === 'current' && state.customDataset.active) {
+        return state.baseline || {};
+    }
+
+    // New import sessions must start empty and not inherit the live baseline.
+    return {};
+}
+
+function normalizeSliceTimestamp(value, fallbackDate = new Date()) {
+    const raw = String(value || '').trim();
+    if (!raw) {
+        return formatTimestampFromDate(fallbackDate);
+    }
+
+    const parsed = parseTimestamp(raw);
+    if (parsed instanceof Date && !Number.isNaN(parsed.getTime())) {
+        return formatTimestampFromDate(parsed);
+    }
+    return raw;
+}
+
+function getTimestampSortValue(timestamp) {
+    const parsed = parseTimestamp(String(timestamp || ''));
+    if (!(parsed instanceof Date)) {
+        return Number.POSITIVE_INFINITY;
+    }
+    const timeValue = parsed.getTime();
+    return Number.isFinite(timeValue) ? timeValue : Number.POSITIVE_INFINITY;
+}
+
+function normalizeImportSlices(datasetPayload = {}) {
+    const fallbackTimestamp = normalizeSliceTimestamp(datasetPayload?.timestamp || new Date().toISOString());
+    const rawSlices = Array.isArray(datasetPayload?.slices) && datasetPayload.slices.length
+        ? datasetPayload.slices
+        : [
+            {
+                timestamp: fallbackTimestamp,
+                observations: datasetPayload?.observations || {},
+                stats: datasetPayload?.stats || {},
+            },
+        ];
+
+    return rawSlices
+        .map((slice, index) => {
+            const fallbackDate = new Date(Date.now() + index * 60000);
+            return {
+                timestamp: normalizeSliceTimestamp(slice?.timestamp, fallbackDate),
+                observations: slice?.observations && typeof slice.observations === 'object' ? slice.observations : {},
+                stats: slice?.stats && typeof slice.stats === 'object' ? slice.stats : {},
+            };
+        })
+        .sort((left, right) => {
+            const leftTime = getTimestampSortValue(left.timestamp);
+            const rightTime = getTimestampSortValue(right.timestamp);
+            if (leftTime !== rightTime) {
+                return leftTime - rightTime;
+            }
+            return String(left.timestamp).localeCompare(String(right.timestamp));
+        });
+}
+
+function mergeImportSlices(existingSlices = [], incomingSlices = []) {
+    const mergedByTimestamp = new Map();
+
+    existingSlices.forEach((slice, index) => {
+        const fallbackDate = new Date(Date.now() + index * 60000);
+        const timestamp = normalizeSliceTimestamp(slice?.timestamp, fallbackDate);
+        mergedByTimestamp.set(timestamp, {
+            timestamp,
+            observations: slice?.observations && typeof slice.observations === 'object' ? slice.observations : {},
+            stats: slice?.stats && typeof slice.stats === 'object' ? slice.stats : {},
+        });
+    });
+
+    incomingSlices.forEach((slice, index) => {
+        const fallbackDate = new Date(Date.now() + (existingSlices.length + index) * 60000);
+        const timestamp = normalizeSliceTimestamp(slice?.timestamp, fallbackDate);
+        mergedByTimestamp.set(timestamp, {
+            timestamp,
+            observations: slice?.observations && typeof slice.observations === 'object' ? slice.observations : {},
+            stats: slice?.stats && typeof slice.stats === 'object' ? slice.stats : {},
+        });
+    });
+
+    return Array.from(mergedByTimestamp.values()).sort((left, right) => {
+        const leftTime = getTimestampSortValue(left.timestamp);
+        const rightTime = getTimestampSortValue(right.timestamp);
+        if (leftTime !== rightTime) {
+            return leftTime - rightTime;
+        }
+        return String(left.timestamp).localeCompare(String(right.timestamp));
+    });
+}
+
+function getSliceMetricSampleCount(observations = {}) {
+    const rows = Object.values(observations || {});
+    let count = 0;
+
+    rows.forEach((obs) => {
+        if (!obs || typeof obs !== 'object') return;
+        const hasMetric = [
+            obs.load,
+            obs.throughput,
+            obs.cqi,
+            obs.traffic,
+            obs.active_users,
+            obs.ta,
+            obs.signal_power,
+        ].some((value) => Number.isFinite(Number(value)));
+
+        if (hasMetric) {
+            count += 1;
+        }
+    });
+
+    return count;
+}
+
+function normalizeImportToken(value) {
+    return String(value || '')
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '');
+}
+
+function hasReferenceDataForKpiImport() {
+    let baselineForCheck = {};
+    const sessionMode = normalizeImportSessionMode(importState.sessionMode);
+
+    // Only the current import session baseline should be used for KPI imports.
+    if (sessionMode === 'current' && state.customDataset.active) {
+        baselineForCheck = state.baseline || {};
+    }
+
+    const baselineCells = Object.values(baselineForCheck || {});
+    if (!baselineCells.length) {
+        return false;
+    }
+    return baselineCells.some((cell) => {
+        const lon = Number(cell?.longitude);
+        const lat = Number(cell?.latitude);
+        return Number.isFinite(lon) && Number.isFinite(lat);
+    });
+}
+
+function getImportHeaderFingerprint(headers = []) {
+    return headers
+        .map((header) => normalizeImportToken(header))
+        .filter(Boolean)
+        .sort()
+        .join('|');
+}
+
+function createEmptyImportAssignments(headers = importState.headers) {
+    const assignments = {};
+    headers.forEach((header) => {
+        assignments[header] = '';
+    });
+    return assignments;
+}
+
+function syncImportMappingFromColumns() {
+    const mapping = {};
+    const mappingSource = {};
+
+    importState.headers.forEach((header) => {
+        const fieldKey = String(importState.columnAssignments?.[header] || '').trim();
+        if (!fieldKey) return;
+        mapping[fieldKey] = header;
+
+        const source = String(importState.columnSource?.[header] || '').trim();
+        if (source) {
+            mappingSource[fieldKey] = source;
+        }
+    });
+
+    importState.mapping = mapping;
+    importState.mappingSource = mappingSource;
+}
+
+function setImportColumnAssignment(header, fieldKey, source = 'manual') {
+    if (!importState.headers.includes(header)) {
+        return;
+    }
+
+    const nextField = String(fieldKey || '').trim();
+    if (!importState.columnAssignments || typeof importState.columnAssignments !== 'object') {
+        importState.columnAssignments = createEmptyImportAssignments();
+    }
+    if (!importState.columnSource || typeof importState.columnSource !== 'object') {
+        importState.columnSource = createEmptyImportAssignments();
+    }
+
+    if (nextField) {
+        Object.keys(importState.columnAssignments).forEach((headerKey) => {
+            if (headerKey !== header && importState.columnAssignments[headerKey] === nextField) {
+                importState.columnAssignments[headerKey] = '';
+                importState.columnSource[headerKey] = '';
+            }
+        });
+    }
+
+    importState.columnAssignments[header] = nextField;
+    importState.columnSource[header] = nextField ? source : '';
+    syncImportMappingFromColumns();
+}
+
+function buildAutoImportAssignments(type = importState.selectedType) {
+    const fields = getImportFieldsForType(type);
+    const headerSet = new Set(importState.headers);
+    const validFieldKeys = new Set(fields.map((field) => field.key));
+    const assignments = createEmptyImportAssignments();
+    const sources = createEmptyImportAssignments();
+    const usedHeaders = new Set();
+    const usedFields = new Set();
+
+    Object.entries(importState.inferredMapping || {}).forEach(([fieldKey, header]) => {
+        if (!validFieldKeys.has(fieldKey)) return;
+        if (!headerSet.has(header)) return;
+        if (usedHeaders.has(header) || usedFields.has(fieldKey)) return;
+        assignments[header] = fieldKey;
+        sources[header] = 'auto';
+        usedHeaders.add(header);
+        usedFields.add(fieldKey);
+    });
+
+    const candidates = [];
+    fields.forEach((field) => {
+        importState.headers.forEach((header) => {
+            const score = Number(importState.matchScores?.[field.key]?.[header] ?? 0);
+            if (!Number.isFinite(score) || score <= 0) return;
+            candidates.push({
+                fieldKey: field.key,
+                header,
+                score,
+                required: field.required,
+            });
+        });
+    });
+
+    candidates
+        .sort((left, right) => {
+            if (right.score !== left.score) return right.score - left.score;
+            if (left.required !== right.required) return Number(right.required) - Number(left.required);
+            if (left.fieldKey !== right.fieldKey) return left.fieldKey.localeCompare(right.fieldKey);
+            return left.header.localeCompare(right.header);
+        })
+        .forEach((candidate) => {
+            if (candidate.score < IMPORT_AUTO_MATCH_THRESHOLD) return;
+            if (usedHeaders.has(candidate.header) || usedFields.has(candidate.fieldKey)) return;
+            assignments[candidate.header] = candidate.fieldKey;
+            sources[candidate.header] = 'auto';
+            usedHeaders.add(candidate.header);
+            usedFields.add(candidate.fieldKey);
+        });
+
+    return { assignments, sources };
+}
+
+function applyAutoImportAssignments(type = importState.selectedType) {
+    if (!importState.headers.length) {
+        importState.columnAssignments = createEmptyImportAssignments();
+        importState.columnSource = createEmptyImportAssignments();
+        importState.mapping = {};
+        importState.mappingSource = {};
+        return;
+    }
+
+    const auto = buildAutoImportAssignments(type);
+    importState.columnAssignments = auto.assignments;
+    importState.columnSource = auto.sources;
+    syncImportMappingFromColumns();
+}
+
+function getImportMappingValidation(mapping = importState.mapping, type = importState.selectedType) {
+    const fields = getImportFieldsForType(type);
+    const missingRequired = fields.filter((field) => field.required && !mapping[field.key]);
+
+    return {
+        fields,
+        missingRequired,
+        isValid: missingRequired.length === 0,
+    };
+}
+
+function validateImportMapping(mapping) {
+    const validation = getImportMappingValidation(mapping);
+    if (validation.isValid) return null;
+    return `Missing required field mapping: ${validation.missingRequired.map((field) => field.label).join(', ')}`;
+}
+
+function updateImportTypeUI() {
+    const typeSelect = document.getElementById('import-type-select');
+    if (typeSelect instanceof HTMLSelectElement) {
+        typeSelect.value = importState.selectedType;
+    }
+
+    const detectedPill = document.getElementById('import-detected-pill');
+    if (detectedPill) {
+        detectedPill.classList.remove('is-reference', 'is-kpi', 'is-unknown');
+        const detectedType = normalizeImportType(importState.detectedType, true);
+
+        if (!importState.selectedFileName) {
+            detectedPill.textContent = 'Detected Type: Awaiting file';
+            detectedPill.classList.add('is-unknown');
+        } else if (detectedType === IMPORT_TYPE_UNKNOWN) {
+            detectedPill.textContent = `Detected Type: Unknown • Using ${getImportTypeLabel(importState.selectedType)}`;
+            detectedPill.classList.add('is-unknown');
+        } else if (detectedType !== importState.selectedType) {
+            detectedPill.textContent = `Detected Type: ${getImportTypeLabel(detectedType)} • Using ${getImportTypeLabel(importState.selectedType)}`;
+            detectedPill.classList.add(importState.selectedType === IMPORT_TYPE_KPI ? 'is-kpi' : 'is-reference');
+        } else {
+            detectedPill.textContent = `Detected Type: ${getImportTypeLabel(detectedType)}`;
+            detectedPill.classList.add(detectedType === IMPORT_TYPE_KPI ? 'is-kpi' : 'is-reference');
+        }
+    }
+
+    const reason = document.getElementById('import-detection-reason');
+    if (reason) {
+        if (!importState.selectedFileName) {
+            reason.textContent = 'Upload a CSV to auto-detect format.';
+        } else if (Array.isArray(importState.detectionReasons) && importState.detectionReasons.length) {
+            reason.textContent = importState.detectionReasons.join(' • ');
+        } else {
+            reason.textContent = 'Type detection complete. Review column mapping before importing.';
+        }
+    }
+}
+
+function updateImportFileInfo() {
+    const fileInfo = document.getElementById('import-file-info');
+    if (fileInfo) {
+        if (!importState.selectedFileName) {
+            fileInfo.textContent = 'No file loaded';
+        } else if (importState.totalRows > 0) {
+            fileInfo.textContent = `${importState.selectedFileName} • ${importState.totalRows} rows detected`;
+        } else {
+            fileInfo.textContent = `${importState.selectedFileName} • scanning rows...`;
+        }
+    }
+
+    const resetButton = document.getElementById('btn-import-reset');
+    if (resetButton) {
+        resetButton.classList.toggle('import-hidden', !importState.selectedFileName);
+    }
+}
+
+function updateImportSessionUI() {
+    const sessionModeSelect = document.getElementById('import-session-mode');
+    const sessionState = document.getElementById('import-session-state');
+    const exitSessionButton = document.getElementById('btn-import-exit-session');
+    const customSessionActive = Boolean(state.customDataset?.active);
+
+    importState.sessionMode = normalizeImportSessionMode(importState.sessionMode);
+    if (!customSessionActive && importState.sessionMode === 'current') {
+        importState.sessionMode = 'new';
+    }
+
+    if (sessionModeSelect instanceof HTMLSelectElement) {
+        const currentOption = Array.from(sessionModeSelect.options).find((option) => option.value === 'current');
+        if (currentOption) {
+            currentOption.disabled = !customSessionActive;
+        }
+
+        sessionModeSelect.value = importState.sessionMode;
+    }
+
+    if (sessionState) {
+        sessionState.classList.toggle('is-custom', customSessionActive);
+        if (!customSessionActive) {
+            sessionState.textContent = 'Session: Live Dataset';
+        } else {
+            const importedFiles = Array.isArray(state.customDataset?.importedFiles)
+                ? state.customDataset.importedFiles.filter((name) => String(name || '').trim())
+                : [];
+            const importedLabel = importedFiles.length === 1 ? '1 file' : `${importedFiles.length} files`;
+            sessionState.textContent = `Session: Import Dataset (${importedLabel})`;
+        }
+    }
+
+    if (exitSessionButton instanceof HTMLButtonElement) {
+        exitSessionButton.classList.toggle('import-hidden', !customSessionActive);
+        exitSessionButton.disabled = !customSessionActive || importState.parseInProgress;
+    }
+}
+
+function updateImportCrossFileWarning() {
+    const warningBanner = document.getElementById('import-crossfile-warning');
+    if (!warningBanner) return;
+
+    const shouldWarn = importState.selectedType === IMPORT_TYPE_KPI && !hasReferenceDataForKpiImport();
+    if (!shouldWarn) {
+        warningBanner.classList.add('import-hidden');
+        warningBanner.textContent = '';
+        return;
+    }
+
+    warningBanner.textContent =
+        'Reference Data is not loaded in this session. KPI Hourly Data can still be imported, but the map will stay empty until you import Reference Data first.';
+    warningBanner.classList.remove('import-hidden');
+}
+
+function setImportSummaryVisible(show) {
+    importState.summaryVisible = Boolean(show);
+
+    const summarySection = document.getElementById('import-summary-section');
+    const mappingSection = document.getElementById('import-mapping-section');
+    const previewSection = document.getElementById('import-preview-section');
+    const primaryActions = document.getElementById('import-primary-actions');
+
+    summarySection?.classList.toggle('import-hidden', !show);
+    mappingSection?.classList.toggle('import-hidden', show);
+    previewSection?.classList.toggle('import-hidden', show);
+    primaryActions?.classList.toggle('import-hidden', show);
+}
+
+function setImportBusyState(isBusy) {
+    [
+        'btn-apply-import',
+        'btn-import-back',
+        'btn-import-confirm',
+        'btn-import-save-profile',
+        'btn-import-profile-confirm',
+        'btn-import-profile-dismiss',
+        'btn-import-reset',
+        'btn-import-exit-session',
+        'import-type-select',
+        'import-session-mode',
+    ].forEach((id) => {
+        const element = document.getElementById(id);
+        if (!(element instanceof HTMLButtonElement) && !(element instanceof HTMLSelectElement)) return;
+        element.disabled = isBusy;
+    });
+}
+
+function setImportParsingState(active, copy = 'Parsing CSV, please wait...', rowCount = null) {
+    const loading = document.getElementById('import-loading');
+    const loadingText = document.getElementById('import-loading-text');
+    const loadingRows = document.getElementById('import-loading-rows');
+
+    importState.parseInProgress = Boolean(active);
+    loading?.classList.toggle('import-hidden', !active);
+    if (loadingText) {
+        loadingText.textContent = copy;
+    }
+    if (loadingRows) {
+        if (Number.isFinite(Number(rowCount)) && Number(rowCount) >= 0) {
+            loadingRows.textContent = `${Number(rowCount)} rows detected`;
+        } else {
+            loadingRows.textContent = 'Counting rows...';
+        }
+    }
+
+    updateImportSessionUI();
+}
+
+function readImportMappingFromUI() {
+    syncImportMappingFromColumns();
+    return { ...(importState.mapping || {}) };
+}
+
+function renderImportMappingUI() {
+    const mappingGrid = document.getElementById('import-mapping-grid');
+    if (!mappingGrid) return;
+
+    mappingGrid.innerHTML = '';
+
+    if (!importState.headers.length) {
+        mappingGrid.innerHTML = '<div class="alert-placeholder">Upload a CSV to start column mapping</div>';
+        return;
+    }
+
+    const validation = getImportMappingValidation(importState.mapping);
+    const statusRow = document.createElement('div');
+    statusRow.className = `import-mapping-status-row ${validation.isValid ? 'is-valid' : 'is-warning'}`;
+    statusRow.textContent = validation.isValid
+        ? 'All required fields are mapped. Ready to review the import summary.'
+        : `Missing required fields: ${validation.missingRequired.map((field) => field.label).join(', ')}`;
+    mappingGrid.appendChild(statusRow);
+
+    const chipList = document.createElement('div');
+    chipList.className = 'import-field-chip-list';
+
+    validation.fields.forEach((field) => {
+        const mappedHeader = importState.mapping?.[field.key] || '';
+        const source = importState.mappingSource?.[field.key] || '';
+
+        const chip = document.createElement('div');
+        chip.className = 'import-field-chip';
+        if (field.required && !mappedHeader) {
+            chip.classList.add('is-required-missing');
+        } else if (mappedHeader) {
+            chip.classList.add('is-mapped');
+        }
+
+        const label = document.createElement('span');
+        label.className = 'import-field-chip-label';
+        label.textContent = field.required ? `${field.label} *` : field.label;
+
+        const value = document.createElement('span');
+        value.className = 'import-field-chip-value';
+        value.textContent = mappedHeader || 'Unassigned';
+
+        chip.appendChild(label);
+        chip.appendChild(value);
+
+        if (mappedHeader && source) {
+            const badge = document.createElement('span');
+            badge.className = 'import-field-chip-source';
+            badge.textContent = source === 'profile' ? 'profile' : source === 'auto' ? 'auto' : 'manual';
+            chip.appendChild(badge);
+        }
+
+        chipList.appendChild(chip);
+    });
+
+    mappingGrid.appendChild(chipList);
+}
+
+function renderImportPreviewRows() {
+    const container = document.getElementById('import-preview-table');
+    if (!container) return;
+
+    if (!importState.previewRows.length || !importState.headers.length) {
+        container.innerHTML = '<div class="alert-placeholder">Upload a CSV to preview rows</div>';
+        return;
+    }
+
+    const headers = importState.headers;
+    const fields = getImportFieldsForType(importState.selectedType);
+    const validation = getImportMappingValidation(importState.mapping, importState.selectedType);
+    const hasMissingRequired = !validation.isValid;
+
+    const fieldLabelByKey = fields.reduce((acc, field) => {
+        acc[field.key] = field.label;
+        return acc;
+    }, {});
+
+    const table = document.createElement('table');
+    table.className = 'import-preview-grid';
+
+    const thead = document.createElement('thead');
+
+    const mappingRow = document.createElement('tr');
+    mappingRow.className = 'import-preview-mapping-row';
+
+    headers.forEach((header) => {
+        const th = document.createElement('th');
+        th.className = 'import-preview-map-cell';
+
+        const select = document.createElement('select');
+        select.className = 'import-column-map-select';
+        select.dataset.header = header;
+
+        const ignoreOption = document.createElement('option');
+        ignoreOption.value = '';
+        ignoreOption.textContent = 'Ignore';
+        select.appendChild(ignoreOption);
+
+        fields.forEach((field) => {
+            const option = document.createElement('option');
+            option.value = field.key;
+            option.textContent = field.required ? `${field.label} *` : field.label;
+            select.appendChild(option);
+        });
+
+        const selectedField = String(importState.columnAssignments?.[header] || '').trim();
+        select.value = selectedField;
+
+        if (hasMissingRequired && !selectedField) {
+            select.classList.add('is-missing');
+        } else if (!hasMissingRequired) {
+            select.classList.add('is-valid');
+        }
+
+        select.addEventListener('change', (event) => {
+            const selectEl = event.target;
+            if (!(selectEl instanceof HTMLSelectElement)) return;
+
+            setImportColumnAssignment(header, selectEl.value, 'manual');
+            setImportSummaryVisible(false);
+            renderImportMappingUI();
+            renderImportPreviewRows();
+        });
+
+        const mapHint = document.createElement('div');
+        mapHint.className = 'import-map-hint';
+        const source = importState.columnSource?.[header] || '';
+        if (selectedField) {
+            const sourceLabel = source === 'profile' ? 'profile' : source === 'auto' ? 'auto' : 'manual';
+            mapHint.textContent = `${fieldLabelByKey[selectedField] || selectedField} (${sourceLabel})`;
+        } else {
+            mapHint.textContent = 'Ignored';
+        }
+
+        th.appendChild(select);
+        th.appendChild(mapHint);
+        mappingRow.appendChild(th);
+    });
+
+    thead.appendChild(mappingRow);
+
+    const headRow = document.createElement('tr');
+    headRow.className = 'import-preview-header-row';
+    headers.forEach((header) => {
+        const th = document.createElement('th');
+        th.textContent = header;
+        headRow.appendChild(th);
+    });
+    thead.appendChild(headRow);
+
+    const tbody = document.createElement('tbody');
+    importState.previewRows.slice(0, IMPORT_PREVIEW_ROW_LIMIT).forEach((row) => {
+        const tr = document.createElement('tr');
+        headers.forEach((header) => {
+            const td = document.createElement('td');
+            td.textContent = row?.[header] || '';
+            tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+    });
+
+    table.appendChild(thead);
+    table.appendChild(tbody);
+
+    const sampleNote = document.createElement('div');
+    sampleNote.className = 'import-preview-note';
+    sampleNote.textContent = `Showing ${Math.min(importState.previewRows.length, IMPORT_PREVIEW_ROW_LIMIT)} sample rows from ${importState.totalRows || importState.previewRows.length} total rows.`;
+
+    container.innerHTML = '';
+    container.appendChild(table);
+    container.appendChild(sampleNote);
+}
+
+function readImportProfiles() {
+    try {
+        const raw = localStorage.getItem(IMPORT_PROFILE_STORAGE_KEY);
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+    } catch {
+        return [];
+    }
+}
+
+function writeImportProfiles(profiles) {
+    try {
+        localStorage.setItem(IMPORT_PROFILE_STORAGE_KEY, JSON.stringify(profiles));
+    } catch (err) {
+        console.warn('Could not save import profile:', err);
+    }
+}
+
+function findBestImportProfileSuggestion() {
+    if (!importState.headers.length) return null;
+
+    const profiles = readImportProfiles();
+    const selectedType = normalizeImportType(importState.selectedType);
+    const fields = getImportFieldsForType(selectedType);
+    const validFieldKeys = new Set(fields.map((field) => field.key));
+    const requiredFieldKeys = new Set(fields.filter((field) => field.required).map((field) => field.key));
+
+    const normalizedHeaderMap = new Map();
+    importState.headers.forEach((header) => {
+        normalizedHeaderMap.set(normalizeImportToken(header), header);
+    });
+
+    let best = null;
+
+    profiles
+        .filter((profile) => normalizeImportType(profile?.type) === selectedType)
+        .forEach((profile) => {
+            const profileMapping = profile?.mapping && typeof profile.mapping === 'object' ? profile.mapping : {};
+            const entries = Object.entries(profileMapping).filter(([fieldKey, header]) => {
+                return validFieldKeys.has(fieldKey) && typeof header === 'string' && header.trim().length > 0;
+            });
+
+            if (!entries.length) return;
+
+            const resolvedMapping = {};
+            let matched = 0;
+            let requiredMatched = 0;
+
+            entries.forEach(([fieldKey, header]) => {
+                const normalizedHeader = normalizeImportToken(header);
+                const matchedHeader = normalizedHeaderMap.get(normalizedHeader);
+                if (!matchedHeader) return;
+
+                resolvedMapping[fieldKey] = matchedHeader;
+                matched += 1;
+                if (requiredFieldKeys.has(fieldKey)) {
+                    requiredMatched += 1;
+                }
+            });
+
+            if (!matched) return;
+
+            const requiredTotal = Math.max(1, requiredFieldKeys.size);
+            const mappingCoverage = matched / entries.length;
+            const requiredCoverage = requiredMatched / requiredTotal;
+            const score = mappingCoverage * 0.72 + requiredCoverage * 0.28;
+
+            if (!best || score > best.score) {
+                best = {
+                    profile,
+                    score,
+                    matched,
+                    total: entries.length,
+                    requiredMatched,
+                    requiredTotal,
+                    resolvedMapping,
+                };
+            }
+        });
+
+    if (!best) return null;
+    if (best.score < 0.6 || best.matched < 2) return null;
+    return best;
+}
+
+function renderImportProfileBanner() {
+    const banner = document.getElementById('import-profile-banner');
+    const copy = document.getElementById('import-profile-copy');
+    if (!banner || !copy) return;
+
+    const suggestion = importState.profileSuggestion;
+    if (!suggestion || importState.profileBannerDismissed || !importState.headers.length) {
+        banner.classList.add('import-hidden');
+        copy.textContent = '';
+        return;
+    }
+
+    const profileName = String(suggestion.profile?.name || 'Saved profile').trim() || 'Saved profile';
+    const confidencePct = Math.round(suggestion.score * 100);
+    copy.innerHTML = sanitizeRichHtml(
+        `<strong>${escapeHtml(profileName)}</strong> matches this file (${escapeHtml(confidencePct)}% confidence, ${escapeHtml(suggestion.matched)}/${escapeHtml(suggestion.total)} mapped columns).`
+    );
+    banner.classList.remove('import-hidden');
+}
+
+function refreshImportProfileSuggestion() {
+    if (!importState.headers.length) {
+        importState.profileSuggestion = null;
+        renderImportProfileBanner();
+        return;
+    }
+
+    importState.profileSuggestion = findBestImportProfileSuggestion();
+    renderImportProfileBanner();
+}
+
+function applySuggestedImportProfile() {
+    const suggestion = importState.profileSuggestion;
+    if (!suggestion) return;
+
+    const fields = getImportFieldsForType(importState.selectedType);
+    const validFieldKeys = new Set(fields.map((field) => field.key));
+
+    const assignments = createEmptyImportAssignments();
+    const sources = createEmptyImportAssignments();
+    const usedFields = new Set();
+
+    Object.entries(suggestion.resolvedMapping || {}).forEach(([fieldKey, header]) => {
+        if (!validFieldKeys.has(fieldKey)) return;
+        if (!importState.headers.includes(header)) return;
+        if (usedFields.has(fieldKey)) return;
+        assignments[header] = fieldKey;
+        sources[header] = 'profile';
+        usedFields.add(fieldKey);
+    });
+
+    importState.columnAssignments = assignments;
+    importState.columnSource = sources;
+    syncImportMappingFromColumns();
+
+    importState.profileBannerDismissed = true;
+    renderImportProfileBanner();
+    renderImportMappingUI();
+    renderImportPreviewRows();
+    setImportSummaryVisible(false);
+
+    const profileId = String(suggestion.profile?.id || '').trim();
+    if (profileId) {
+        const profiles = readImportProfiles();
+        const nextProfiles = profiles.map((profile) => {
+            if (String(profile?.id || '').trim() !== profileId) return profile;
+            return {
+                ...profile,
+                lastUsedAt: new Date().toISOString(),
+            };
+        });
+        writeImportProfiles(nextProfiles);
+    }
+
+    showNotification('Applied saved profile mapping', 'success');
+}
+
+function dismissImportProfileSuggestion() {
+    importState.profileBannerDismissed = true;
+    renderImportProfileBanner();
+}
+
+function saveCurrentImportProfile() {
+    if (!importState.headers.length || !importState.allRows.length) {
+        showNotification('Upload and map a CSV before saving a profile', 'error');
+        return;
+    }
+
+    const mapping = readImportMappingFromUI();
+    const validationMessage = validateImportMapping(mapping);
+    if (validationMessage) {
+        showNotification(`${validationMessage}.`, 'error');
+        return;
+    }
+
+    const mappedEntries = Object.entries(mapping).filter(([, header]) => String(header || '').trim());
+    if (!mappedEntries.length) {
+        showNotification('No mapped fields to save', 'error');
+        return;
+    }
+
+    const now = new Date().toISOString();
+    const selectedType = normalizeImportType(importState.selectedType);
+    const headerFingerprint = getImportHeaderFingerprint(importState.headers);
+    const profileName = `${getImportTypeLabel(selectedType)} Mapping`;
+
+    const nextProfilePayload = {
+        id: `${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+        name: profileName,
+        type: selectedType,
+        headerFingerprint,
+        mapping,
+        createdAt: now,
+        updatedAt: now,
+        lastUsedAt: now,
+    };
+
+    const profiles = readImportProfiles();
+    const existingIndex = profiles.findIndex((profile) => {
+        return (
+            normalizeImportType(profile?.type) === selectedType &&
+            String(profile?.headerFingerprint || '').trim() === headerFingerprint
+        );
+    });
+
+    if (existingIndex >= 0) {
+        const existing = profiles[existingIndex];
+        profiles[existingIndex] = {
+            ...existing,
+            name: existing?.name || profileName,
+            mapping,
+            updatedAt: now,
+            lastUsedAt: now,
+        };
+    } else {
+        profiles.unshift(nextProfilePayload);
+    }
+
+    const trimmedProfiles = profiles
+        .sort((left, right) => {
+            const leftDate = Date.parse(left?.updatedAt || '') || 0;
+            const rightDate = Date.parse(right?.updatedAt || '') || 0;
+            return rightDate - leftDate;
+        })
+        .slice(0, IMPORT_MAX_SAVED_PROFILES);
+
+    writeImportProfiles(trimmedProfiles);
+    importState.profileBannerDismissed = false;
+    refreshImportProfileSuggestion();
+    showNotification('Mapping profile saved successfully', 'success');
+}
+
+function renderImportSummary(mapping) {
+    const container = document.getElementById('import-summary-content');
+    if (!container) return;
+
+    const validation = getImportMappingValidation(mapping, importState.selectedType);
+    const mappedRows = validation.fields
+        .filter((field) => mapping[field.key])
+        .map((field) => {
+            const source = importState.mappingSource?.[field.key] || 'manual';
+            const sourceLabel = source === 'profile' ? 'profile' : source === 'auto' ? 'auto' : 'manual';
+            return `<tr>
+                <td>${escapeHtml(field.label)}</td>
+                <td>${escapeHtml(mapping[field.key])}</td>
+                <td>${escapeHtml(sourceLabel)}</td>
+            </tr>`;
+        })
+        .join('');
+
+    const warnings = [];
+    if (importState.selectedType === IMPORT_TYPE_KPI && !hasReferenceDataForKpiImport()) {
+        warnings.push('Reference Data has not been loaded. KPI-only imports will not place unmatched cells on the map.');
+    }
+
+    const warningHtml = warnings.length
+        ? `<div class="import-summary-warning">${warnings.map((warning) => `<div>${escapeHtml(warning)}</div>`).join('')}</div>`
+        : '';
+
+    const sessionCopy = importState.sessionMode === 'current' && state.customDataset.active
+        ? 'Current Import Session'
+        : 'New Import Session';
+
+    container.innerHTML = sanitizeRichHtml(`
+        <div class="import-summary-metrics">
+            <div><span>File</span><strong>${escapeHtml(importState.selectedFileName || '-')}</strong></div>
+            <div><span>Import Type</span><strong>${escapeHtml(getImportTypeLabel(importState.selectedType))}</strong></div>
+            <div><span>Target Session</span><strong>${escapeHtml(sessionCopy)}</strong></div>
+            <div><span>Rows</span><strong>${escapeHtml(importState.totalRows || 0)}</strong></div>
+            <div><span>Mapped Fields</span><strong>${escapeHtml(Object.keys(mapping).length)} / ${escapeHtml(validation.fields.length)}</strong></div>
+        </div>
+        ${warningHtml}
+        <div class="import-summary-table-wrap">
+            <table class="import-summary-table">
+                <thead>
+                    <tr>
+                        <th>NetVision Field</th>
+                        <th>CSV Column</th>
+                        <th>Source</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${mappedRows || '<tr><td colspan="3">No mapped fields.</td></tr>'}
+                </tbody>
+            </table>
+        </div>
+    `);
+}
+
+async function readCsvTextWithProgress(file, onProgress) {
+    if (!file) return { csvText: '', rowCount: 0 };
+
+    if (typeof file.stream !== 'function') {
+        const csvText = await file.text();
+        const lineCount = csvText.split(/\r\n|\n|\r/g).filter((line) => line.trim().length > 0).length;
+        const rowCount = Math.max(0, lineCount - 1);
+        onProgress?.({ rows: rowCount, done: true, bytesRead: file.size, totalBytes: file.size });
+        return { csvText, rowCount };
+    }
+
+    const reader = file.stream().getReader();
+    const decoder = new TextDecoder();
+
+    let csvText = '';
+    let carry = '';
+    let lineCount = 0;
+    let bytesRead = 0;
+
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        bytesRead += value.byteLength;
+        const chunk = decoder.decode(value, { stream: true });
+        csvText += chunk;
+
+        const merged = carry + chunk;
+        const lines = merged.split(/\r\n|\n|\r/g);
+        carry = lines.pop() || '';
+        lineCount += lines.filter((line) => line.trim().length > 0).length;
+
+        const bodyRows = Math.max(0, lineCount - 1);
+        onProgress?.({ rows: bodyRows, done: false, bytesRead, totalBytes: file.size });
+    }
+
+    const tail = decoder.decode();
+    if (tail) {
+        csvText += tail;
+        carry += tail;
+    }
+    if (carry.trim().length > 0) {
+        lineCount += 1;
+    }
+
+    const rowCount = Math.max(0, lineCount - 1);
+    onProgress?.({ rows: rowCount, done: true, bytesRead: file.size, totalBytes: file.size });
+    return { csvText, rowCount };
+}
+
+function clearImportSession(options = {}) {
+    const keepSelectedType = options.keepSelectedType !== false;
+    const clearInput = options.clearInput === true;
+
+    if (!keepSelectedType) {
+        importState.selectedType = IMPORT_TYPE_REFERENCE;
+    }
+
+    importState.headers = [];
+    importState.allRows = [];
+    importState.previewRows = [];
+    importState.inferredMapping = {};
+    importState.inferredMappingMeta = {};
+    importState.matchScores = {};
+    importState.mapping = {};
+    importState.mappingSource = {};
+    importState.columnAssignments = {};
+    importState.columnSource = {};
+    importState.selectedFileName = '';
+    importState.detectedType = IMPORT_TYPE_UNKNOWN;
+    importState.detectionReasons = [];
+    importState.totalRows = 0;
+    importState.profileSuggestion = null;
+    importState.profileBannerDismissed = false;
+
+    setImportParsingState(false);
+    setImportSummaryVisible(false);
+    updateImportFileInfo();
+    updateImportTypeUI();
+    updateImportCrossFileWarning();
+    updateImportSessionUI();
+    renderImportProfileBanner();
+    renderImportMappingUI();
+    renderImportPreviewRows();
+
+    if (clearInput) {
+        const fileInput = document.getElementById('import-csv-file');
+        if (fileInput instanceof HTMLInputElement) {
+            fileInput.value = '';
+        }
+    }
+}
+
+async function restoreLiveDatasetSession() {
+    if (!state.customDataset.active) {
+        return true;
+    }
+
+    const snapshot = state.liveDatasetSnapshot;
+    if (!snapshot) {
+        showNotification('Cannot exit import session because no live snapshot is available.', 'warning');
+        return false;
+    }
+
+    stopUnifiedPlayback();
+    if (activeSliceAbortController) {
+        activeSliceAbortController.abort();
+    }
+
+    state.customDataset = {
+        active: false,
+        sessionId: '',
+        createdAt: '',
+        sourceFile: '',
+        importedFiles: [],
+        slices: [],
+    };
+
+    state.baseline = deepClone(snapshot.baseline || {});
+    state.timeIndex = deepClone(snapshot.timeIndex || []);
+    state.currentTimeIndex = Number.isInteger(snapshot.currentTimeIndex) ? snapshot.currentTimeIndex : 0;
+    state.currentObservations = deepClone(snapshot.currentObservations || {});
+    state.currentStats = deepClone(snapshot.currentStats || null);
+    state.globalStats = deepClone(snapshot.globalStats || null);
+    state.peakHoursByCell = deepClone(snapshot.peakHoursByCell || {});
+    state.driftByCell = deepClone(snapshot.driftByCell || {});
+    state.driftAlerts = Array.isArray(snapshot.driftAlerts) ? deepClone(snapshot.driftAlerts) : [];
+    state.lastVisibleFilterSignature = null;
+    state.lastCongestedCount = null;
+
+    forecastState.forecastIndex = deepClone(snapshot.forecastIndex || []);
+    forecastState.available = Boolean(snapshot.forecastAvailable);
+
+    await buildSiteHierarchy();
+
+    const frequencyBands = Array.from(new Set(
+        Object.values(state.baseline || {})
+            .map((cell) => Number(cell?.frequency_band))
+            .filter((band) => Number.isFinite(band))
+    )).sort((a, b) => a - b);
+
+    populateFrequencyFilters(frequencyBands);
+
+    const { pointFeatures, sectorFeatures } = buildFeaturesForTime();
+    state.pointFeatures = pointFeatures;
+    state.sectorFeatures = sectorFeatures;
+    state.features = pointFeatures;
+    state.filteredPointFeatures = pointFeatures;
+    state.filteredSectorFeatures = sectorFeatures;
+    state.needsPointGeometrySync = true;
+    state.needsSectorGeometrySync = true;
+    featureStateCache.cells.clear();
+
+    if (state.selectedSite && !state.siteHierarchy[state.selectedSite]) {
+        state.selectedSite = null;
+    }
+    if (state.selectedCellName && !state.baseline[state.selectedCellName]) {
+        state.selectedCellName = null;
+        renderActionPanel(state.selectedCellName);
+    }
+
+    updateDriftAlertsUI();
+
+    await checkForecastAvailability();
+    updateUnifiedTimeline();
+
+    if (unifiedTimeline.totalCount > 0) {
+        const maxIndex = Math.max(0, unifiedTimeline.totalCount - 1);
+        const targetIndex = Math.min(state.currentTimeIndex, maxIndex);
+        await loadUnifiedTimeSlice(targetIndex);
+    } else {
+        applyFilters();
+        updateStatsUI(state.currentStats || {});
+        updateAlertsUI(state.filteredPointFeatures);
+        updateMapData();
+    }
+
+    populateIssueFilters(collectIssueTypesFromCurrent());
+    applyFilters();
+
+    importState.sessionMode = 'new';
+    state.liveDatasetSnapshot = null;
+    updateImportSessionUI();
+    return true;
+}
+
+async function applyImportedDataset(datasetPayload, options = {}) {
+    const sessionMode = normalizeImportSessionMode(options.sessionMode || importState.sessionMode);
+    const sourceFileName = String(options.sourceFileName || importState.selectedFileName || '').trim();
+
+    if (sessionMode === 'new') {
+        if (!state.customDataset.active) {
+            captureLiveDatasetSnapshot();
+        } else if (!state.liveDatasetSnapshot) {
+            showNotification('Live snapshot is unavailable, continuing from current import state.', 'warning');
+        }
+    } else if (!state.customDataset.active) {
+        captureLiveDatasetSnapshot();
+    }
+
+    stopUnifiedPlayback();
+    if (activeSliceAbortController) {
+        activeSliceAbortController.abort();
+    }
+
+    const incomingSlices = normalizeImportSlices(datasetPayload);
+    const canMergeWithCurrentSession = sessionMode === 'current' && state.customDataset.active;
+    const finalSlices = canMergeWithCurrentSession
+        ? mergeImportSlices(state.customDataset.slices, incomingSlices)
+        : incomingSlices;
+
+    const safeSlices = finalSlices.length
+        ? finalSlices
+        : [
+            {
+                timestamp: normalizeSliceTimestamp(new Date().toISOString()),
+                observations: {},
+                stats: {},
+            },
+        ];
+
+    const incomingBaseline = datasetPayload?.baseline && typeof datasetPayload.baseline === 'object'
+        ? datasetPayload.baseline
+        : {};
+    const baseline = canMergeWithCurrentSession
+        ? { ...(state.baseline || {}), ...incomingBaseline }
+        : incomingBaseline;
+
+    const sessionId = canMergeWithCurrentSession && state.customDataset.sessionId
+        ? state.customDataset.sessionId
+        : `import_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+    const sessionCreatedAt = canMergeWithCurrentSession && state.customDataset.createdAt
+        ? state.customDataset.createdAt
+        : new Date().toISOString();
+
+    const importedFiles = canMergeWithCurrentSession && Array.isArray(state.customDataset.importedFiles)
+        ? [...state.customDataset.importedFiles]
+        : [];
+    if (sourceFileName && !importedFiles.includes(sourceFileName)) {
+        importedFiles.push(sourceFileName);
+    }
+
+    const latestSlice = safeSlices[safeSlices.length - 1];
+
+    let preferredSliceIndex = Math.max(0, safeSlices.length - 1);
+    const latestMetricSamples = getSliceMetricSampleCount(latestSlice?.observations || {});
+    if (latestMetricSamples === 0 && safeSlices.length > 1) {
+        for (let index = safeSlices.length - 2; index >= 0; index -= 1) {
+            const metricSamples = getSliceMetricSampleCount(safeSlices[index]?.observations || {});
+            if (metricSamples > 0) {
+                preferredSliceIndex = index;
+                break;
+            }
+        }
+    }
+
+    const preferredSlice = safeSlices[preferredSliceIndex] || latestSlice;
+
+    state.baseline = baseline;
+    state.customDataset.active = true;
+    state.customDataset.sessionId = sessionId;
+    state.customDataset.createdAt = sessionCreatedAt;
+    state.customDataset.sourceFile = sourceFileName || state.customDataset.sourceFile || '';
+    state.customDataset.importedFiles = importedFiles;
+    state.customDataset.slices = safeSlices;
+
+    state.timeIndex = safeSlices.map((slice, index) => ({
+        timestamp: slice.timestamp,
+        filename: `__custom_import__${index}`,
+        stats: slice.stats || {},
+    }));
+    state.currentTimeIndex = preferredSliceIndex;
+    state.currentObservations = preferredSlice?.observations || {};
+    state.currentStats = preferredSlice?.stats || {};
+    state.lastVisibleFilterSignature = null;
+    state.lastCongestedCount = null;
+
+    if (state.selectedCellName && !baseline[state.selectedCellName]) {
+        state.selectedCellName = null;
+        renderActionPanel(state.selectedCellName);
+    }
+
+    forecastState.forecastIndex = [];
+    forecastState.available = false;
+
+    const frequencyBands = Array.from(new Set(
+        Object.values(baseline)
+            .map((cell) => Number(cell?.frequency_band))
+            .filter((band) => Number.isFinite(band))
+    )).sort((a, b) => a - b);
+
+    state.globalStats = {
+        total_timestamps: state.timeIndex.length,
+        total_cells: Object.keys(baseline).length,
+        frequency_bands: frequencyBands,
+    };
+
+    await buildSiteHierarchy();
+    if (state.selectedSite && !state.siteHierarchy[state.selectedSite]) {
+        state.selectedSite = null;
+    }
+
+    populateFrequencyFilters(frequencyBands);
+    const { pointFeatures, sectorFeatures } = buildFeaturesForTime();
+    state.pointFeatures = pointFeatures;
+    state.sectorFeatures = sectorFeatures;
+    state.features = pointFeatures;
+    state.filteredPointFeatures = pointFeatures;
+    state.filteredSectorFeatures = sectorFeatures;
+    state.needsPointGeometrySync = true;
+    state.needsSectorGeometrySync = true;
+    featureStateCache.cells.clear();
+
+    updateDriftAlertsUI();
+    updateUnifiedTimeline();
+
+    const maxIndex = Math.max(0, unifiedTimeline.totalCount - 1);
+    const targetIndex = Math.min(Math.max(0, state.currentTimeIndex), maxIndex);
+    if (unifiedTimeline.totalCount > 0) {
+        await loadUnifiedTimeSlice(targetIndex);
+    } else {
+        applyFilters();
+        updateStatsUI(state.currentStats || {});
+        updateAlertsUI(state.filteredPointFeatures);
+        updateMapData();
+    }
+
+    populateIssueFilters(collectIssueTypesFromCurrent());
+    applyFilters();
+
+    importState.sessionMode = 'current';
+    updateImportSessionUI();
+
+    const importedCells = Number(
+        datasetPayload?.imported_cells ||
+        Object.keys(latestSlice?.observations || {}).length ||
+        Object.keys(baseline || {}).length
+    );
+    const errorCount = Array.isArray(datasetPayload?.errors) ? datasetPayload.errors.length : 0;
+    const sessionCopy = canMergeWithCurrentSession ? 'updated current import session' : 'started new import session';
+
+    showNotification(
+        `Imported ${importedCells} cells and ${sessionCopy}${errorCount ? ` (${errorCount} row warnings)` : ''}`,
+        'success'
+    );
+}
+
+async function parseImportCsvFile(file) {
+    if (!file) return;
+
+    const selectedTypeBeforeParse = importState.selectedType;
+    clearImportSession({ keepSelectedType: true, clearInput: false });
+
+    importState.selectedFileName = file.name;
+    updateImportFileInfo();
+    setImportBusyState(true);
+    setImportParsingState(true, 'Parsing CSV, please wait...', 0);
+
+    try {
+        const readResult = await readCsvTextWithProgress(file, (progress) => {
+            const rows = Number(progress?.rows || 0);
+            importState.totalRows = Math.max(importState.totalRows, rows);
+            updateImportFileInfo();
+            setImportParsingState(true, 'Parsing CSV, please wait...', importState.totalRows);
+        });
+
+        const parsed = await callDataWorker(
+            'parseCsvPreview',
+            { csvText: readResult.csvText, maxPreviewRows: IMPORT_PREVIEW_ROW_LIMIT },
+            120000
+        );
+
+        importState.headers = Array.isArray(parsed?.headers) ? parsed.headers : [];
+        importState.previewRows = Array.isArray(parsed?.previewRows) ? parsed.previewRows : [];
+        importState.allRows = Array.isArray(parsed?.allRows) ? parsed.allRows : [];
+        importState.inferredMapping = parsed?.inferredMapping || {};
+        importState.inferredMappingMeta = parsed?.inferredMappingMeta || {};
+        importState.matchScores = parsed?.matchScores || {};
+        importState.detectedType = normalizeImportType(parsed?.detectedType, true);
+        importState.detectionReasons = Array.isArray(parsed?.detectionReasons) ? parsed.detectionReasons : [];
+        importState.totalRows = Number(parsed?.totalRows) || readResult.rowCount || 0;
+
+        if (importState.detectedType === IMPORT_TYPE_REFERENCE || importState.detectedType === IMPORT_TYPE_KPI) {
+            importState.selectedType = importState.detectedType;
+        } else {
+            importState.selectedType = selectedTypeBeforeParse;
+        }
+
+        applyAutoImportAssignments(importState.selectedType);
+        importState.profileBannerDismissed = false;
+
+        updateImportFileInfo();
+        updateImportTypeUI();
+        updateImportCrossFileWarning();
+        refreshImportProfileSuggestion();
+        renderImportMappingUI();
+        renderImportPreviewRows();
+    } finally {
+        setImportParsingState(false);
+        setImportBusyState(false);
+    }
+}
+
+function runCsvImport() {
+    if (!importState.allRows.length) {
+        showNotification('Upload a CSV file before importing', 'error');
+        return;
+    }
+
+    const mapping = readImportMappingFromUI();
+    const validationError = validateImportMapping(mapping);
+    if (validationError) {
+        showNotification(validationError, 'error');
+        renderImportMappingUI();
+        renderImportPreviewRows();
+        return;
+    }
+
+    renderImportSummary(mapping);
+    setImportSummaryVisible(true);
+}
+
+async function confirmCsvImport() {
+    if (!importState.allRows.length) {
+        showNotification('Upload a CSV file before importing', 'error');
+        setImportSummaryVisible(false);
+        return;
+    }
+
+    const mapping = readImportMappingFromUI();
+    const validationError = validateImportMapping(mapping);
+    if (validationError) {
+        showNotification(validationError, 'error');
+        setImportSummaryVisible(false);
+        renderImportMappingUI();
+        renderImportPreviewRows();
+        return;
+    }
+
+    setImportBusyState(true);
+
+    try {
+        const existingBaseline = getBaselineForImportSession(importState.selectedType, importState.sessionMode);
+
+        const payload = await callDataWorker(
+            'applyCsvMapping',
+            {
+                rows: importState.allRows,
+                mapping,
+                importType: importState.selectedType,
+                existingBaseline,
+            },
+            90000
+        );
+
+        const warnings = Array.isArray(payload?.warnings) ? payload.warnings : [];
+        warnings.forEach((warning) => showNotification(String(warning), 'warning'));
+
+        await applyImportedDataset(payload, {
+            sessionMode: importState.sessionMode,
+            sourceFileName: importState.selectedFileName,
+        });
+        clearImportSession({ keepSelectedType: true, clearInput: true });
+        toggleModal('import-modal', false);
+    } catch (err) {
+        console.error('CSV import failed:', err);
+        showNotification('CSV import failed. Verify mapping and numeric fields.', 'error');
+    } finally {
+        setImportBusyState(false);
+    }
+}
+
+function openImportModal() {
+    setImportSummaryVisible(false);
+    updateImportTypeUI();
+    updateImportCrossFileWarning();
+    updateImportSessionUI();
+    renderImportMappingUI();
+    renderImportPreviewRows();
+    toggleModal('import-modal', true);
+}
+
+function setupImportModal() {
+    document.getElementById('btn-import')?.addEventListener('click', openImportModal);
+    document.getElementById('import-close')?.addEventListener('click', () => {
+        setImportSummaryVisible(false);
+        toggleModal('import-modal', false);
+    });
+
+    const fileInput = document.getElementById('import-csv-file');
+    fileInput?.addEventListener('change', async (event) => {
+        const input = event.target;
+        if (!(input instanceof HTMLInputElement) || !input.files || !input.files[0]) {
+            return;
+        }
+
+        const selectedFile = input.files[0];
+        input.value = '';
+
+        try {
+            await parseImportCsvFile(selectedFile);
+        } catch (err) {
+            console.error('Failed to parse CSV file:', err);
+            showNotification('CSV parsing failed. Please verify the file format.', 'error');
+            setImportParsingState(false);
+            setImportBusyState(false);
+        }
+    });
+
+    document.getElementById('import-type-select')?.addEventListener('change', (event) => {
+        const select = event.target;
+        if (!(select instanceof HTMLSelectElement)) return;
+
+        importState.selectedType = normalizeImportType(select.value);
+        setImportSummaryVisible(false);
+
+        if (importState.headers.length) {
+            applyAutoImportAssignments(importState.selectedType);
+            importState.profileBannerDismissed = false;
+            refreshImportProfileSuggestion();
+        }
+
+        updateImportTypeUI();
+        updateImportCrossFileWarning();
+        renderImportMappingUI();
+        renderImportPreviewRows();
+    });
+
+    document.getElementById('import-session-mode')?.addEventListener('change', (event) => {
+        const select = event.target;
+        if (!(select instanceof HTMLSelectElement)) return;
+        importState.sessionMode = normalizeImportSessionMode(select.value);
+        setImportSummaryVisible(false);
+        updateImportSessionUI();
+        updateImportCrossFileWarning();
+    });
+
+    document.getElementById('btn-import-reset')?.addEventListener('click', () => {
+        clearImportSession({ keepSelectedType: true, clearInput: true });
+        showNotification('Current import has been cleared', 'success');
+    });
+
+    document.getElementById('btn-import-exit-session')?.addEventListener('click', async () => {
+        if (!state.customDataset.active) {
+            updateImportSessionUI();
+            showNotification('Live dataset is already active', 'info');
+            return;
+        }
+
+        setImportBusyState(true);
+        try {
+            const restored = await restoreLiveDatasetSession();
+            if (restored) {
+                clearImportSession({ keepSelectedType: true, clearInput: true });
+                showNotification('Returned to live dataset session', 'success');
+            }
+        } catch (err) {
+            console.error('Failed to restore live dataset session:', err);
+            showNotification('Failed to exit import session', 'error');
+        } finally {
+            setImportBusyState(false);
+            updateImportSessionUI();
+        }
+    });
+
+    document.getElementById('btn-import-save-profile')?.addEventListener('click', saveCurrentImportProfile);
+    document.getElementById('btn-import-profile-confirm')?.addEventListener('click', applySuggestedImportProfile);
+    document.getElementById('btn-import-profile-dismiss')?.addEventListener('click', dismissImportProfileSuggestion);
+
+    document.getElementById('btn-import-back')?.addEventListener('click', () => {
+        setImportSummaryVisible(false);
+    });
+
+    document.getElementById('btn-import-confirm')?.addEventListener('click', confirmCsvImport);
+    document.getElementById('btn-apply-import')?.addEventListener('click', runCsvImport);
+
+    clearImportSession({ keepSelectedType: true, clearInput: true });
+    updateImportSessionUI();
+}
+
 // --- Forecast Mode (Unified Timeline) ---
 const forecastState = {
     forecastIndex: [],
@@ -2103,6 +4070,13 @@ let activeSliceAbortController = null;
 let activeSliceRequestId = 0;
 
 async function checkForecastAvailability() {
+    if (state.customDataset.active) {
+        forecastState.available = false;
+        forecastState.forecastIndex = [];
+        updateUnifiedTimeline();
+        return { available: false, reason: 'custom-dataset-active' };
+    }
+
     try {
         const res = await fetchWithAuth('/api/forecast');
         const data = await res.json();
@@ -2251,6 +4225,24 @@ async function loadUnifiedTimeSliceInternal(index, options = {}) {
 async function loadHistoricalSliceInternal(timeEntry, localIndex, requestContext = {}) {
     if (!timeEntry) return;
     const { signal, requestId } = requestContext;
+
+    if (state.customDataset.active) {
+        const customSlice = state.customDataset.slices[localIndex] || state.customDataset.slices[0] || null;
+        if (!customSlice) return;
+        state.currentTimeIndex = localIndex;
+        state.currentObservations = customSlice.observations || {};
+        state.currentStats = customSlice.stats || null;
+
+        await updateFeaturesForTime(state.currentObservations, { isForecast: false });
+        applyFilters();
+        updateTimeSliderUI();
+        updateStatsUI(customSlice.stats || {});
+        updateAlertsUI(state.filteredPointFeatures);
+        if (state.selectedSite) {
+            refreshSiteInfoStats(state.selectedSite);
+        }
+        return;
+    }
     
     try {
         const res = await fetchWithAuth(buildDataUrl('time_data', timeEntry.filename), { signal });
@@ -2265,7 +4257,7 @@ async function loadHistoricalSliceInternal(timeEntry, localIndex, requestContext
         state.currentObservations = sliceData.observations;
         state.currentStats = sliceData.stats;
 
-        updateFeaturesForTime(sliceData.observations, { isForecast: false });
+        await updateFeaturesForTime(sliceData.observations, { isForecast: false });
         applyFilters();
         
         updateTimeSliderUI();
@@ -2299,7 +4291,7 @@ async function loadForecastSliceInternal(forecastEntry, localIndex, requestConte
         
         const confidence = sliceData.confidence || forecastEntry.confidence || 0.75;
 
-        updateFeaturesForTime(sliceData.observations || {}, { isForecast: true, confidence });
+        await updateFeaturesForTime(sliceData.observations || {}, { isForecast: true, confidence });
         applyFilters();
         
         updateTimeSliderUI();
@@ -2318,6 +4310,10 @@ async function loadForecastSliceInternal(forecastEntry, localIndex, requestConte
 
 async function generateForecast() {
     if (forecastState.isGenerating) return;
+    if (state.customDataset.active) {
+        showNotification('Forecast generation is disabled for imported CSV snapshots.', 'info');
+        return;
+    }
     
     const btn = document.getElementById('btn-generate-forecast');
     const daysInput = document.getElementById('forecast-days');
@@ -2368,6 +4364,10 @@ async function generateForecast() {
 }
 
 async function clearForecastDataByUser() {
+    if (state.customDataset.active) {
+        showNotification('No generated forecast is attached to imported CSV snapshots.', 'info');
+        return;
+    }
     try {
         await fetchWithAuth('/api/forecast', { method: 'DELETE' });
         forecastState.forecastIndex = [];
@@ -2403,6 +4403,23 @@ function showNotification(message, type = 'info') {
         toast.classList.remove('show');
         setTimeout(() => toast.remove(), 300);
     }, 4000);
+}
+
+function stopUnifiedPlayback() {
+    if (state.playInterval) {
+        clearInterval(state.playInterval);
+        state.playInterval = null;
+    }
+    state.isPlaying = false;
+
+    const playBtn = document.getElementById('time-play');
+    const icon = playBtn?.querySelector('.material-symbols-outlined');
+    playBtn?.classList.remove('playing');
+    if (icon) {
+        icon.textContent = 'play_arrow';
+    }
+
+    setSectorGeometryResolution(CONFIG.SECTOR_ARC_STEPS_DEFAULT);
 }
 
 function setupUnifiedTimelineControls() {
@@ -2482,6 +4499,13 @@ function updateMapData() {
     const cellsSource = state.map.getSource('cells');
     const sectorsSource = state.map.getSource('sectors');
     if (!cellsSource || !sectorsSource) return;
+
+    if (state.needsPointGeometrySync) {
+        const pointsGeojson = { type: 'FeatureCollection', features: state.pointFeatures };
+        cellsSource.setData(pointsGeojson);
+        state.needsPointGeometrySync = false;
+        state.lastVisibleFilterSignature = null;
+    }
 
     const sectorsVisible = !state.layers.heatmap;
     if (sectorsVisible || state.needsSectorGeometrySync) {
@@ -2572,22 +4596,24 @@ function setupTimeControls() {
 // --- UI Updates ---
 function updateStatsUI(stats) {
     const totalCells = Object.keys(state.baseline).length;
+    const observedCells = Number(stats?.cells_observed || 0);
+    const congestedCells = Number(stats?.congested || 0);
+    const avgLoad = Number(stats?.avg_load || 0);
+    const highLoadEstimate = Math.round((avgLoad > 70 ? observedCells * 0.3 : observedCells * 0.15));
+    const coveragePct = totalCells > 0 ? Math.round((observedCells / totalCells) * 100) : 0;
     
     document.querySelector('#stat-total .stat-value').textContent = formatLargeNumber(totalCells);
-    document.querySelector('#stat-congested .stat-value').textContent = formatLargeNumber(stats?.congested || 0);
-    document.querySelector('#stat-high-load .stat-value').textContent = formatLargeNumber(
-        Math.round((stats?.avg_load || 0) > 70 ? stats?.cells_observed * 0.3 : stats?.cells_observed * 0.15)
-    );
+    document.querySelector('#stat-congested .stat-value').textContent = formatLargeNumber(congestedCells);
+    document.querySelector('#stat-high-load .stat-value').textContent = formatLargeNumber(highLoadEstimate);
     document.querySelector('#stat-healthy .stat-value').textContent = formatLargeNumber(
-        (stats?.cells_observed || 0) - (stats?.congested || 0)
+        observedCells - congestedCells
     );
     
     document.getElementById('metric-avg-load').textContent = (stats?.avg_load || 0).toFixed(1) + '%';
     document.getElementById('progress-load').style.width = Math.min(stats?.avg_load || 0, 100) + '%';
     document.getElementById('metric-avg-throughput').textContent = formatThroughput(stats?.avg_throughput);
     document.getElementById('metric-avg-cqi').textContent = (stats?.avg_cqi || 0).toFixed(1);
-    document.getElementById('metric-coverage').textContent = 
-        Math.round(((stats?.cells_observed || 0) / totalCells) * 100) + '%';
+    document.getElementById('metric-coverage').textContent = `${coveragePct}%`;
     
     const gaugeValue = document.getElementById('gauge-value');
     const gaugeFill = document.getElementById('gauge-fill');
@@ -2656,6 +4682,76 @@ function updateAlertsUI(features) {
             item.addEventListener('click', () => selectCell(cellName, true));
         }
     });
+}
+
+function updateDriftAlertsUI() {
+    const list = document.getElementById('drift-alerts-list');
+    const badge = document.getElementById('drift-alert-count');
+    if (!list) return;
+
+    const alerts = Array.isArray(state.driftAlerts) ? state.driftAlerts : [];
+    if (badge) badge.textContent = String(alerts.length);
+
+    if (!alerts.length) {
+        list.innerHTML = '<div class="alert-placeholder">No forecast drift above threshold</div>';
+        return;
+    }
+
+    list.innerHTML = '';
+    const fragment = document.createDocumentFragment();
+    alerts.slice(0, 40).forEach((alert) => {
+        const item = document.createElement('div');
+        item.className = 'alert-item drift-alert-item';
+        item.dataset.cellName = String(alert?.cell_name || '');
+
+        const icon = document.createElement('span');
+        icon.className = 'material-symbols-outlined';
+        icon.textContent = alert?.severity === 'critical' ? 'crisis_alert' : 'monitoring';
+
+        const content = document.createElement('div');
+        content.className = 'alert-item-content';
+
+        const title = document.createElement('div');
+        title.className = 'alert-item-title';
+        title.textContent = String(alert?.cell_name || 'Unknown cell');
+
+        const desc = document.createElement('div');
+        desc.className = 'alert-item-desc';
+        desc.textContent = `Delta ${formatNumber(alert?.last_abs_delta, 1)} PRB (${formatNumber(alert?.last_pct_delta, 1)}%)`;
+
+        content.appendChild(title);
+        content.appendChild(desc);
+        item.appendChild(icon);
+        item.appendChild(content);
+        fragment.appendChild(item);
+    });
+
+    list.appendChild(fragment);
+    list.querySelectorAll('.drift-alert-item').forEach((item) => {
+        const cellName = item.dataset.cellName;
+        if (cellName) {
+            item.addEventListener('click', () => selectCell(cellName, true));
+        }
+    });
+}
+
+async function refreshDriftAlertsFromUI() {
+    const absInput = document.getElementById('drift-threshold-abs');
+    const pctInput = document.getElementById('drift-threshold-pct');
+    const absRaw = absInput instanceof HTMLInputElement ? Number(absInput.value) : NaN;
+    const pctRaw = pctInput instanceof HTMLInputElement ? Number(pctInput.value) : NaN;
+
+    state.driftThresholds.absPrbDelta = Number.isFinite(absRaw) && absRaw > 0 ? absRaw : state.driftThresholds.absPrbDelta;
+    state.driftThresholds.pctPrbDelta = Number.isFinite(pctRaw) && pctRaw > 0 ? pctRaw : state.driftThresholds.pctPrbDelta;
+
+    if (absInput instanceof HTMLInputElement) {
+        absInput.value = String(state.driftThresholds.absPrbDelta);
+    }
+    if (pctInput instanceof HTMLInputElement) {
+        pctInput.value = String(state.driftThresholds.pctPrbDelta);
+    }
+
+    await loadDriftAlerts();
 }
 
 function destroyCharts() {
@@ -3067,7 +5163,7 @@ function setupMapInteractions(map) {
         const p = getLivePointProperties(feature);
         const popupRoot = document.createElement('div');
         popupRoot.style.padding = '10px';
-        popupRoot.style.fontFamily = 'Inter, sans-serif';
+        popupRoot.style.fontFamily = 'IBM Plex Sans, Segoe UI, sans-serif';
         popupRoot.style.minWidth = '180px';
 
         const title = document.createElement('div');
@@ -3083,6 +5179,8 @@ function setupMapInteractions(map) {
             `Site: ${p.enodeb_name}`,
             `Load: ${formatNumber(p.load)}%`,
             `CQI: ${formatNumber(p.cqi)}`,
+            `Peak Hour: ${p.peak_hour || 'N/A'}`,
+            `Drift: ${p.drift_abs_delta !== null && p.drift_abs_delta !== undefined ? `${formatNumber(p.drift_abs_delta, 1)} PRB` : 'N/A'}`,
             `Status: ${p.status}`,
         ].forEach((line) => {
             const row = document.createElement('div');
@@ -3257,6 +5355,18 @@ function setupEventHandlers() {
     document.getElementById('btn-export')?.addEventListener('click', () => toggleModal('export-modal', true));
     document.getElementById('export-close')?.addEventListener('click', () => toggleModal('export-modal', false));
 
+    const driftAbsInput = document.getElementById('drift-threshold-abs');
+    const driftPctInput = document.getElementById('drift-threshold-pct');
+    if (driftAbsInput instanceof HTMLInputElement) {
+        driftAbsInput.value = String(state.driftThresholds.absPrbDelta);
+    }
+    if (driftPctInput instanceof HTMLInputElement) {
+        driftPctInput.value = String(state.driftThresholds.pctPrbDelta);
+    }
+    document.getElementById('btn-refresh-drift')?.addEventListener('click', () => {
+        refreshDriftAlertsFromUI();
+    });
+
     document.getElementById('btn-refresh')?.addEventListener('click', () => window.location.reload());
 
     const actionSelect = document.getElementById('action-select');
@@ -3278,11 +5388,13 @@ function setupEventHandlers() {
             case 'a': e.preventDefault(); toggleModal('analytics-modal', true); break;
             case 'd': e.preventDefault(); toggleModal('explore-modal', true); renderExploreCharts(); break;
             case 'e': e.preventDefault(); toggleModal('export-modal', true); break;
+            case 'i': e.preventDefault(); openImportModal(); break;
         }
     });
 
     // Data Exploration Modal
     setupExploreModal();
+    setupImportModal();
     
     // Unified Timeline Controls
     setupUnifiedTimelineControls();
@@ -3337,7 +5449,13 @@ async function init() {
             };
             console.warn(`stats.json unavailable (${statsRes.status}); using fallback global stats`);
         }
-        buildSiteHierarchy();
+
+        await Promise.all([
+            loadPeakHoursIndex(),
+            loadDriftAlerts(),
+        ]);
+
+        await buildSiteHierarchy();
 
         populateFrequencyFilters(state.globalStats?.frequency_bands || []);
         const { pointFeatures, sectorFeatures, sites } = buildFeaturesForTime();
@@ -3346,6 +5464,8 @@ async function init() {
         state.features = pointFeatures;
         state.filteredPointFeatures = pointFeatures;
         state.filteredSectorFeatures = sectorFeatures;
+        applyPeakAndDriftMetadataToFeatures();
+        updateDriftAlertsUI();
         state.currentSectorArcSteps = CONFIG.SECTOR_ARC_STEPS_DEFAULT;
         
         console.log(`Loaded ${Object.keys(state.baseline).length} cells, ${state.timeIndex.length} time slices`);
