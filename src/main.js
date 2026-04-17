@@ -1,6 +1,8 @@
 import maplibregl from 'maplibre-gl';
 import { destination } from '@turf/turf';
 import Chart from 'chart.js/auto';
+import { parseTimestampValue } from './utils/timestampParsing';
+import { buildFeatureUpdateMapFromPayload } from './utils/featureUpdateContract';
 
 // ============================================
 // NETVISION DIGITAL TWIN - TIME-SERIES EDITION
@@ -202,11 +204,7 @@ function debounce(fn, wait) {
 }
 
 function parseTimestamp(ts) {
-    const [datePart, timePart] = ts.split(' ');
-    if (!datePart || !timePart) return new Date(ts);
-    const [d, m, y] = datePart.split('-').map(Number);
-    const [hh, mm] = timePart.split(':').map(Number);
-    return new Date(y, m - 1, d, hh, mm, 0, 0);
+    return parseTimestampValue(ts);
 }
 
 function createSectorPolygon(center, radiusMeters, azimuth, beamwidth, steps = CONFIG.SECTOR_ARC_STEPS_DEFAULT) {
@@ -826,12 +824,18 @@ function syncSectorGeometryForObservations(observations = {}) {
     return geometryChanged;
 }
 
+function buildFeatureUpdateMap(featureUpdates = []) {
+    return buildFeatureUpdateMapFromPayload(featureUpdates);
+}
+
 function applyWorkerFeatureUpdates(featureUpdates = []) {
-    const featuresCount = Math.min(state.pointFeatures.length, state.sectorFeatures.length, featureUpdates.length);
+    const updatesByCellName = buildFeatureUpdateMap(featureUpdates);
+    const featuresCount = Math.min(state.pointFeatures.length, state.sectorFeatures.length);
     for (let i = 0; i < featuresCount; i++) {
         const pointFeature = state.pointFeatures[i];
         const sectorFeature = state.sectorFeatures[i];
-        const update = featureUpdates[i];
+        const cellName = String(pointFeature?.properties?.cell_name || sectorFeature?.properties?.cell_name || '').trim();
+        const update = cellName ? updatesByCellName.get(cellName) : null;
         if (!pointFeature || !sectorFeature || !update) continue;
 
         pointFeature.properties.status = update.status;
@@ -897,7 +901,9 @@ async function updateFeaturesForTime(observations = {}, options = {}) {
         45000
     );
 
-    if (!Array.isArray(updates) || updates.length !== state.pointFeatures.length) {
+    const isArrayPayload = Array.isArray(updates);
+    const isObjectPayload = updates !== null && typeof updates === 'object';
+    if (!isArrayPayload && !isObjectPayload) {
         throw new Error('Worker returned invalid feature update payload');
     }
     applyWorkerFeatureUpdates(updates);
