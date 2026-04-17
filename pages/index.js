@@ -9,7 +9,7 @@ const pageMarkup = `
                     <span class="material-symbols-outlined">cell_tower</span>
                     <span class="logo-text">NetVision</span>
                 </div>
-                <span class="header-subtitle">Digital Twin - Network Operations Center</span>
+                <span class="header-subtitle">NOC Live Operations Console</span>
             </div>
             <div class="header-center">
                 <div class="timestamp" id="timestamp"></div>
@@ -23,6 +23,9 @@ const pageMarkup = `
                 </button>
                 <button class="btn-icon" id="btn-explore" title="Data Exploration (D)">
                     <span class="material-symbols-outlined">query_stats</span>
+                </button>
+                <button class="btn-icon" id="btn-import" title="Import CSV (I)">
+                    <span class="material-symbols-outlined">upload_file</span>
                 </button>
                 <button class="btn-icon" id="btn-export" title="Export Data (E)">
                     <span class="material-symbols-outlined">download</span>
@@ -68,7 +71,7 @@ const pageMarkup = `
                     <input type="number" id="forecast-days" class="forecast-days-input" min="1" max="30" value="7" title="Days to forecast">
                     <button class="generate-btn" id="btn-generate-forecast" title="Generate forecast">
                         <span class="material-symbols-outlined">model_training</span>
-                        Generate
+                        Generate Forecast
                     </button>
                     <button class="btn-secondary" id="btn-clear-forecast" title="Clear generated forecasts">
                         <span class="material-symbols-outlined">delete</span>
@@ -177,6 +180,29 @@ const pageMarkup = `
                     </h3>
                     <div class="alerts-list" id="alerts-list">
                         <div class="alert-placeholder">Loading...</div>
+                    </div>
+                </div>
+
+                <div class="panel drift-panel">
+                    <h3 class="panel-title">
+                        <span class="material-symbols-outlined">monitoring</span>
+                        Forecast Drift Alerts
+                        <span class="alert-badge" id="drift-alert-count">0</span>
+                    </h3>
+                    <div class="drift-thresholds">
+                        <label>Abs Delta
+                            <input type="number" id="drift-threshold-abs" min="1" step="1" value="15" />
+                        </label>
+                        <label>Pct Delta
+                            <input type="number" id="drift-threshold-pct" min="1" step="1" value="30" />
+                        </label>
+                        <button class="btn-secondary" id="btn-refresh-drift">
+                            <span class="material-symbols-outlined">sync</span>
+                            Refresh
+                        </button>
+                    </div>
+                    <div class="alerts-list" id="drift-alerts-list">
+                        <div class="alert-placeholder">Loading drift alerts...</div>
                     </div>
                 </div>
             </aside>
@@ -305,7 +331,7 @@ const pageMarkup = `
                         <span class="reco-badge" id="reco-count">0</span>
                     </h3>
                     <div class="reco-list" id="reco-list">
-                        <div class="reco-placeholder">Select a cell to get recommendations</div>
+                        <div class="reco-placeholder">Select a cell to request optimization recommendations</div>
                     </div>
                 </div>
 
@@ -317,21 +343,21 @@ const pageMarkup = `
                     <div class="action-field">
                         <label for="action-select">Select action</label>
                         <select id="action-select">
-                            <option value="">-- Choisir une action --</option>
-                            <optgroup label="Court terme (OPEX)">
-                                <option value="tilt">Ajustement Tilt</option>
-                                <option value="power">Ajustement Puissance</option>
-                                <option value="redistribute">Équilibrage MLB</option>
-                                <option value="parameter_tuning">Tuning paramètres radio</option>
+                            <option value="">-- Select an action --</option>
+                            <optgroup label="Short-Term (OPEX)">
+                                <option value="tilt">Tilt Adjustment</option>
+                                <option value="power">Power Adjustment</option>
+                                <option value="redistribute">MLB Redistribution</option>
+                                <option value="parameter_tuning">Radio Parameter Tuning</option>
                             </optgroup>
-                            <optgroup label="Moyen terme">
-                                <option value="add_carrier">Activation carrier (CA)</option>
-                                <option value="mimo_upgrade">Upgrade MIMO</option>
-                                <option value="small_cell">Small Cell / Micro</option>
+                            <optgroup label="Mid-Term">
+                                <option value="add_carrier">Carrier Activation (CA)</option>
+                                <option value="mimo_upgrade">MIMO Upgrade</option>
+                                <option value="small_cell">Small Cell / Micro Cell</option>
                             </optgroup>
-                            <optgroup label="Long terme (CAPEX)">
-                                <option value="add_sector">Ajout 4ème secteur</option>
-                                <option value="add_site">Nouveau site macro</option>
+                            <optgroup label="Long-Term (CAPEX)">
+                                <option value="add_sector">Add 4th Sector</option>
+                                <option value="add_site">New Macro Site</option>
                                 <option value="split_cell">Cell Split</option>
                             </optgroup>
                         </select>
@@ -478,6 +504,7 @@ const pageMarkup = `
                         <div><span class="kbd">A</span> Analytics</div>
                         <div><span class="kbd">D</span> Data Explore</div>
                         <div><span class="kbd">E</span> Export</div>
+                        <div><span class="kbd">I</span> Import CSV</div>
                     </div>
                 </div>
             </aside>
@@ -527,7 +554,7 @@ const pageMarkup = `
                 <div class="modal-header">
                     <h2>
                         <span class="material-symbols-outlined">query_stats</span>
-                        Data Exploration
+                        Network Traffic Exploration
                     </h2>
                     <button class="modal-close" id="explore-close">
                         <span class="material-symbols-outlined">close</span>
@@ -608,6 +635,135 @@ const pageMarkup = `
                             <span class="material-symbols-outlined">warning</span>
                             <span>Congested Cells Only</span>
                             <small>Filtered issue data</small>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- CSV Import Modal -->
+        <div class="modal-overlay hidden" id="import-modal">
+            <div class="modal import-modal">
+                <div class="modal-header">
+                    <h2>
+                        <span class="material-symbols-outlined">upload_file</span>
+                        CSV Import and Field Mapping
+                    </h2>
+                    <button class="modal-close" id="import-close">
+                        <span class="material-symbols-outlined">close</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="import-top-row">
+                        <label class="btn-secondary import-file-label" for="import-csv-file">
+                            <span class="material-symbols-outlined">attach_file</span>
+                            Choose CSV File
+                        </label>
+                        <input type="file" id="import-csv-file" accept=".csv,text/csv" />
+                        <div class="import-file-meta">
+                            <div class="import-file-info" id="import-file-info">No file loaded</div>
+                            <button class="btn-secondary import-reset-btn import-hidden" id="btn-import-reset">
+                                <span class="material-symbols-outlined">restart_alt</span>
+                                Clear Import
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="import-loading import-hidden" id="import-loading">
+                        <div class="import-loading-spinner"></div>
+                        <div class="import-loading-copy">
+                            <div class="import-loading-text" id="import-loading-text">Parsing CSV, please wait...</div>
+                            <div class="import-loading-rows" id="import-loading-rows">0 rows detected</div>
+                        </div>
+                    </div>
+
+                    <div class="import-type-row">
+                        <div class="import-detected-pill" id="import-detected-pill">Detected Type: Awaiting file</div>
+                        <label class="import-type-select-wrap" for="import-type-select">
+                            Import Type
+                            <select id="import-type-select" class="import-type-select">
+                                <option value="reference">Reference Data</option>
+                                <option value="kpi">KPI Hourly Data</option>
+                            </select>
+                        </label>
+                    </div>
+
+                    <div class="import-session-row">
+                        <div class="import-session-state" id="import-session-state">Session: Live Dataset</div>
+                        <label class="import-type-select-wrap" for="import-session-mode">
+                            Target Session
+                            <select id="import-session-mode" class="import-type-select">
+                                <option value="new">Start New Import Session</option>
+                                <option value="current">Use Current Import Session</option>
+                            </select>
+                        </label>
+                        <button class="btn-secondary import-hidden" id="btn-import-exit-session">
+                            <span class="material-symbols-outlined">exit_to_app</span>
+                            Exit Import Session
+                        </button>
+                    </div>
+                    <p class="import-helper" id="import-detection-reason">Upload a CSV to auto-detect format.</p>
+
+                    <div class="import-warning-banner import-hidden" id="import-crossfile-warning"></div>
+
+                    <div class="import-mode-row" id="import-mode-row">
+                        <label class="import-mode-toggle" for="import-strict-mode-toggle">
+                            <input type="checkbox" id="import-strict-mode-toggle" />
+                            <span>Strict congestion mode (use mapped Congestion Flag only)</span>
+                        </label>
+                        <p class="import-helper import-mode-helper" id="import-strict-mode-help">
+                            Heuristic mode is default for KPI imports.
+                        </p>
+                    </div>
+
+                    <div class="import-profile-banner import-hidden" id="import-profile-banner">
+                        <div class="import-profile-copy" id="import-profile-copy"></div>
+                        <div class="import-profile-actions">
+                            <button class="btn-primary" id="btn-import-profile-confirm">
+                                <span class="material-symbols-outlined">bolt</span>
+                                Use Profile Mapping
+                            </button>
+                            <button class="btn-secondary" id="btn-import-profile-dismiss">
+                                <span class="material-symbols-outlined">edit</span>
+                                Review Manually
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="import-section" id="import-mapping-section">
+                        <h4>Field Mapping</h4>
+                        <p class="import-helper">Assign each CSV column using the dropdown in its header. Required fields are marked with *.</p>
+                        <div class="import-mapping-grid" id="import-mapping-grid"></div>
+                    </div>
+
+                    <div class="import-section" id="import-preview-section">
+                        <h4>Preview</h4>
+                        <div class="import-preview-table" id="import-preview-table"></div>
+                    </div>
+
+                    <div class="import-section import-hidden" id="import-summary-section">
+                        <h4>Pre-Import Summary</h4>
+                        <div class="import-summary-content" id="import-summary-content"></div>
+                        <div class="import-actions import-summary-actions">
+                            <button class="btn-secondary" id="btn-import-back">
+                                <span class="material-symbols-outlined">arrow_back</span>
+                                Back To Mapping
+                            </button>
+                            <button class="btn-primary" id="btn-import-confirm">
+                                <span class="material-symbols-outlined">check_circle</span>
+                                Confirm Import
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="import-actions" id="import-primary-actions">
+                        <button class="btn-secondary" id="btn-import-save-profile">
+                            <span class="material-symbols-outlined">save</span>
+                            Save Mapping Profile
+                        </button>
+                        <button class="btn-primary" id="btn-apply-import">
+                            <span class="material-symbols-outlined">rule</span>
+                            Review Import Summary
                         </button>
                     </div>
                 </div>
