@@ -66,6 +66,12 @@ const CONFIG = {
     }
 };
 
+const IMPORT_REALISM_POLICY = Object.freeze({
+    strictScopeToReference: true,
+    strictNoFallback: false,
+    hideSectorsWithoutTa: true,
+});
+
 // --- State Management ---
 const state = {
     baseline: {},
@@ -85,9 +91,10 @@ const state = {
         active: false,
         sessionId: '',
         createdAt: '',
-        sourceFile: '',
         importedFiles: [],
         slices: [],
+        realismPolicy: { ...IMPORT_REALISM_POLICY },
+        dataQuality: null,
     },
     liveDatasetSnapshot: null,
     
@@ -142,7 +149,6 @@ const importState = {
     allRows: [],
     previewRows: [],
     inferredMapping: {},
-    inferredMappingMeta: {},
     matchScores: {},
     mapping: {},
     mappingSource: {},
@@ -156,7 +162,9 @@ const importState = {
     profileSuggestion: null,
     profileBannerDismissed: false,
     sessionMode: 'new',
-    summaryVisible: false,
+    strictNoFallback: false,
+    pendingImportPayload: null,
+    pendingImportOptions: null,
     parseInProgress: false,
 };
 
@@ -600,58 +608,12 @@ function warnIfObservationSchemaMismatch(observations, sourceLabel = 'observatio
     showNotification('Data schema mismatch detected. See console for missing KPI keys.', 'error');
 }
 
-function buildSiteHierarchyLocal() {
-    const hierarchy = {};
-    for (const [cellName, info] of Object.entries(state.baseline)) {
-        const { siteName, antenna, cellNum } = parseCellName(cellName);
-        if (!hierarchy[siteName]) {
-            hierarchy[siteName] = {
-                name: siteName,
-                enodeb_name: info.enodeb_name,
-                longitude: info.longitude,
-                latitude: info.latitude,
-                antennas: {}
-            };
-        }
-        if (!hierarchy[siteName].antennas[antenna]) {
-            hierarchy[siteName].antennas[antenna] = {
-                id: antenna,
-                azimuth: info.azimuth,
-                band: info.frequency_band,
-                type: info.cell_fdd_tdd_indication || 'FDD',
-                cells: []
-            };
-        }
-        hierarchy[siteName].antennas[antenna].cells.push({
-            cellName,
-            cellNum,
-            frequency_band: info.frequency_band,
-            localcell_id: info.localcell_id,
-            azimuth: info.azimuth
-        });
-    }
-
-    Object.values(hierarchy).forEach(site => {
-        Object.values(site.antennas).forEach(ant => {
-            ant.cells.sort((a, b) => a.cellNum - b.cellNum);
-        });
-    });
-
-    state.siteHierarchy = hierarchy;
-}
-
 async function buildSiteHierarchy() {
-    try {
-        const hierarchy = await callDataWorker('buildSiteHierarchy', { baseline: state.baseline }, 60000);
-        if (hierarchy && typeof hierarchy === 'object') {
-            state.siteHierarchy = hierarchy;
-            return;
-        }
-    } catch (err) {
-        console.warn('Falling back to main-thread site hierarchy build:', err?.message || err);
+    const hierarchy = await callDataWorker('buildSiteHierarchy', { baseline: state.baseline }, 60000);
+    if (!hierarchy || typeof hierarchy !== 'object') {
+        throw new Error('Worker returned invalid site hierarchy payload');
     }
-
-    buildSiteHierarchyLocal();
+    state.siteHierarchy = hierarchy;
 }
 
 function getLivePointProperties(mapFeature) {
@@ -700,58 +662,6 @@ function computeSiteLiveStats(site) {
 }
 
 // --- Data Processing ---
-function updateFeatureProperties(pointProperties, sectorProperties, obs, options = {}) {
-    const { isForecast = false, confidence = null } = options;
-    const cqi = obs?.cqi ?? null;
-    const hasLowCQI = cqi !== null && cqi < CONFIG.CQI_THRESHOLD;
-    const status = getCellStatus(obs);
-    const load = obs?.load ?? null;
-    const severity = obs?.severity ?? 0;
-    const issueType = obs?.issue_type || 'Normal';
-    const color = getLoadColor(load, obs?.congested, cqi);
-    const taValue = getObservationTA(obs);
-    const pointOpacity = obs ? 0.75 : 0.35;
-    const sectorOpacity = obs ? 0.58 : 0.04;
-
-    pointProperties.status = status;
-    pointProperties.color = color;
-    pointProperties.opacity = pointOpacity;
-    pointProperties.load = load;
-    pointProperties.congested = obs?.congested || false;
-    pointProperties.issue_type = issueType;
-    pointProperties.root_cause = obs?.root_cause || '-';
-    pointProperties.severity = severity;
-    pointProperties.health_score = obs?.health_score ?? 100;
-    pointProperties.throughput = obs?.throughput;
-    pointProperties.cqi = cqi;
-    pointProperties.has_low_cqi = hasLowCQI;
-    pointProperties.traffic = obs?.traffic;
-    pointProperties.ta = taValue;
-    pointProperties.signal_power = obs?.signal_power;
-    pointProperties.is_forecast = isForecast;
-    if (isForecast && confidence !== null && confidence !== undefined) {
-        pointProperties.confidence = confidence;
-    } else {
-        delete pointProperties.confidence;
-    }
-
-    sectorProperties.status = status;
-    sectorProperties.color = color;
-    sectorProperties.opacity = sectorOpacity;
-    sectorProperties.load = load;
-    sectorProperties.cqi = cqi;
-    sectorProperties.has_low_cqi = hasLowCQI;
-    sectorProperties.congested = obs?.congested || false;
-    sectorProperties.severity = severity;
-    sectorProperties.issue_type = issueType;
-    sectorProperties.is_forecast = isForecast;
-    if (isForecast && confidence !== null && confidence !== undefined) {
-        sectorProperties.confidence = confidence;
-    } else {
-        delete sectorProperties.confidence;
-    }
-}
-
 function buildFeaturesForTime() {
     const pointFeatures = [];
     const sectorFeatures = [];
@@ -810,7 +720,10 @@ function buildFeaturesForTime() {
                 cqi: null,
                 has_low_cqi: false,
                 traffic: null,
+                traffic_loss_ue: 0,
+                traffic_loss_gb: 0,
                 ta: null,
+                dynamic_radius_supported: true,
                 signal_power: null,
                 peak_hour: peak?.peak_hour || null,
                 peak_avg_prb: Number.isFinite(Number(peak?.peak_avg_prb)) ? Number(peak.peak_avg_prb) : null,
@@ -846,6 +759,7 @@ function buildFeaturesForTime() {
                 azimuth,
                 radius,
                 arc_steps: CONFIG.SECTOR_ARC_STEPS_DEFAULT,
+                dynamic_radius_supported: true,
                 severity: 0,
                 issue_type: 'Normal',
                 is_forecast: false
@@ -912,7 +826,7 @@ function syncSectorGeometryForObservations(observations = {}) {
     return geometryChanged;
 }
 
-function applyWorkerFeatureUpdates(featureUpdates = [], options = {}) {
+function applyWorkerFeatureUpdates(featureUpdates = []) {
     const featuresCount = Math.min(state.pointFeatures.length, state.sectorFeatures.length, featureUpdates.length);
     for (let i = 0; i < featuresCount; i++) {
         const pointFeature = state.pointFeatures[i];
@@ -933,7 +847,10 @@ function applyWorkerFeatureUpdates(featureUpdates = [], options = {}) {
         pointFeature.properties.cqi = update.cqi;
         pointFeature.properties.has_low_cqi = update.has_low_cqi;
         pointFeature.properties.traffic = update.traffic;
+        pointFeature.properties.traffic_loss_ue = update.traffic_loss_ue ?? 0;
+        pointFeature.properties.traffic_loss_gb = update.traffic_loss_gb ?? 0;
         pointFeature.properties.ta = update.ta;
+        pointFeature.properties.dynamic_radius_supported = update.dynamic_radius_supported !== false;
         pointFeature.properties.signal_power = update.signal_power;
         pointFeature.properties.is_forecast = update.is_forecast;
         if (update.confidence !== null && update.confidence !== undefined) {
@@ -951,6 +868,7 @@ function applyWorkerFeatureUpdates(featureUpdates = [], options = {}) {
         sectorFeature.properties.congested = update.congested;
         sectorFeature.properties.severity = update.severity;
         sectorFeature.properties.issue_type = update.issue_type;
+        sectorFeature.properties.dynamic_radius_supported = update.dynamic_radius_supported !== false;
         sectorFeature.properties.is_forecast = update.is_forecast;
         if (update.confidence !== null && update.confidence !== undefined) {
             sectorFeature.properties.confidence = update.confidence;
@@ -964,47 +882,25 @@ function applyWorkerFeatureUpdates(featureUpdates = [], options = {}) {
     state.needsSectorGeometrySync = true;
 }
 
-function updateFeaturesForTimeLocal(observations = {}, options = {}) {
-    const featuresCount = Math.min(state.pointFeatures.length, state.sectorFeatures.length);
-    for (let i = 0; i < featuresCount; i++) {
-        const pointFeature = state.pointFeatures[i];
-        const sectorFeature = state.sectorFeatures[i];
-        const cellName = pointFeature?.properties?.cell_name;
-        if (!cellName || !sectorFeature) continue;
-        const obs = observations[cellName] || null;
-        updateFeatureProperties(pointFeature.properties, sectorFeature.properties, obs, options);
-    }
-
-    applyPeakAndDriftMetadataToFeatures();
-    syncSectorGeometryForObservations(observations);
-    state.needsSectorGeometrySync = true;
-}
-
 async function updateFeaturesForTime(observations = {}, options = {}) {
     const cellNames = state.pointFeatures.map((feature) => feature?.properties?.cell_name || '');
-    try {
-        const updates = await callDataWorker(
-            'buildFeatureUpdates',
-            {
-                cellNames,
-                observations,
-                cqiThreshold: CONFIG.CQI_THRESHOLD,
-                colors: CONFIG.COLORS,
-                isForecast: options?.isForecast || false,
-                confidence: options?.confidence ?? null,
-            },
-            45000
-        );
+    const updates = await callDataWorker(
+        'buildFeatureUpdates',
+        {
+            cellNames,
+            observations,
+            cqiThreshold: CONFIG.CQI_THRESHOLD,
+            colors: CONFIG.COLORS,
+            isForecast: options?.isForecast || false,
+            confidence: options?.confidence ?? null,
+        },
+        45000
+    );
 
-        if (Array.isArray(updates) && updates.length === state.pointFeatures.length) {
-            applyWorkerFeatureUpdates(updates, options);
-            return;
-        }
-    } catch (err) {
-        console.warn('Feature updates moved to local thread:', err?.message || err);
+    if (!Array.isArray(updates) || updates.length !== state.pointFeatures.length) {
+        throw new Error('Worker returned invalid feature update payload');
     }
-
-    updateFeaturesForTimeLocal(observations, options);
+    applyWorkerFeatureUpdates(updates);
 }
 
 function setSectorGeometryResolution(steps) {
@@ -1891,6 +1787,8 @@ window.selectCell = (cellName, fly = true) => {
             ['Load', `${formatNumber(p.load)}%`],
             ['CQI', formatNumber(p.cqi)],
             ['Throughput', formatThroughput(p.throughput)],
+            ['Lost UEs / month', formatNumber(p.traffic_loss_ue, 0)],
+            ['Lost GB / month', formatNumber(p.traffic_loss_gb, 1)],
             ['Peak Hour', p.peak_hour || 'N/A'],
             ['Peak Avg PRB', p.peak_avg_prb !== null && p.peak_avg_prb !== undefined ? `${formatNumber(p.peak_avg_prb, 1)}%` : 'N/A'],
             ['Drift Delta', p.drift_abs_delta !== null && p.drift_abs_delta !== undefined ? `${formatNumber(p.drift_abs_delta, 1)} PRB` : 'N/A'],
@@ -1924,6 +1822,9 @@ function applyFilters() {
     const { status, loadRange, severityRange, showLowCQIOnly, bands, issueTypes } = state.filters;
     const [minLoad, maxLoad] = loadRange;
     const [minSeverity, maxSeverity] = severityRange;
+    const hideSectorsWithoutTa =
+        state.customDataset.active &&
+        Boolean(state.customDataset.realismPolicy?.hideSectorsWithoutTa);
     
     const points = state.pointFeatures.filter(f => {
         const p = f.properties;
@@ -1940,7 +1841,20 @@ function applyFilters() {
         return true;
     });
     const visiblePointIds = new Set(points.map(p => p.id));
-    const sectors = state.sectorFeatures.filter(f => visiblePointIds.has(f.id));
+    const visibleSectors = state.sectorFeatures.filter((f) => {
+        if (!visiblePointIds.has(f.id)) return false;
+        return true;
+    });
+
+    const sectorsWithTa = visibleSectors.filter((f) => f?.properties?.dynamic_radius_supported !== false);
+    const shouldFallbackToStaticSectors = hideSectorsWithoutTa && sectorsWithTa.length === 0;
+
+    const sectors = visibleSectors.filter((f) => {
+        if (hideSectorsWithoutTa && f?.properties?.dynamic_radius_supported === false) {
+            return shouldFallbackToStaticSectors;
+        }
+        return true;
+    });
     state.filteredPointFeatures = points;
     state.filteredSectorFeatures = sectors;
     updateMapData();
@@ -2076,167 +1990,28 @@ function simpleReport() {
 // --- Data Exploration ---
 const exploreCharts = { main: null, timeline: null };
 
-function computeExploreData(duration, metric) {
-    const data = state.timeIndex;
-    if (!data || data.length === 0) return { labels: [], values: [], insights: {} };
-
-    if (duration === 'hour') {
-        // Aggregate by hour of day (0-23)
-        const hourBuckets = Array(24).fill(null).map(() => []);
-        data.forEach(entry => {
-            const ts = entry.timestamp || '';
-            const match = ts.match(/(\d{2}):(\d{2})$/);
-            if (match) {
-                const hour = parseInt(match[1], 10);
-                const val = entry.stats?.[metric] ?? 0;
-                hourBuckets[hour].push(val);
-            }
-        });
-        const labels = Array.from({ length: 24 }, (_, i) => `${String(i).padStart(2, '0')}:00`);
-        const values = hourBuckets.map(arr => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0);
-        
-        // Find peak hours
-        const sorted = values.map((v, i) => ({ hour: i, value: v })).sort((a, b) => b.value - a.value);
-        const peakHours = sorted.slice(0, 3).map(p => `${String(p.hour).padStart(2, '0')}:00`);
-        const offPeakHours = sorted.slice(-3).map(p => `${String(p.hour).padStart(2, '0')}:00`);
-        
-        return {
-            labels,
-            values,
-            insights: {
-                peakHours,
-                offPeakHours,
-                maxValue: Math.max(...values),
-                avgValue: values.reduce((a, b) => a + b, 0) / 24
-            }
-        };
-    }
-
-    if (duration === 'day') {
-        // Aggregate by day
-        const dayBuckets = {};
-        data.forEach(entry => {
-            const ts = entry.timestamp || '';
-            const match = ts.match(/^(\d{2}-\d{2}-\d{4})/);
-            if (match) {
-                const day = match[1];
-                if (!dayBuckets[day]) dayBuckets[day] = [];
-                dayBuckets[day].push(entry.stats?.[metric] ?? 0);
-            }
-        });
-        const days = Object.keys(dayBuckets).sort((a, b) => {
-            const [da, ma, ya] = a.split('-').map(Number);
-            const [db, mb, yb] = b.split('-').map(Number);
-            return new Date(ya, ma - 1, da) - new Date(yb, mb - 1, db);
-        });
-        const labels = days;
-        const values = days.map(d => {
-            const arr = dayBuckets[d];
-            return arr.reduce((a, b) => a + b, 0) / arr.length;
-        });
-        
-        const maxIdx = values.indexOf(Math.max(...values));
-        const minIdx = values.indexOf(Math.min(...values));
-        
-        return {
-            labels,
-            values,
-            insights: {
-                worstDay: labels[maxIdx],
-                bestDay: labels[minIdx],
-                maxValue: values[maxIdx],
-                minValue: values[minIdx],
-                avgValue: values.reduce((a, b) => a + b, 0) / values.length
-            }
-        };
-    }
-
-    if (duration === 'week') {
-        // Aggregate by week (day of week)
-        const weekDays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-        const weekBuckets = Array(7).fill(null).map(() => []);
-        data.forEach(entry => {
-            const ts = entry.timestamp || '';
-            const match = ts.match(/^(\d{2})-(\d{2})-(\d{4})/);
-            if (match) {
-                const [, d, m, y] = match;
-                const date = new Date(Number(y), Number(m) - 1, Number(d));
-                const dow = date.getDay();
-                weekBuckets[dow].push(entry.stats?.[metric] ?? 0);
-            }
-        });
-        const labels = weekDays;
-        const values = weekBuckets.map(arr => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0);
-        
-        const maxIdx = values.indexOf(Math.max(...values));
-        const minIdx = values.indexOf(Math.min(...values));
-        
-        return {
-            labels,
-            values,
-            insights: {
-                worstDay: weekDays[maxIdx],
-                bestDay: weekDays[minIdx],
-                maxValue: values[maxIdx],
-                minValue: values[minIdx]
-            }
-        };
-    }
-
-    if (duration === 'all') {
-        const arr = data.map(entry => entry.stats?.[metric] ?? 0);
-        const total = arr.reduce((a, b) => a + b, 0);
-        const avg = arr.length ? total / arr.length : 0;
-        const maxValue = arr.length ? Math.max(...arr) : 0;
-        const minValue = arr.length ? Math.min(...arr) : 0;
-        return {
-            labels: ['All time total'],
-            values: [total],
-            insights: { total, avgValue: avg, maxValue, minValue, samples: arr.length }
-        };
-    }
-
-    return { labels: [], values: [], insights: {} };
-}
-
-function computeTimelineData(metric) {
-    // Show congestion over time (all data points)
-    const data = state.timeIndex;
-    const labels = data.map(e => e.timestamp || '');
-    const values = data.map(e => e.stats?.[metric] ?? 0);
-    return { labels, values };
-}
-
 async function computeExploreDataWithWorker(duration, metric) {
-    try {
-        const result = await callDataWorker(
-            'computeExploreData',
-            { duration, metric, timeIndex: state.timeIndex },
-            30000
-        );
-        if (result && Array.isArray(result.labels) && Array.isArray(result.values)) {
-            return result;
-        }
-    } catch (err) {
-        console.warn('Explore aggregation moved to local thread:', err?.message || err);
+    const result = await callDataWorker(
+        'computeExploreData',
+        { duration, metric, timeIndex: state.timeIndex },
+        30000
+    );
+    if (!result || !Array.isArray(result.labels) || !Array.isArray(result.values)) {
+        throw new Error('Worker returned invalid explore data payload');
     }
-    return computeExploreData(duration, metric);
+    return result;
 }
 
 async function computeTimelineDataWithWorker(metric) {
-    try {
-        const result = await callDataWorker(
-            'computeTimelineData',
-            { metric, timeIndex: state.timeIndex },
-            30000
-        );
-        if (result && Array.isArray(result.labels) && Array.isArray(result.values)) {
-            return result;
-        }
-    } catch (err) {
-        console.warn('Timeline aggregation moved to local thread:', err?.message || err);
+    const result = await callDataWorker(
+        'computeTimelineData',
+        { metric, timeIndex: state.timeIndex },
+        30000
+    );
+    if (!result || !Array.isArray(result.labels) || !Array.isArray(result.values)) {
+        throw new Error('Worker returned invalid timeline data payload');
     }
-    return computeTimelineData(metric);
+    return result;
 }
 
 async function renderExploreCharts() {
@@ -2467,11 +2242,19 @@ const IMPORT_FIELD_CONFIG = {
         { key: 'localcell_id', label: 'Local Cell ID', required: false },
         { key: 'enodeb_name', label: 'Site / eNodeB', required: false },
         { key: 'cell_fdd_tdd_indication', label: 'Duplex Mode', required: false },
+        { key: 'timestamp', label: 'Timestamp', required: false },
+        { key: 'date', label: 'Date', required: false },
+        { key: 'time', label: 'Time', required: false },
         { key: 'traffic', label: 'Traffic', required: false },
         { key: 'active_users', label: 'Active Users', required: false },
         { key: 'load', label: 'PRB Load', required: false },
         { key: 'throughput', label: 'Throughput', required: false },
         { key: 'cqi', label: 'CQI', required: false },
+        { key: 'congested', label: 'Congestion Flag', required: false },
+        { key: 'severity', label: 'Severity', required: false },
+        { key: 'issue_type', label: 'Issue Type', required: false },
+        { key: 'root_cause', label: 'Root Cause', required: false },
+        { key: 'health_score', label: 'Health Score', required: false },
     ],
 };
 
@@ -2550,10 +2333,10 @@ function getBaselineForImportSession(importType, sessionMode = importState.sessi
     return {};
 }
 
-function normalizeSliceTimestamp(value, fallbackDate = new Date()) {
+function normalizeSliceTimestamp(value) {
     const raw = String(value || '').trim();
     if (!raw) {
-        return formatTimestampFromDate(fallbackDate);
+        return '';
     }
 
     const parsed = parseTimestamp(raw);
@@ -2573,26 +2356,18 @@ function getTimestampSortValue(timestamp) {
 }
 
 function normalizeImportSlices(datasetPayload = {}) {
-    const fallbackTimestamp = normalizeSliceTimestamp(datasetPayload?.timestamp || new Date().toISOString());
-    const rawSlices = Array.isArray(datasetPayload?.slices) && datasetPayload.slices.length
-        ? datasetPayload.slices
-        : [
-            {
-                timestamp: fallbackTimestamp,
-                observations: datasetPayload?.observations || {},
-                stats: datasetPayload?.stats || {},
-            },
-        ];
+    const rawSlices = Array.isArray(datasetPayload?.slices) ? datasetPayload.slices : [];
 
     return rawSlices
-        .map((slice, index) => {
-            const fallbackDate = new Date(Date.now() + index * 60000);
+        .map((slice) => {
+            const timestamp = normalizeSliceTimestamp(slice?.timestamp);
             return {
-                timestamp: normalizeSliceTimestamp(slice?.timestamp, fallbackDate),
+                timestamp,
                 observations: slice?.observations && typeof slice.observations === 'object' ? slice.observations : {},
                 stats: slice?.stats && typeof slice.stats === 'object' ? slice.stats : {},
             };
         })
+        .filter((slice) => String(slice.timestamp || '').trim().length > 0)
         .sort((left, right) => {
             const leftTime = getTimestampSortValue(left.timestamp);
             const rightTime = getTimestampSortValue(right.timestamp);
@@ -2606,9 +2381,9 @@ function normalizeImportSlices(datasetPayload = {}) {
 function mergeImportSlices(existingSlices = [], incomingSlices = []) {
     const mergedByTimestamp = new Map();
 
-    existingSlices.forEach((slice, index) => {
-        const fallbackDate = new Date(Date.now() + index * 60000);
-        const timestamp = normalizeSliceTimestamp(slice?.timestamp, fallbackDate);
+    existingSlices.forEach((slice) => {
+        const timestamp = normalizeSliceTimestamp(slice?.timestamp);
+        if (!timestamp) return;
         mergedByTimestamp.set(timestamp, {
             timestamp,
             observations: slice?.observations && typeof slice.observations === 'object' ? slice.observations : {},
@@ -2616,9 +2391,9 @@ function mergeImportSlices(existingSlices = [], incomingSlices = []) {
         });
     });
 
-    incomingSlices.forEach((slice, index) => {
-        const fallbackDate = new Date(Date.now() + (existingSlices.length + index) * 60000);
-        const timestamp = normalizeSliceTimestamp(slice?.timestamp, fallbackDate);
+    incomingSlices.forEach((slice) => {
+        const timestamp = normalizeSliceTimestamp(slice?.timestamp);
+        if (!timestamp) return;
         mergedByTimestamp.set(timestamp, {
             timestamp,
             observations: slice?.observations && typeof slice.observations === 'object' ? slice.observations : {},
@@ -2819,18 +2594,35 @@ function applyAutoImportAssignments(type = importState.selectedType) {
 function getImportMappingValidation(mapping = importState.mapping, type = importState.selectedType) {
     const fields = getImportFieldsForType(type);
     const missingRequired = fields.filter((field) => field.required && !mapping[field.key]);
+    const extraErrors = [];
+
+    if (normalizeImportType(type) === IMPORT_TYPE_KPI) {
+        const hasTimestamp = Boolean(mapping?.timestamp);
+        const hasDateTime = Boolean(mapping?.date) && Boolean(mapping?.time);
+        if (!hasTimestamp && !hasDateTime) {
+            extraErrors.push('KPI Hourly Data requires a Timestamp mapping, or both Date and Time mappings.');
+        }
+    }
 
     return {
         fields,
         missingRequired,
-        isValid: missingRequired.length === 0,
+        extraErrors,
+        isValid: missingRequired.length === 0 && extraErrors.length === 0,
     };
 }
 
 function validateImportMapping(mapping) {
     const validation = getImportMappingValidation(mapping);
     if (validation.isValid) return null;
-    return `Missing required field mapping: ${validation.missingRequired.map((field) => field.label).join(', ')}`;
+    const messages = [];
+    if (validation.missingRequired.length) {
+        messages.push(`Missing required field mapping: ${validation.missingRequired.map((field) => field.label).join(', ')}`);
+    }
+    if (validation.extraErrors.length) {
+        messages.push(validation.extraErrors.join(' '));
+    }
+    return messages.join(' ');
 }
 
 function updateImportTypeUI() {
@@ -2939,14 +2731,69 @@ function updateImportCrossFileWarning() {
         return;
     }
 
-    warningBanner.textContent =
-        'Reference Data is not loaded in this session. KPI Hourly Data can still be imported, but the map will stay empty until you import Reference Data first.';
+    warningBanner.textContent = 'Reference Data is required in this session before KPI rows can be loaded because scope-to-reference validation is enabled.';
     warningBanner.classList.remove('import-hidden');
 }
 
-function setImportSummaryVisible(show) {
-    importState.summaryVisible = Boolean(show);
+function canEnableStrictCongestionMode(mapping = importState.mapping) {
+    if (normalizeImportType(importState.selectedType) !== IMPORT_TYPE_KPI) {
+        return false;
+    }
+    return Boolean(mapping?.congested);
+}
 
+function buildCurrentImportRealismPolicy(mapping = importState.mapping) {
+    const strictNoFallbackEnabled = Boolean(importState.strictNoFallback) && canEnableStrictCongestionMode(mapping);
+    return {
+        ...IMPORT_REALISM_POLICY,
+        strictNoFallback: strictNoFallbackEnabled,
+    };
+}
+
+function updateImportStrictModeUI() {
+    const toggle = document.getElementById('import-strict-mode-toggle');
+    const helper = document.getElementById('import-strict-mode-help');
+    if (!(toggle instanceof HTMLInputElement)) return;
+
+    const isKpi = normalizeImportType(importState.selectedType) === IMPORT_TYPE_KPI;
+    const canEnable = canEnableStrictCongestionMode(importState.mapping);
+
+    if (!isKpi || !canEnable) {
+        importState.strictNoFallback = false;
+    }
+
+    toggle.checked = isKpi && canEnable && importState.strictNoFallback;
+    toggle.disabled = !isKpi || !canEnable || importState.parseInProgress;
+
+    if (!helper) return;
+    if (!isKpi) {
+        helper.textContent = 'Reference Data imports do not use congestion classification mode.';
+    } else if (!canEnable) {
+        helper.textContent = 'Map a CSV column to Congestion Flag to enable strict mode.';
+    } else if (importState.strictNoFallback) {
+        helper.textContent = 'Strict mode enabled: only mapped Congestion Flag values are used.';
+    } else {
+        helper.textContent = 'Heuristic mode enabled: congestion is derived from PRB, throughput, queue, and CQI.';
+    }
+}
+
+function updateImportConfirmButtonState() {
+    const confirmButton = document.getElementById('btn-import-confirm');
+    if (!(confirmButton instanceof HTMLButtonElement)) return;
+
+    const hasPendingPayload = Boolean(importState.pendingImportPayload);
+    confirmButton.innerHTML = hasPendingPayload
+        ? '<span class="material-symbols-outlined">map</span>Load Imported Session'
+        : '<span class="material-symbols-outlined">check_circle</span>Confirm Import';
+}
+
+function resetPendingImportPreview() {
+    importState.pendingImportPayload = null;
+    importState.pendingImportOptions = null;
+    updateImportConfirmButtonState();
+}
+
+function setImportSummaryVisible(show) {
     const summarySection = document.getElementById('import-summary-section');
     const mappingSection = document.getElementById('import-mapping-section');
     const previewSection = document.getElementById('import-preview-section');
@@ -2970,9 +2817,14 @@ function setImportBusyState(isBusy) {
         'btn-import-exit-session',
         'import-type-select',
         'import-session-mode',
+        'import-strict-mode-toggle',
     ].forEach((id) => {
         const element = document.getElementById(id);
-        if (!(element instanceof HTMLButtonElement) && !(element instanceof HTMLSelectElement)) return;
+        if (
+            !(element instanceof HTMLButtonElement) &&
+            !(element instanceof HTMLSelectElement) &&
+            !(element instanceof HTMLInputElement)
+        ) return;
         element.disabled = isBusy;
     });
 }
@@ -2996,6 +2848,7 @@ function setImportParsingState(active, copy = 'Parsing CSV, please wait...', row
     }
 
     updateImportSessionUI();
+    updateImportStrictModeUI();
 }
 
 function readImportMappingFromUI() {
@@ -3122,6 +2975,8 @@ function renderImportPreviewRows() {
             if (!(selectEl instanceof HTMLSelectElement)) return;
 
             setImportColumnAssignment(header, selectEl.value, 'manual');
+            resetPendingImportPreview();
+            updateImportStrictModeUI();
             setImportSummaryVisible(false);
             renderImportMappingUI();
             renderImportPreviewRows();
@@ -3316,6 +3171,8 @@ function applySuggestedImportProfile() {
     importState.columnAssignments = assignments;
     importState.columnSource = sources;
     syncImportMappingFromColumns();
+    resetPendingImportPreview();
+    updateImportStrictModeUI();
 
     importState.profileBannerDismissed = true;
     renderImportProfileBanner();
@@ -3414,11 +3271,15 @@ function saveCurrentImportProfile() {
     showNotification('Mapping profile saved successfully', 'success');
 }
 
-function renderImportSummary(mapping) {
+function renderImportSummary(mapping, parityPayload = null) {
     const container = document.getElementById('import-summary-content');
     if (!container) return;
 
     const validation = getImportMappingValidation(mapping, importState.selectedType);
+    const realismPolicy = buildCurrentImportRealismPolicy(mapping);
+    const congestionModeLabel = realismPolicy.strictNoFallback
+        ? 'Strict (pre-labeled congestion only)'
+        : 'Heuristic (Orange thresholds)';
     const mappedRows = validation.fields
         .filter((field) => mapping[field.key])
         .map((field) => {
@@ -3441,6 +3302,32 @@ function renderImportSummary(mapping) {
         ? `<div class="import-summary-warning">${warnings.map((warning) => `<div>${escapeHtml(warning)}</div>`).join('')}</div>`
         : '';
 
+    let parityHtml = '';
+    if (parityPayload && normalizeImportType(importState.selectedType) === IMPORT_TYPE_KPI) {
+        const quality = parityPayload?.data_quality && typeof parityPayload.data_quality === 'object'
+            ? parityPayload.data_quality
+            : {};
+
+        const rowsProcessed = Math.max(0, Number(quality?.rows_processed ?? 0));
+        const rowsDroppedByScope = Math.max(0, Number(quality?.rows_dropped_by_scope ?? 0));
+        const rowsWithTa = Math.max(0, Number(quality?.rows_with_ta ?? 0));
+        const taCoveragePct = rowsProcessed > 0 ? ((rowsWithTa / rowsProcessed) * 100).toFixed(1) : '0.0';
+        const congestedCells = Math.max(0, Number(parityPayload?.stats?.congested ?? 0));
+
+        parityHtml = `
+            <div class="import-parity-report">
+                <div class="import-parity-title">Parity Report (before map load)</div>
+                <div class="import-parity-grid">
+                    <div><span>Rows Processed</span><strong>${escapeHtml(rowsProcessed)}</strong></div>
+                    <div><span>Dropped By Scope</span><strong>${escapeHtml(rowsDroppedByScope)}</strong></div>
+                    <div><span>TA Coverage</span><strong>${escapeHtml(taCoveragePct)}%</strong></div>
+                    <div><span>Congestion Mode</span><strong>${escapeHtml(congestionModeLabel)}</strong></div>
+                    <div><span>Congested Cells</span><strong>${escapeHtml(congestedCells)}</strong></div>
+                </div>
+            </div>
+        `;
+    }
+
     const sessionCopy = importState.sessionMode === 'current' && state.customDataset.active
         ? 'Current Import Session'
         : 'New Import Session';
@@ -3451,6 +3338,7 @@ function renderImportSummary(mapping) {
             <div><span>Import Type</span><strong>${escapeHtml(getImportTypeLabel(importState.selectedType))}</strong></div>
             <div><span>Target Session</span><strong>${escapeHtml(sessionCopy)}</strong></div>
             <div><span>Rows</span><strong>${escapeHtml(importState.totalRows || 0)}</strong></div>
+            <div><span>Congestion Mode</span><strong>${escapeHtml(congestionModeLabel)}</strong></div>
             <div><span>Mapped Fields</span><strong>${escapeHtml(Object.keys(mapping).length)} / ${escapeHtml(validation.fields.length)}</strong></div>
         </div>
         ${warningHtml}
@@ -3468,6 +3356,7 @@ function renderImportSummary(mapping) {
                 </tbody>
             </table>
         </div>
+        ${parityHtml}
     `);
 }
 
@@ -3533,7 +3422,6 @@ function clearImportSession(options = {}) {
     importState.allRows = [];
     importState.previewRows = [];
     importState.inferredMapping = {};
-    importState.inferredMappingMeta = {};
     importState.matchScores = {};
     importState.mapping = {};
     importState.mappingSource = {};
@@ -3545,6 +3433,9 @@ function clearImportSession(options = {}) {
     importState.totalRows = 0;
     importState.profileSuggestion = null;
     importState.profileBannerDismissed = false;
+    importState.strictNoFallback = false;
+    importState.pendingImportPayload = null;
+    importState.pendingImportOptions = null;
 
     setImportParsingState(false);
     setImportSummaryVisible(false);
@@ -3552,6 +3443,8 @@ function clearImportSession(options = {}) {
     updateImportTypeUI();
     updateImportCrossFileWarning();
     updateImportSessionUI();
+    updateImportStrictModeUI();
+    updateImportConfirmButtonState();
     renderImportProfileBanner();
     renderImportMappingUI();
     renderImportPreviewRows();
@@ -3584,9 +3477,10 @@ async function restoreLiveDatasetSession() {
         active: false,
         sessionId: '',
         createdAt: '',
-        sourceFile: '',
         importedFiles: [],
         slices: [],
+        realismPolicy: { ...IMPORT_REALISM_POLICY },
+        dataQuality: null,
     };
 
     state.baseline = deepClone(snapshot.baseline || {});
@@ -3631,6 +3525,7 @@ async function restoreLiveDatasetSession() {
         state.selectedCellName = null;
         renderActionPanel(state.selectedCellName);
     }
+    recommendationCache.clear();
 
     updateDriftAlertsUI();
 
@@ -3660,6 +3555,11 @@ async function restoreLiveDatasetSession() {
 async function applyImportedDataset(datasetPayload, options = {}) {
     const sessionMode = normalizeImportSessionMode(options.sessionMode || importState.sessionMode);
     const sourceFileName = String(options.sourceFileName || importState.selectedFileName || '').trim();
+    const realismPolicy = {
+        ...IMPORT_REALISM_POLICY,
+        ...(state.customDataset?.realismPolicy || {}),
+        ...(options.realismPolicy || {}),
+    };
 
     if (sessionMode === 'new') {
         if (!state.customDataset.active) {
@@ -3677,20 +3577,22 @@ async function applyImportedDataset(datasetPayload, options = {}) {
     }
 
     const incomingSlices = normalizeImportSlices(datasetPayload);
+    const incomingImportType = normalizeImportType(datasetPayload?.import_type, true);
     const canMergeWithCurrentSession = sessionMode === 'current' && state.customDataset.active;
-    const finalSlices = canMergeWithCurrentSession
+    let finalSlices = canMergeWithCurrentSession
         ? mergeImportSlices(state.customDataset.slices, incomingSlices)
         : incomingSlices;
 
-    const safeSlices = finalSlices.length
-        ? finalSlices
-        : [
-            {
-                timestamp: normalizeSliceTimestamp(new Date().toISOString()),
-                observations: {},
-                stats: {},
-            },
-        ];
+    if (incomingImportType === IMPORT_TYPE_KPI) {
+        finalSlices = finalSlices.filter((slice) => String(slice?.timestamp || '').trim() !== 'Reference import snapshot');
+    }
+
+    if (!finalSlices.length) {
+        showNotification('Import produced no valid timestamped slices. Timeline was not updated.', 'error');
+        return false;
+    }
+
+    const safeSlices = finalSlices;
 
     const incomingBaseline = datasetPayload?.baseline && typeof datasetPayload.baseline === 'object'
         ? datasetPayload.baseline
@@ -3733,9 +3635,12 @@ async function applyImportedDataset(datasetPayload, options = {}) {
     state.customDataset.active = true;
     state.customDataset.sessionId = sessionId;
     state.customDataset.createdAt = sessionCreatedAt;
-    state.customDataset.sourceFile = sourceFileName || state.customDataset.sourceFile || '';
     state.customDataset.importedFiles = importedFiles;
     state.customDataset.slices = safeSlices;
+    state.customDataset.realismPolicy = realismPolicy;
+    state.customDataset.dataQuality = datasetPayload?.data_quality && typeof datasetPayload.data_quality === 'object'
+        ? datasetPayload.data_quality
+        : null;
 
     state.timeIndex = safeSlices.map((slice, index) => ({
         timestamp: slice.timestamp,
@@ -3752,6 +3657,7 @@ async function applyImportedDataset(datasetPayload, options = {}) {
         state.selectedCellName = null;
         renderActionPanel(state.selectedCellName);
     }
+    recommendationCache.clear();
 
     forecastState.forecastIndex = [];
     forecastState.available = false;
@@ -3816,12 +3722,25 @@ async function applyImportedDataset(datasetPayload, options = {}) {
         `Imported ${importedCells} cells and ${sessionCopy}${errorCount ? ` (${errorCount} row warnings)` : ''}`,
         'success'
     );
+
+    const taHiddenCount = Number(state.customDataset.dataQuality?.rows_without_ta ?? 0);
+    if (realismPolicy.hideSectorsWithoutTa && taHiddenCount > 0) {
+        showNotification(
+            `${taHiddenCount} KPI rows are missing TA. Sector radius stays static for those cells.`,
+            'info'
+        );
+    }
+
+    if (safeSlices.length <= 1) {
+        showNotification('Only one timestamp is available in this import. Playback and date stepping are limited.', 'info');
+    }
+
+    return true;
 }
 
 async function parseImportCsvFile(file) {
     if (!file) return;
 
-    const selectedTypeBeforeParse = importState.selectedType;
     clearImportSession({ keepSelectedType: true, clearInput: false });
 
     importState.selectedFileName = file.name;
@@ -3847,7 +3766,6 @@ async function parseImportCsvFile(file) {
         importState.previewRows = Array.isArray(parsed?.previewRows) ? parsed.previewRows : [];
         importState.allRows = Array.isArray(parsed?.allRows) ? parsed.allRows : [];
         importState.inferredMapping = parsed?.inferredMapping || {};
-        importState.inferredMappingMeta = parsed?.inferredMappingMeta || {};
         importState.matchScores = parsed?.matchScores || {};
         importState.detectedType = normalizeImportType(parsed?.detectedType, true);
         importState.detectionReasons = Array.isArray(parsed?.detectionReasons) ? parsed.detectionReasons : [];
@@ -3856,7 +3774,7 @@ async function parseImportCsvFile(file) {
         if (importState.detectedType === IMPORT_TYPE_REFERENCE || importState.detectedType === IMPORT_TYPE_KPI) {
             importState.selectedType = importState.detectedType;
         } else {
-            importState.selectedType = selectedTypeBeforeParse;
+            importState.selectedType = IMPORT_TYPE_REFERENCE;
         }
 
         applyAutoImportAssignments(importState.selectedType);
@@ -3865,6 +3783,8 @@ async function parseImportCsvFile(file) {
         updateImportFileInfo();
         updateImportTypeUI();
         updateImportCrossFileWarning();
+        updateImportStrictModeUI();
+        updateImportConfirmButtonState();
         refreshImportProfileSuggestion();
         renderImportMappingUI();
         renderImportPreviewRows();
@@ -3889,6 +3809,8 @@ function runCsvImport() {
         return;
     }
 
+    resetPendingImportPreview();
+    updateImportStrictModeUI();
     renderImportSummary(mapping);
     setImportSummaryVisible(true);
 }
@@ -3910,9 +3832,36 @@ async function confirmCsvImport() {
         return;
     }
 
+    const realismPolicy = buildCurrentImportRealismPolicy(mapping);
+
+    if (
+        importState.selectedType === IMPORT_TYPE_KPI &&
+        realismPolicy.strictScopeToReference &&
+        !hasReferenceDataForKpiImport()
+    ) {
+        showNotification(
+            'Reference Data must exist in this import session before KPI Hourly Data can be loaded.',
+            'error'
+        );
+        setImportSummaryVisible(false);
+        return;
+    }
+
     setImportBusyState(true);
 
     try {
+        const stagedPayload = importState.pendingImportPayload;
+        const stagedOptions = importState.pendingImportOptions;
+        if (stagedPayload && stagedOptions) {
+            const applied = await applyImportedDataset(stagedPayload, stagedOptions);
+            if (!applied) {
+                return;
+            }
+            clearImportSession({ keepSelectedType: true, clearInput: true });
+            toggleModal('import-modal', false);
+            return;
+        }
+
         const existingBaseline = getBaselineForImportSession(importState.selectedType, importState.sessionMode);
 
         const payload = await callDataWorker(
@@ -3922,6 +3871,7 @@ async function confirmCsvImport() {
                 mapping,
                 importType: importState.selectedType,
                 existingBaseline,
+                realismPolicy,
             },
             90000
         );
@@ -3929,10 +3879,37 @@ async function confirmCsvImport() {
         const warnings = Array.isArray(payload?.warnings) ? payload.warnings : [];
         warnings.forEach((warning) => showNotification(String(warning), 'warning'));
 
-        await applyImportedDataset(payload, {
+        if (importState.selectedType === IMPORT_TYPE_KPI) {
+            const rowsProcessed = Number(payload?.data_quality?.rows_processed ?? 0);
+            const hasSlices = Array.isArray(payload?.slices) && payload.slices.length > 0;
+            if (!hasSlices || rowsProcessed <= 0) {
+                showNotification(
+                    'KPI import has no valid timestamped rows after strict validation. Check timestamp mapping and reference scope.',
+                    'error'
+                );
+                return;
+            }
+
+            importState.pendingImportPayload = payload;
+            importState.pendingImportOptions = {
+                sessionMode: importState.sessionMode,
+                sourceFileName: importState.selectedFileName,
+                realismPolicy,
+            };
+            renderImportSummary(mapping, payload);
+            updateImportConfirmButtonState();
+            showNotification('Parity report generated. Review it, then click Load Imported Session.', 'info');
+            return;
+        }
+
+        const applied = await applyImportedDataset(payload, {
             sessionMode: importState.sessionMode,
             sourceFileName: importState.selectedFileName,
+            realismPolicy,
         });
+        if (!applied) {
+            return;
+        }
         clearImportSession({ keepSelectedType: true, clearInput: true });
         toggleModal('import-modal', false);
     } catch (err) {
@@ -3944,10 +3921,13 @@ async function confirmCsvImport() {
 }
 
 function openImportModal() {
+    resetPendingImportPreview();
     setImportSummaryVisible(false);
     updateImportTypeUI();
     updateImportCrossFileWarning();
     updateImportSessionUI();
+    updateImportStrictModeUI();
+    updateImportConfirmButtonState();
     renderImportMappingUI();
     renderImportPreviewRows();
     toggleModal('import-modal', true);
@@ -3956,6 +3936,7 @@ function openImportModal() {
 function setupImportModal() {
     document.getElementById('btn-import')?.addEventListener('click', openImportModal);
     document.getElementById('import-close')?.addEventListener('click', () => {
+        resetPendingImportPreview();
         setImportSummaryVisible(false);
         toggleModal('import-modal', false);
     });
@@ -3985,6 +3966,7 @@ function setupImportModal() {
         if (!(select instanceof HTMLSelectElement)) return;
 
         importState.selectedType = normalizeImportType(select.value);
+        resetPendingImportPreview();
         setImportSummaryVisible(false);
 
         if (importState.headers.length) {
@@ -3995,6 +3977,7 @@ function setupImportModal() {
 
         updateImportTypeUI();
         updateImportCrossFileWarning();
+        updateImportStrictModeUI();
         renderImportMappingUI();
         renderImportPreviewRows();
     });
@@ -4003,9 +3986,25 @@ function setupImportModal() {
         const select = event.target;
         if (!(select instanceof HTMLSelectElement)) return;
         importState.sessionMode = normalizeImportSessionMode(select.value);
+        resetPendingImportPreview();
         setImportSummaryVisible(false);
         updateImportSessionUI();
         updateImportCrossFileWarning();
+    });
+
+    document.getElementById('import-strict-mode-toggle')?.addEventListener('change', (event) => {
+        const input = event.target;
+        if (!(input instanceof HTMLInputElement)) return;
+
+        importState.strictNoFallback = input.checked;
+        resetPendingImportPreview();
+        updateImportStrictModeUI();
+
+        const summarySection = document.getElementById('import-summary-section');
+        if (summarySection && !summarySection.classList.contains('import-hidden')) {
+            const mapping = readImportMappingFromUI();
+            renderImportSummary(mapping);
+        }
     });
 
     document.getElementById('btn-import-reset')?.addEventListener('click', () => {
@@ -4041,6 +4040,7 @@ function setupImportModal() {
     document.getElementById('btn-import-profile-dismiss')?.addEventListener('click', dismissImportProfileSuggestion);
 
     document.getElementById('btn-import-back')?.addEventListener('click', () => {
+        resetPendingImportPreview();
         setImportSummaryVisible(false);
     });
 
@@ -4117,6 +4117,36 @@ function updateUnifiedTimeline() {
     
     // Update labels
     updateTimelineLabels();
+    updateUnifiedTimelineControlsState();
+}
+
+function updateUnifiedTimelineControlsState() {
+    const slider = document.getElementById('time-slider');
+    const prevBtn = document.getElementById('time-prev');
+    const nextBtn = document.getElementById('time-next');
+    const playBtn = document.getElementById('time-play');
+
+    const total = Number(unifiedTimeline.totalCount || 0);
+    const hasTimeline = total > 0;
+    const canStep = total > 1;
+    const current = Math.max(0, Math.min(unifiedTimeline.currentIndex, Math.max(0, total - 1)));
+
+    if (slider) {
+        slider.min = 0;
+        slider.max = Math.max(0, total - 1);
+        slider.value = current;
+        slider.disabled = !hasTimeline;
+    }
+
+    if (prevBtn instanceof HTMLButtonElement) {
+        prevBtn.disabled = !canStep || current <= 0;
+    }
+    if (nextBtn instanceof HTMLButtonElement) {
+        nextBtn.disabled = !canStep || current >= total - 1;
+    }
+    if (playBtn instanceof HTMLButtonElement) {
+        playBtn.disabled = !canStep;
+    }
 }
 
 function updateSliderTrack() {
@@ -4145,8 +4175,10 @@ function updateTimelineLabels() {
     const endLabel = document.getElementById('time-end-label');
     
     // Start label from historical
-    if (startLabel && state.timeIndex.length > 0) {
-        startLabel.textContent = state.timeIndex[0]?.timestamp || '--';
+    if (startLabel) {
+        startLabel.textContent = state.timeIndex.length > 0
+            ? state.timeIndex[0]?.timestamp || '--'
+            : '--';
     }
     
     // End label from forecast (if available) or historical
@@ -4155,6 +4187,8 @@ function updateTimelineLabels() {
             endLabel.textContent = forecastState.forecastIndex[forecastState.forecastIndex.length - 1]?.timestamp || '--';
         } else if (state.timeIndex.length > 0) {
             endLabel.textContent = state.timeIndex[state.timeIndex.length - 1]?.timestamp || '--';
+        } else {
+            endLabel.textContent = '--';
         }
     }
 }
@@ -4215,6 +4249,7 @@ async function loadUnifiedTimeSliceInternal(index, options = {}) {
         // Update slider position
         const slider = document.getElementById('time-slider');
         if (slider) slider.value = index;
+        updateUnifiedTimelineControlsState();
     } finally {
         if (requestId === activeSliceRequestId) {
             state.isLoadingSlice = false;
@@ -4227,7 +4262,7 @@ async function loadHistoricalSliceInternal(timeEntry, localIndex, requestContext
     const { signal, requestId } = requestContext;
 
     if (state.customDataset.active) {
-        const customSlice = state.customDataset.slices[localIndex] || state.customDataset.slices[0] || null;
+        const customSlice = state.customDataset.slices[localIndex] || null;
         if (!customSlice) return;
         state.currentTimeIndex = localIndex;
         state.currentObservations = customSlice.observations || {};
@@ -4453,6 +4488,11 @@ function setupUnifiedTimelineControls() {
     
     // Play button
     playBtn?.addEventListener('click', () => {
+        if (unifiedTimeline.totalCount <= 1) {
+            showNotification('Playback requires at least two timestamps.', 'info');
+            return;
+        }
+
         state.isPlaying = !state.isPlaying;
         const icon = playBtn.querySelector('.material-symbols-outlined');
         
@@ -4566,16 +4606,20 @@ function updateTimeSliderUI() {
     const isForecast = data.type === 'forecast';
     
     const currentLabel = document.getElementById('time-current-label');
-    if (currentLabel && data.entry) {
-        const label = isForecast 
-            ? `${data.entry.timestamp} (Forecast)` 
-            : data.entry.timestamp;
-        currentLabel.textContent = label || '--';
+    if (currentLabel) {
+        if (data.entry) {
+            const label = isForecast 
+                ? `${data.entry.timestamp} (Forecast)` 
+                : data.entry.timestamp;
+            currentLabel.textContent = label || '--';
+        } else {
+            currentLabel.textContent = '--';
+        }
     }
     
     const timestampEl = document.getElementById('timestamp');
-    if (timestampEl && data.entry) {
-        timestampEl.textContent = data.entry.timestamp || '--';
+    if (timestampEl) {
+        timestampEl.textContent = data?.entry?.timestamp || '--';
     }
 }
 
@@ -5236,18 +5280,12 @@ function switchBasemap(basemapKey) {
         return;
     }
 
-    if (typeof source.setTiles === 'function') {
-        source.setTiles(basemap.tiles);
+    if (typeof source.setTiles !== 'function') {
+        console.warn('Basemap source does not support dynamic tile switching');
         return;
     }
 
-    // Fallback for environments without setTiles support.
-    const style = state.map.getStyle();
-    if (style?.sources?.basemap && style.sources.basemap.type === 'raster') {
-        style.sources.basemap.tiles = [...basemap.tiles];
-        style.sources.basemap.attribution = basemap.attribution;
-        state.map.setStyle(style, { diff: true });
-    }
+    source.setTiles(basemap.tiles);
 }
 
 // --- Event Handlers ---

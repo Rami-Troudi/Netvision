@@ -2409,6 +2409,36 @@ body.theme-light .modal-overlay {
     font-size: 12px;
 }
 
+.import-mode-row {
+    margin: 10px 0;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-tertiary);
+    padding: 10px 12px;
+}
+
+.import-mode-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.import-mode-toggle input {
+    accent-color: var(--orange-primary);
+}
+
+.import-mode-toggle input:disabled + span {
+    opacity: 0.65;
+}
+
+.import-mode-helper {
+    margin: 6px 0 0;
+    font-size: 11px;
+}
+
 .import-profile-banner {
     margin: 10px 0;
     border: 1px solid rgba(129, 212, 250, 0.45);
@@ -2689,6 +2719,50 @@ body.theme-light .modal-overlay {
     border-bottom: none;
 }
 
+.import-parity-report {
+    margin-top: 12px;
+    border: 1px solid rgba(255, 121, 0, 0.35);
+    border-radius: var(--radius-sm);
+    background: rgba(255, 121, 0, 0.08);
+    padding: 10px;
+}
+
+.import-parity-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: #ffd180;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+.import-parity-grid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(120px, 1fr));
+    gap: 8px;
+}
+
+.import-parity-grid div {
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: var(--bg-secondary);
+    padding: 8px 9px;
+    display: grid;
+    gap: 4px;
+}
+
+.import-parity-grid span {
+    font-size: 10px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.35px;
+}
+
+.import-parity-grid strong {
+    font-size: 13px;
+    color: var(--text-primary);
+}
+
 .modal-header {
     display: flex;
     align-items: center;
@@ -2957,6 +3031,10 @@ body.theme-light .modal-overlay {
     .import-summary-actions {
         justify-content: flex-end;
     }
+
+    .import-parity-grid {
+        grid-template-columns: repeat(2, minmax(120px, 1fr));
+    }
 }
 
 @media (max-width: 640px) {
@@ -2992,6 +3070,10 @@ body.theme-light .modal-overlay {
     }
 
     .import-summary-metrics {
+        grid-template-columns: 1fr;
+    }
+
+    .import-parity-grid {
         grid-template-columns: 1fr;
     }
 

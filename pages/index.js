@@ -706,6 +706,16 @@ const pageMarkup = `
 
                     <div class="import-warning-banner import-hidden" id="import-crossfile-warning"></div>
 
+                    <div class="import-mode-row" id="import-mode-row">
+                        <label class="import-mode-toggle" for="import-strict-mode-toggle">
+                            <input type="checkbox" id="import-strict-mode-toggle" />
+                            <span>Strict congestion mode (use mapped Congestion Flag only)</span>
+                        </label>
+                        <p class="import-helper import-mode-helper" id="import-strict-mode-help">
+                            Heuristic mode is default for KPI imports.
+                        </p>
+                    </div>
+
                     <div class="import-profile-banner import-hidden" id="import-profile-banner">
                         <div class="import-profile-copy" id="import-profile-copy"></div>
                         <div class="import-profile-actions">

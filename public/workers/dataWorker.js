@@ -1,4 +1,15 @@
 const DEFAULT_CQI_THRESHOLD = 8
+const ORANGE_CONGESTION_CONFIG = Object.freeze({
+  PRB_SATURATED: 90,
+  PRB_HIGH: 80,
+  PRB_MEDIUM: 70,
+  THROUGHPUT_DEGRADED: 4000,
+  THROUGHPUT_TARGET: 10000,
+  THROUGHPUT_CRITICAL: 2000,
+  USERS_CRITICAL: 4,
+  CQI_CRITICAL: 5,
+  CQI_LOW: 7,
+})
 
 function normalizeText(value) {
   return String(value || '')
@@ -104,6 +115,23 @@ function toFiniteNumber(value) {
   return isNegativeByParentheses ? -Math.abs(parsed) : parsed
 }
 
+function toBooleanLike(value) {
+  if (value === null || value === undefined) return null
+  if (typeof value === 'boolean') return value
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) return null
+    if (value === 1) return true
+    if (value === 0) return false
+    return null
+  }
+
+  const text = String(value).trim().toLowerCase()
+  if (!text) return null
+  if (['1', 'true', 'yes', 'y', 'on'].includes(text)) return true
+  if (['0', 'false', 'no', 'n', 'off'].includes(text)) return false
+  return null
+}
+
 function parseTimestamp(ts) {
   const text = String(ts || '').trim()
   const parts = text.split(' ')
@@ -112,6 +140,20 @@ function parseTimestamp(ts) {
   const [d, m, y] = datePart.split('-').map((item) => Number.parseInt(item, 10))
   const [hh, mm] = timePart.split(':').map((item) => Number.parseInt(item, 10))
   return new Date(y, m - 1, d, hh, mm, 0, 0)
+}
+
+function isValidDate(value) {
+  return value instanceof Date && !Number.isNaN(value.getTime())
+}
+
+function formatTimestampFromDate(date) {
+  const value = date instanceof Date ? date : new Date(date)
+  const day = String(value.getDate()).padStart(2, '0')
+  const month = String(value.getMonth() + 1).padStart(2, '0')
+  const year = value.getFullYear()
+  const hour = String(value.getHours()).padStart(2, '0')
+  const minute = String(value.getMinutes()).padStart(2, '0')
+  return `${day}-${month}-${year} ${hour}:${minute}`
 }
 
 function getCellStatus(obs, cqiThreshold = DEFAULT_CQI_THRESHOLD) {
@@ -196,6 +238,11 @@ function buildFeatureUpdates(payload) {
     const hasLowCQI = cqi !== null && cqi !== undefined && Number(cqi) < cqiThreshold
     const load = obs?.load ?? null
     const congested = Boolean(obs?.congested)
+    const taValue = obs?.ta ?? obs?.timing_advance ?? obs?.avg_ta ?? obs?.ta_avg ?? null
+    const dynamicRadiusSupported =
+      obs?.dynamic_radius_supported !== undefined && obs?.dynamic_radius_supported !== null
+        ? Boolean(obs?.dynamic_radius_supported)
+        : taValue !== null && taValue !== undefined
     const status = getCellStatus(obs, cqiThreshold)
     const color = getLoadColor(load, congested, cqi, cqiThreshold, colors)
     const baseUpdate = {
@@ -213,8 +260,11 @@ function buildFeatureUpdates(payload) {
       cqi,
       has_low_cqi: hasLowCQI,
       traffic: obs?.traffic ?? null,
-      ta: obs?.ta ?? obs?.timing_advance ?? obs?.avg_ta ?? obs?.ta_avg ?? null,
+      traffic_loss_ue: obs?.traffic_loss_ue ?? 0,
+      traffic_loss_gb: obs?.traffic_loss_gb ?? 0,
+      ta: taValue,
       signal_power: obs?.signal_power ?? null,
+      dynamic_radius_supported: dynamicRadiusSupported,
       is_forecast: isForecast,
       confidence: isForecast && confidence !== null && confidence !== undefined ? confidence : null,
     }
@@ -444,6 +494,14 @@ const FIELD_ALIASES = {
   traffic: ['ft_4g_lte_dl_traffic_volume__gbytes', 'traffic', 'dl traffic', 'gbytes'],
   ta: ['ot_average_ta', 'timing advance', 'ta'],
   signal_power: ['referencesignalpwr', 'signal power', 'rsrp'],
+  congested: ['congested', 'is_congested', 'congestion_flag', 'alarm_congestion'],
+  severity: ['severity', 'alarm_severity', 'priority'],
+  issue_type: ['issue_type', 'issue', 'problem_type'],
+  root_cause: ['root_cause', 'rootcause', 'cause'],
+  health_score: ['health_score', 'health', 'healthscore'],
+  timestamp: ['timestamp', 'datetime', 'date_time', 'date time'],
+  date: ['date', 'jour', 'day'],
+  time: ['time', 'heure', 'hour'],
 }
 
 function tokenizeHeader(value) {
@@ -519,7 +577,12 @@ function applyFieldPenalty(fieldKey, headerNormalized, baseScore) {
   let score = baseScore
   if (!Number.isFinite(score) || score <= 0) return 0
 
-  if (headerNormalized === 'date' || headerNormalized === 'time') {
+  if (
+    (headerNormalized === 'date' || headerNormalized === 'time') &&
+    fieldKey !== 'date' &&
+    fieldKey !== 'time' &&
+    fieldKey !== 'timestamp'
+  ) {
     score *= 0.2
   }
 
@@ -548,6 +611,15 @@ function applyFieldPenalty(fieldKey, headerNormalized, baseScore) {
     score *= 0.3
   }
 
+  if (fieldKey === 'active_users') {
+    if (headerNormalized.includes('ltrafficactiveuserdlavg')) {
+      score = Math.min(1, score + 0.05)
+    }
+    if (headerNormalized.includes('uesrrcconnected')) {
+      score *= 0.9
+    }
+  }
+
   return Math.max(0, Math.min(1, score))
 }
 
@@ -573,6 +645,7 @@ function detectImportType(headers) {
   const hasLongitudeSector = normalizedHeaders.has('longitudesector')
   const hasLatitudeSector = normalizedHeaders.has('latitudesector')
   const hasTime = normalizedHeaders.has('time')
+  const hasTimestamp = normalizedHeaders.has('timestamp') || normalizedHeaders.has('datetime')
   const hasTrafficVolume = normalizedHeaders.has('ft4gltedltrafficvolumegbytes')
 
   if (hasLongitudeSector || hasLatitudeSector) {
@@ -584,8 +657,8 @@ function detectImportType(headers) {
     }
   }
 
-  if (hasTime && hasTrafficVolume) {
-    detectionReasons.push('Found time header')
+  if ((hasTime || hasTimestamp) && hasTrafficVolume) {
+    detectionReasons.push(hasTimestamp ? 'Found timestamp header' : 'Found time header')
     detectionReasons.push('Found ft_4g_lte_dl_traffic_volume__gbytes header')
     return {
       detectedType: IMPORT_TYPE_KPI,
@@ -595,6 +668,9 @@ function detectImportType(headers) {
 
   if (hasTime) {
     detectionReasons.push('Found time header (partial KPI signal)')
+  }
+  if (hasTimestamp) {
+    detectionReasons.push('Found timestamp header (partial KPI signal)')
   }
   if (hasTrafficVolume) {
     detectionReasons.push('Found KPI traffic volume header (partial KPI signal)')
@@ -620,7 +696,6 @@ function inferMapping(headers) {
   })
 
   const mapping = {}
-  const inferredMappingMeta = {}
   const usedHeaders = new Set()
 
   const fieldOrder = Object.keys(FIELD_ALIASES)
@@ -641,17 +716,11 @@ function inferMapping(headers) {
     if (!candidate) return
 
     mapping[fieldKey] = candidate.header
-    inferredMappingMeta[fieldKey] = {
-      header: candidate.header,
-      confidence: Number(candidate.score.toFixed(4)),
-      source: 'auto',
-    }
     usedHeaders.add(candidate.header)
   })
 
   return {
     inferredMapping: mapping,
-    inferredMappingMeta,
     matchScores: scoreTable,
   }
 }
@@ -690,7 +759,6 @@ function parseCsvPreview(payload) {
     previewRows,
     totalRows: bodyRows.length,
     inferredMapping: inferred.inferredMapping,
-    inferredMappingMeta: inferred.inferredMappingMeta,
     matchScores: inferred.matchScores,
     detectedType: detected.detectedType,
     detectionReasons: detected.detectionReasons,
@@ -704,45 +772,152 @@ function parseCsvPreview(payload) {
   }
 }
 
-function classifyRow(load, throughput, cqi) {
-  const numericLoad = toFiniteNumber(load)
-  const numericThroughput = toFiniteNumber(throughput)
-  const numericCqi = toFiniteNumber(cqi)
+function estimateTrafficLoss(activeUsers, load, throughput, congested) {
+  if (!congested) {
+    return {
+      trafficLossUe: 0,
+      trafficLossGb: 0,
+      throughputGap: 0,
+    }
+  }
+
+  const safeUsers = Number.isFinite(activeUsers) ? activeUsers : 0
+  const safeLoad = Number.isFinite(load) ? load : ORANGE_CONGESTION_CONFIG.PRB_MEDIUM
+  const safeThroughput = Number.isFinite(throughput) ? throughput : ORANGE_CONGESTION_CONFIG.THROUGHPUT_TARGET
+
+  const excessLoad = Math.max(0, safeLoad - ORANGE_CONGESTION_CONFIG.PRB_MEDIUM) / 100
+  // process_time_series.py computes throughput_gap but currently does not use it in traffic_loss_ue.
+  const throughputGap =
+    Math.max(0, ORANGE_CONGESTION_CONFIG.THROUGHPUT_TARGET - safeThroughput) /
+    ORANGE_CONGESTION_CONFIG.THROUGHPUT_TARGET
+  const trafficLossUe = Math.max(0, Math.trunc(safeUsers * excessLoad * 0.5))
+  const trafficLossGb = Number((trafficLossUe * 2.4).toFixed(1))
+
+  return {
+    trafficLossUe,
+    trafficLossGb,
+    throughputGap,
+  }
+}
+
+function classifyRow(metrics = {}, explicitFields = {}, options = {}) {
+  const strictNoFallback = Boolean(options?.strictNoFallback)
+
+  const loadValue = toFiniteNumber(metrics?.load)
+  const throughputValue = toFiniteNumber(metrics?.throughput)
+  const cqiValue = toFiniteNumber(metrics?.cqi)
+  const activeUsersValue = toFiniteNumber(metrics?.active_users)
+
+  const load = loadValue !== null ? loadValue : 0
+  const throughput = throughputValue !== null ? throughputValue : ORANGE_CONGESTION_CONFIG.THROUGHPUT_TARGET
+  const cqi = cqiValue !== null ? cqiValue : 10
+  const activeUsers = activeUsersValue !== null ? activeUsersValue : 0
+
+  const explicitCongested = toBooleanLike(explicitFields?.congested)
+  const explicitSeverityRaw = toFiniteNumber(explicitFields?.severity)
+  const explicitSeverity = explicitSeverityRaw !== null ? Math.max(0, Math.min(100, explicitSeverityRaw)) : null
+  const explicitIssueType = String(explicitFields?.issue_type || '').trim()
+  const explicitRootCause = String(explicitFields?.root_cause || '').trim()
+  const explicitHealthRaw = toFiniteNumber(explicitFields?.health_score)
+  const explicitHealth = explicitHealthRaw !== null ? Math.max(0, Math.min(100, explicitHealthRaw)) : null
+
+  if (strictNoFallback) {
+    const congested = explicitCongested === true
+    const severity = explicitSeverity ?? (congested ? 80 : 0)
+    const issueType = explicitIssueType || (congested ? 'Congestion' : 'Normal')
+    const rootCause = explicitRootCause || (congested ? 'Capacity saturation' : 'Normal')
+    const healthScore = explicitHealth ?? Math.max(0, 100 - severity)
+    const trafficLoss = estimateTrafficLoss(activeUsers, load, throughput, congested)
+
+    return {
+      congestion: congested,
+      severity,
+      issueType,
+      rootCause,
+      healthScore,
+      trafficLossUe: trafficLoss.trafficLossUe,
+      trafficLossGb: trafficLoss.trafficLossGb,
+      source: explicitCongested === null ? 'missing_explicit' : 'explicit',
+    }
+  }
 
   let severity = 0
+  const issues = []
+
+  // Parity with scripts/process_time_series.py::analyze_cell thresholds and rules.
+  if (load >= ORANGE_CONGESTION_CONFIG.PRB_SATURATED) {
+    severity += 50
+    issues.push('PRB saturated')
+  } else if (load >= ORANGE_CONGESTION_CONFIG.PRB_HIGH) {
+    severity += 30
+    issues.push('PRB high')
+  } else if (load >= ORANGE_CONGESTION_CONFIG.PRB_MEDIUM) {
+    severity += 15
+    issues.push('PRB elevated')
+  }
+
+  if (throughput < ORANGE_CONGESTION_CONFIG.THROUGHPUT_CRITICAL) {
+    severity += 35
+    issues.push('Throughput critical')
+  } else if (throughput < ORANGE_CONGESTION_CONFIG.THROUGHPUT_DEGRADED) {
+    severity += 20
+    issues.push('Throughput degraded')
+  }
+
+  if (activeUsers > ORANGE_CONGESTION_CONFIG.USERS_CRITICAL) {
+    severity += 25
+    issues.push('Queue high')
+  }
+
+  if (cqi < ORANGE_CONGESTION_CONFIG.CQI_CRITICAL) {
+    severity += 20
+    issues.push('CQI critical')
+  } else if (cqi < ORANGE_CONGESTION_CONFIG.CQI_LOW) {
+    severity += 10
+    issues.push('CQI low')
+  }
+
+  let congested = false
+  if (load >= ORANGE_CONGESTION_CONFIG.PRB_SATURATED) {
+    congested = true
+  } else if (load >= ORANGE_CONGESTION_CONFIG.PRB_HIGH && throughput < ORANGE_CONGESTION_CONFIG.THROUGHPUT_DEGRADED) {
+    congested = true
+  } else if (activeUsers > ORANGE_CONGESTION_CONFIG.USERS_CRITICAL && load >= ORANGE_CONGESTION_CONFIG.PRB_MEDIUM) {
+    congested = true
+  } else if (throughput < ORANGE_CONGESTION_CONFIG.THROUGHPUT_DEGRADED && load >= ORANGE_CONGESTION_CONFIG.PRB_MEDIUM) {
+    congested = true
+  } else if (severity >= 50) {
+    congested = true
+  }
+
   let issueType = 'Normal'
   let rootCause = 'Normal'
 
-  if (numericLoad !== null) {
-    if (numericLoad >= 90) severity += 50
-    else if (numericLoad >= 80) severity += 30
-    else if (numericLoad >= 70) severity += 15
-  }
-
-  if (numericThroughput !== null) {
-    if (numericThroughput < 2000) severity += 30
-    else if (numericThroughput < 4000) severity += 15
-  }
-
-  if (numericCqi !== null) {
-    if (numericCqi < 5) severity += 20
-    else if (numericCqi < 7) severity += 10
-  }
-
-  const congested =
-    (numericLoad !== null && numericLoad >= 90) ||
-    (numericLoad !== null && numericLoad >= 80 && numericThroughput !== null && numericThroughput < 4000) ||
-    severity >= 50
-
-  if (congested) {
-    issueType = 'Congestion'
-    rootCause = 'Capacity saturation'
-  } else if (numericCqi !== null && numericCqi < DEFAULT_CQI_THRESHOLD) {
-    issueType = 'Radio quality warning'
-    rootCause = 'Low CQI'
+  if (!issues.length) {
+    issueType = 'Normal'
+    rootCause = 'Normal'
+  } else if (load >= ORANGE_CONGESTION_CONFIG.PRB_SATURATED) {
+    issueType = 'Saturation Capacite'
+    rootCause = 'PRB satures - renforcement capacitaire requis'
+  } else if (load >= ORANGE_CONGESTION_CONFIG.PRB_HIGH && throughput < ORANGE_CONGESTION_CONFIG.THROUGHPUT_DEGRADED) {
+    issueType = 'Congestion + Degradation'
+    rootCause = 'Charge elevee avec debit degrade'
+  } else if (throughput < ORANGE_CONGESTION_CONFIG.THROUGHPUT_DEGRADED) {
+    issueType = 'Degradation QoE'
+    rootCause = 'Debit utilisateur insuffisant'
+  } else if (activeUsers > ORANGE_CONGESTION_CONFIG.USERS_CRITICAL) {
+    issueType = "File d'attente"
+    rootCause = 'Trop d utilisateurs actifs'
+  } else if (cqi < ORANGE_CONGESTION_CONFIG.CQI_LOW) {
+    issueType = 'Qualite Signal'
+    rootCause = 'Interference ou couverture faible'
+  } else {
+    issueType = 'Performance Warning'
+    rootCause = issues.join(', ')
   }
 
   const healthScore = Math.max(0, 100 - severity)
+  const trafficLoss = estimateTrafficLoss(activeUsers, load, throughput, congested)
 
   return {
     congestion: congested,
@@ -750,6 +925,9 @@ function classifyRow(load, throughput, cqi) {
     issueType,
     rootCause,
     healthScore,
+    trafficLossUe: trafficLoss.trafficLossUe,
+    trafficLossGb: trafficLoss.trafficLossGb,
+    source: 'heuristic_orange',
   }
 }
 
@@ -806,17 +984,19 @@ function findHeaderByNormalizedName(rows, expectedName) {
   return header || ''
 }
 
-function buildRowTimestamp(row, dateHeader, timeHeader) {
+function buildRowTimestamp(row, timestampHeader, dateHeader, timeHeader) {
+  const rawTimestamp = timestampHeader ? String(row?.[timestampHeader] || '').trim() : ''
+  if (rawTimestamp) {
+    return rawTimestamp
+  }
+
   const datePart = dateHeader ? String(row?.[dateHeader] || '').trim() : ''
   const timePart = timeHeader ? String(row?.[timeHeader] || '').trim() : ''
-
-  if (!datePart && !timePart) {
-    return null
-  }
   if (datePart && timePart) {
     return `${datePart} ${timePart}`
   }
-  return datePart || timePart
+
+  return ''
 }
 
 function computeObservationStats(observations, baseline = {}) {
@@ -856,9 +1036,15 @@ function applyCsvMapping(payload) {
     mapping = {},
     importType = IMPORT_TYPE_REFERENCE,
     existingBaseline = {},
+    realismPolicy = {},
   } = payload || {}
 
   const normalizedImportType = importType === IMPORT_TYPE_KPI ? IMPORT_TYPE_KPI : IMPORT_TYPE_REFERENCE
+  const strictScopeToReference =
+    normalizedImportType === IMPORT_TYPE_KPI && Boolean(realismPolicy?.strictScopeToReference)
+  const strictNoFallback =
+    normalizedImportType === IMPORT_TYPE_KPI && Boolean(realismPolicy?.strictNoFallback)
+  const effectiveStrictNoFallback = strictNoFallback && Boolean(mapping?.congested)
 
   const baseline = normalizedImportType === IMPORT_TYPE_KPI ? { ...(existingBaseline || {}) } : {}
   const observations = {}
@@ -866,11 +1052,40 @@ function applyCsvMapping(payload) {
   const warnings = []
   const baselineLookup = buildBaselineLookup(existingBaseline)
   const observationsByTimestamp = new Map()
-  const dateHeader = normalizedImportType === IMPORT_TYPE_KPI ? findHeaderByNormalizedName(rows, 'date') : ''
-  const timeHeader = normalizedImportType === IMPORT_TYPE_KPI ? findHeaderByNormalizedName(rows, 'time') : ''
+  const timestampHeader =
+    normalizedImportType === IMPORT_TYPE_KPI
+      ? String(mapping.timestamp || findHeaderByNormalizedName(rows, 'timestamp') || '').trim()
+      : ''
+  const dateHeader =
+    normalizedImportType === IMPORT_TYPE_KPI
+      ? String(mapping.date || findHeaderByNormalizedName(rows, 'date') || '').trim()
+      : ''
+  const timeHeader =
+    normalizedImportType === IMPORT_TYPE_KPI
+      ? String(mapping.time || findHeaderByNormalizedName(rows, 'time') || '').trim()
+      : ''
+  const canonicalActiveUsersHeader =
+    normalizedImportType === IMPORT_TYPE_KPI
+      ? String(findHeaderByNormalizedName(rows, 'l_traffic_activeuser_dl_avg') || '').trim()
+      : ''
+  const mappedActiveUsersHeader =
+    normalizedImportType === IMPORT_TYPE_KPI ? String(mapping.active_users || '').trim() : ''
+  const activeUsersHeaderMismatch =
+    normalizedImportType === IMPORT_TYPE_KPI &&
+    Boolean(canonicalActiveUsersHeader) &&
+    Boolean(mappedActiveUsersHeader) &&
+    normalizeText(canonicalActiveUsersHeader) !== normalizeText(mappedActiveUsersHeader)
+  const hasTimestampMapping =
+    normalizedImportType !== IMPORT_TYPE_KPI || Boolean(timestampHeader) || (Boolean(dateHeader) && Boolean(timeHeader))
   let unmatchedKpiRows = 0
+  let droppedRowsByScope = 0
   let rowsWithTa = 0
   let rowsWithoutTa = 0
+  let rowsMissingTimestamp = 0
+  let rowsInvalidTimestamp = 0
+  let rowsWithExplicitCongestion = 0
+  let rowsWithoutExplicitCongestion = 0
+  let rowsProcessed = 0
 
   rows.forEach((row, rowIndex) => {
     const rawCellName = String(row?.[mapping.cell_name] || '').trim()
@@ -915,23 +1130,75 @@ function applyCsvMapping(payload) {
       targetCellName = resolveKpiCellName(rawCellName, rawLocalCellId, baselineLookup)
       if (!baseline[targetCellName]) {
         unmatchedKpiRows += 1
+        if (strictScopeToReference) {
+          droppedRowsByScope += 1
+          return
+        }
       }
+    }
+
+    let rowTimestamp = ''
+    if (normalizedImportType === IMPORT_TYPE_KPI) {
+      if (!hasTimestampMapping) {
+        rowsMissingTimestamp += 1
+        return
+      }
+
+      const rawRowTimestamp = buildRowTimestamp(row, timestampHeader, dateHeader, timeHeader)
+      if (!rawRowTimestamp) {
+        rowsMissingTimestamp += 1
+        return
+      }
+
+      const parsedTimestamp = parseTimestamp(rawRowTimestamp)
+      if (!isValidDate(parsedTimestamp)) {
+        rowsInvalidTimestamp += 1
+        return
+      }
+
+      rowTimestamp = formatTimestampFromDate(parsedTimestamp)
     }
 
     const load = toFiniteNumber(row?.[mapping.load])
     const throughput = toFiniteNumber(row?.[mapping.throughput])
     const cqi = toFiniteNumber(row?.[mapping.cqi])
-    const activeUsers = toFiniteNumber(row?.[mapping.active_users])
+    const mappedActiveUsers = toFiniteNumber(row?.[mapping.active_users])
+    const canonicalActiveUsers = canonicalActiveUsersHeader ? toFiniteNumber(row?.[canonicalActiveUsersHeader]) : null
+    const activeUsers = canonicalActiveUsers !== null ? canonicalActiveUsers : mappedActiveUsers
     const traffic = toFiniteNumber(row?.[mapping.traffic])
     const ta = toFiniteNumber(row?.[mapping.ta])
     const signalPower = toFiniteNumber(row?.[mapping.signal_power])
+    const explicitCongested = mapping.congested ? row?.[mapping.congested] : null
+    const parsedExplicitCongested = toBooleanLike(explicitCongested)
+    const explicitFields = {
+      congested: explicitCongested,
+      severity: mapping.severity ? row?.[mapping.severity] : null,
+      issue_type: mapping.issue_type ? row?.[mapping.issue_type] : null,
+      root_cause: mapping.root_cause ? row?.[mapping.root_cause] : null,
+      health_score: mapping.health_score ? row?.[mapping.health_score] : null,
+    }
 
     if (normalizedImportType === IMPORT_TYPE_KPI) {
       if (ta !== null) rowsWithTa += 1
       else rowsWithoutTa += 1
+      if (parsedExplicitCongested === null) rowsWithoutExplicitCongestion += 1
+      else rowsWithExplicitCongestion += 1
     }
 
-    const classification = classifyRow(load, throughput, cqi)
+    const classification = classifyRow(
+      {
+        load,
+        throughput,
+        cqi,
+        active_users: activeUsers,
+      },
+      explicitFields,
+      {
+        strictNoFallback: effectiveStrictNoFallback,
+      }
+    )
+
+    rowsProcessed += 1
 
     const mappedObservation = {
       load,
@@ -941,22 +1208,22 @@ function applyCsvMapping(payload) {
       traffic,
       ta,
       signal_power: signalPower,
+      dynamic_radius_supported: ta !== null,
       congested: classification.congestion,
       severity: classification.severity,
       issue_type: classification.issueType,
       root_cause: classification.rootCause,
       health_score: classification.healthScore,
+      traffic_loss_ue: classification.trafficLossUe,
+      traffic_loss_gb: classification.trafficLossGb,
     }
 
     observations[targetCellName] = mappedObservation
 
     if (normalizedImportType === IMPORT_TYPE_KPI) {
-      const rowTimestamp = buildRowTimestamp(row, dateHeader, timeHeader)
-      if (rowTimestamp) {
-        const existingSlice = observationsByTimestamp.get(rowTimestamp) || {}
-        existingSlice[targetCellName] = mappedObservation
-        observationsByTimestamp.set(rowTimestamp, existingSlice)
-      }
+      const existingSlice = observationsByTimestamp.get(rowTimestamp) || {}
+      existingSlice[targetCellName] = mappedObservation
+      observationsByTimestamp.set(rowTimestamp, existingSlice)
     }
   })
 
@@ -971,10 +1238,48 @@ function applyCsvMapping(payload) {
       warnings.push(`${unmatchedKpiRows} KPI rows did not match existing Reference Data by cell_name/localcell_id.`)
     }
 
+    if (!hasTimestampMapping) {
+      warnings.push('KPI import requires timestamp mapping (timestamp or date + time). No KPI rows were loaded.')
+    }
+
+    if (rowsMissingTimestamp > 0) {
+      warnings.push(`${rowsMissingTimestamp} KPI rows were skipped because timestamp values were missing.`)
+    }
+
+    if (rowsInvalidTimestamp > 0) {
+      warnings.push(`${rowsInvalidTimestamp} KPI rows were skipped because timestamp values were invalid.`)
+    }
+
+    if (activeUsersHeaderMismatch) {
+      warnings.push(
+        `Active Users congestion rule used "${canonicalActiveUsersHeader}" (Orange queue KPI) instead of mapped "${mappedActiveUsersHeader}".`
+      )
+    }
+
+    if (strictScopeToReference && droppedRowsByScope > 0) {
+      warnings.push(
+        `${droppedRowsByScope} KPI rows were dropped because they did not match active Reference Data (strict scope enabled).`
+      )
+    }
+
+    if (effectiveStrictNoFallback && rowsWithoutExplicitCongestion > 0) {
+      warnings.push(
+        `${rowsWithoutExplicitCongestion} KPI rows had no explicit congestion label; strict mode treated them as non-congested.`
+      )
+    }
+
+    if (strictNoFallback && !mapping.congested) {
+      warnings.push('Strict mode was requested but no Congestion Flag mapping was provided. Heuristic mode was used instead.')
+    }
+
     if (!mapping.ta) {
       warnings.push('Timing Advance (TA) is not mapped. Sector radius will remain static across timestamps.')
     } else if (rowsWithoutTa > 0 && rowsWithTa === 0) {
       warnings.push('No valid Timing Advance (TA) values were parsed. Sector radius will remain static; check TA column formatting.')
+    }
+
+    if (!observationsByTimestamp.size) {
+      warnings.push('No valid KPI timestamps were imported. Timeline was not updated.')
     }
   }
 
@@ -991,24 +1296,28 @@ function applyCsvMapping(payload) {
     })
     .sort((left, right) => parseTimestamp(left.timestamp) - parseTimestamp(right.timestamp))
 
-  const effectiveSlices = slices.length
-    ? slices
-    : [
-        {
-          timestamp: new Date().toISOString(),
-          observations,
-          stats,
-          import_type: normalizedImportType,
-        },
-      ]
+  const effectiveSlices =
+    normalizedImportType === IMPORT_TYPE_REFERENCE
+      ? slices.length
+        ? slices
+        : [
+            {
+              timestamp: 'Reference import snapshot',
+              observations,
+              stats,
+              import_type: normalizedImportType,
+            },
+          ]
+      : slices
 
-  const latestSlice = effectiveSlices[effectiveSlices.length - 1]
-  const latestObservations = latestSlice?.observations || observations
-  const latestStats = latestSlice?.stats || stats
+  const latestSlice = effectiveSlices.length ? effectiveSlices[effectiveSlices.length - 1] : null
+  const latestObservations = latestSlice?.observations || (normalizedImportType === IMPORT_TYPE_REFERENCE ? observations : {})
+  const latestStats = latestSlice?.stats || computeObservationStats(latestObservations, baseline)
 
   const importedCells = normalizedImportType === IMPORT_TYPE_KPI
     ? Object.keys(latestObservations).length
     : Object.keys(baseline).length
+  const responseTimestamp = latestSlice?.timestamp || ''
 
   return {
     baseline,
@@ -1018,8 +1327,26 @@ function applyCsvMapping(payload) {
     errors,
     warnings,
     imported_cells: importedCells,
-    timestamp: new Date().toISOString(),
+    timestamp: responseTimestamp,
     import_type: normalizedImportType,
+    data_quality:
+      normalizedImportType === IMPORT_TYPE_KPI
+        ? {
+            rows_total: rows.length,
+            rows_processed: rowsProcessed,
+            rows_unmatched_reference: unmatchedKpiRows,
+            rows_dropped_by_scope: droppedRowsByScope,
+            rows_with_ta: rowsWithTa,
+            rows_without_ta: rowsWithoutTa,
+            rows_missing_timestamp: rowsMissingTimestamp,
+            rows_invalid_timestamp: rowsInvalidTimestamp,
+            timestamp_mapping_available: hasTimestampMapping,
+            rows_with_explicit_congestion: rowsWithExplicitCongestion,
+            rows_without_explicit_congestion: rowsWithoutExplicitCongestion,
+            scope_to_reference_enforced: strictScopeToReference,
+            strict_no_fallback: effectiveStrictNoFallback,
+          }
+        : null,
   }
 }
 
