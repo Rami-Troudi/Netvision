@@ -36,6 +36,23 @@ FORECAST_STOCHASTIC = os.getenv("FORECAST_STOCHASTIC", "false").strip().lower() 
 
 class PredictRequest(BaseModel):
     cellname: str
+    prb_load: float | None = None
+    throughput: float | None = None
+    active_users: float | None = None
+    cqi: float | None = None
+
+
+def _extract_request_kpis(body: PredictRequest) -> dict[str, float]:
+    request_kpis: dict[str, float] = {}
+    for key in ("prb_load", "throughput", "active_users", "cqi"):
+        raw_value = getattr(body, key, None)
+        if raw_value is None:
+            continue
+        parsed = float(raw_value)
+        if not np.isfinite(parsed):
+            continue
+        request_kpis[key] = parsed
+    return request_kpis
 
 
 class CellNotFoundError(Exception):
@@ -272,9 +289,33 @@ def predict(body: PredictRequest) -> dict[str, Any]:
     cellname = _normalize_cellname(body.cellname)
     cell_hist = _get_cell_history_df(app, cellname)
     _get_profile_row(app, cellname)
+    request_kpis = _extract_request_kpis(body)
 
-    latest_frame = _latest_non_imputed_frame(cell_hist)
-    latest = latest_frame.iloc[0]
+    if request_kpis:
+        ordered_hist = cell_hist.sort_values("DATE_ID")
+        if ordered_hist.empty:
+            raise ValueError(f"Cell '{cellname}' has no history row in features_with_score.parquet.")
+
+        latest = ordered_hist.iloc[-1].copy()
+        if "prb_load" in request_kpis:
+            latest["prb_load"] = request_kpis["prb_load"]
+        if "throughput" in request_kpis:
+            latest["throughput"] = request_kpis["throughput"]
+        if "active_users" in request_kpis:
+            latest["active_users"] = request_kpis["active_users"]
+        if "cqi" in request_kpis:
+            latest["cqi"] = request_kpis["cqi"]
+        latest["IS_IMPUTED"] = False
+
+        latest_frame = latest.to_frame().T
+        if "DATE_ID" in latest_frame.columns:
+            latest_frame["DATE_ID"] = pd.to_datetime(latest_frame["DATE_ID"], errors="coerce")
+        cell_hist_for_state = pd.concat([cell_hist, latest_frame], ignore_index=True)
+    else:
+        latest_frame = _latest_non_imputed_frame(cell_hist)
+        latest = latest_frame.iloc[0]
+        cell_hist_for_state = cell_hist
+
     prediction_backend = str(getattr(app.state, "prediction_backend", "trained_forecaster"))
 
     latest_ts = pd.to_datetime(latest.get("DATE_ID"), errors="coerce")
@@ -306,13 +347,15 @@ def predict(body: PredictRequest) -> dict[str, Any]:
 
     cell_state = app.state.action_engine.get_cell_state(
         cellname=cellname,
-        features_df=cell_hist,
+        features_df=cell_hist_for_state,
         profile_df=app.state.profile_df,
         pred_prb=pred_prb,
         pred_users=pred_users,
         pred_thrput=pred_thrput,
     )
     actions = app.state.action_engine.recommend_actions(cell_state)
+    current_loss_ue = max(0, int(round(_to_float(cell_state.get("traffic_loss_ue"), 0.0))))
+    current_loss_gb = round(max(0.0, _to_float(cell_state.get("traffic_loss_gb"), 0.0)), 1)
 
     return {
         "cellname": cellname,
@@ -323,6 +366,12 @@ def predict(body: PredictRequest) -> dict[str, Any]:
             "active_users": _to_float(cell_state["current_users"]),
             "throughput_kbps": _to_float(cell_state["current_thrput"]),
             "cqi": _to_float(cell_state["current_cqi"]),
+            "traffic_loss_ue": current_loss_ue,
+            "traffic_loss_gb": current_loss_gb,
+        },
+        "current_loss": {
+            "ue": current_loss_ue,
+            "gb": current_loss_gb,
         },
         "predicted_next_hour": {
             "prb_load": pred_prb,
@@ -338,6 +387,15 @@ def predict(body: PredictRequest) -> dict[str, Any]:
                 "confidence": str(action["confidence"]),
                 "reason": str(action["reason"]),
                 "estimated_recovery_pct": int(action["estimated_recovery_pct"]),
+                "recovery_rate": max(
+                    0.0,
+                    min(
+                        100.0,
+                        _to_float(action.get("recovery_rate", action.get("estimated_recovery_pct")), 0.0),
+                    ),
+                ),
+                "gain_ue": max(0, int(round(_to_float(action.get("gain_ue"), 0.0)))),
+                "gain_gb": round(max(0.0, _to_float(action.get("gain_gb"), 0.0)), 1),
                 "priority_rank": int(action["priority_rank"]),
             }
             for action in actions

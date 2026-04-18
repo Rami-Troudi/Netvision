@@ -1174,6 +1174,56 @@ function confidenceToPercent(confidence) {
     return 50;
 }
 
+function toFiniteNumberOrNull(value) {
+    if (value === null || value === undefined) return null;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+}
+
+function getCustomSessionObservation(cellName) {
+    if (!state.customDataset.active) return null;
+
+    const currentIndex = Number.isInteger(state.currentTimeIndex) ? state.currentTimeIndex : 0;
+    const currentSlice = state.customDataset?.slices?.[currentIndex] || null;
+    const sliceObservation = currentSlice?.observations?.[cellName];
+    if (sliceObservation && typeof sliceObservation === 'object' && !Array.isArray(sliceObservation)) {
+        return sliceObservation;
+    }
+
+    const fallbackObservation = state.currentObservations?.[cellName];
+    if (fallbackObservation && typeof fallbackObservation === 'object' && !Array.isArray(fallbackObservation)) {
+        return fallbackObservation;
+    }
+
+    return null;
+}
+
+function buildRecommendRequestBody(cellName) {
+    const requestBody = { cell_name: cellName };
+    const currentObservation = getCustomSessionObservation(cellName);
+    if (!currentObservation) {
+        return requestBody;
+    }
+
+    const prbLoad = toFiniteNumberOrNull(currentObservation?.load);
+    const throughput = toFiniteNumberOrNull(currentObservation?.throughput);
+    const activeUsers = toFiniteNumberOrNull(currentObservation?.active_users ?? currentObservation?.traffic);
+    const cqi = toFiniteNumberOrNull(currentObservation?.cqi);
+
+    if (prbLoad !== null) requestBody.prb_load = prbLoad;
+    if (throughput !== null) requestBody.throughput = throughput;
+    if (activeUsers !== null) requestBody.active_users = activeUsers;
+    if (cqi !== null) requestBody.cqi = cqi;
+
+    return requestBody;
+}
+
+function getRecommendationCacheKey(cellName) {
+    if (!state.customDataset.active) return cellName;
+    const currentIndex = Number.isInteger(state.currentTimeIndex) ? state.currentTimeIndex : 0;
+    return `${cellName}::custom::${currentIndex}`;
+}
+
 function getSuggestedCarrierBand(cellName) {
     const bands = (state.globalStats?.frequency_bands || []).map(b => String(b));
     if (!bands.length) return '';
@@ -1219,10 +1269,22 @@ function mapBackendRecommendation(payload, recommendation, cellName, idx) {
     const actionLabel = String(recommendation?.action || '').trim();
     const simAction = BACKEND_ACTION_TO_SIM_ACTION[actionLabel] ?? null;
     const actionMeta = simAction ? ACTION_UI_METADATA[simAction] : null;
+    const currentLossUeRaw = Number(payload?.current_loss?.ue ?? payload?.current_kpis?.traffic_loss_ue ?? 0);
+    const currentLossGbRaw = Number(payload?.current_loss?.gb ?? payload?.current_kpis?.traffic_loss_gb ?? 0);
+    const currentLossUe = Number.isFinite(currentLossUeRaw) ? Math.max(0, Math.round(currentLossUeRaw)) : 0;
+    const currentLossGb = Number.isFinite(currentLossGbRaw) ? Number(Math.max(0, currentLossGbRaw).toFixed(1)) : 0;
     const recoveryPct = toRecoveryPercent(
-        recommendation?.estimated_recovery_pct,
+        recommendation?.recovery_rate ?? recommendation?.estimated_recovery_pct,
         actionMeta?.recoveryRate || 0
     );
+    const gainUeRaw = Number(recommendation?.gain_ue);
+    const gainGbRaw = Number(recommendation?.gain_gb);
+    const gainUe = Number.isFinite(gainUeRaw)
+        ? Math.max(0, Math.round(gainUeRaw))
+        : Math.round(currentLossUe * (recoveryPct / 100));
+    const gainGb = Number.isFinite(gainGbRaw)
+        ? Number(Math.max(0, gainGbRaw).toFixed(1))
+        : Number((currentLossGb * (recoveryPct / 100)).toFixed(1));
 
     return {
         id: `${cellName}-${idx}-${simAction || 'none'}`,
@@ -1236,6 +1298,10 @@ function mapBackendRecommendation(payload, recommendation, cellName, idx) {
         timeline: String(recommendation?.tier || actionMeta?.timeline || 'none'),
         recoveryRate: recoveryPct,
         estimatedRecoveryPct: recoveryPct,
+        currentLossUe,
+        currentLossGb,
+        gainUe,
+        gainGb,
         priorityRank: Number.parseInt(recommendation?.priority_rank, 10) || idx + 1,
         currentMetrics: payload?.current_kpis || {},
         predictedMetrics: payload?.predicted_next_hour || {},
@@ -1247,7 +1313,7 @@ async function fetchBackendDecision(cellName) {
     const response = await fetchWithAuth('/api/recommend', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cell_name: cellName }),
+        body: JSON.stringify(buildRecommendRequestBody(cellName)),
     });
 
     let payload = null;
@@ -1285,8 +1351,9 @@ async function renderRecommendationsPanel(cellName) {
     container.innerHTML = '<div class="reco-placeholder">Chargement des recommandations backend…</div>';
 
     try {
-        const payload = recommendationCache.get(cellName) || await fetchBackendDecision(cellName);
-        recommendationCache.set(cellName, payload);
+        const cacheKey = getRecommendationCacheKey(cellName);
+        const payload = recommendationCache.get(cacheKey) || await fetchBackendDecision(cellName);
+        recommendationCache.set(cacheKey, payload);
 
         if (requestSeq !== recommendationRequestSeq) {
             return;
@@ -1311,6 +1378,18 @@ async function renderRecommendationsPanel(cellName) {
             const currentLoad = Number(recommendation.currentMetrics?.prb_load);
             const predictedLoad = Number(recommendation.predictedMetrics?.prb_load);
             const hasLoadDelta = Number.isFinite(currentLoad) && Number.isFinite(predictedLoad);
+            const currentLossUe = Number.isFinite(Number(recommendation.currentLossUe))
+                ? Math.max(0, Math.round(Number(recommendation.currentLossUe)))
+                : 0;
+            const currentLossGb = Number.isFinite(Number(recommendation.currentLossGb))
+                ? Number(Math.max(0, Number(recommendation.currentLossGb)).toFixed(1))
+                : 0;
+            const gainUe = Number.isFinite(Number(recommendation.gainUe))
+                ? Math.max(0, Math.round(Number(recommendation.gainUe)))
+                : 0;
+            const gainGb = Number.isFinite(Number(recommendation.gainGb))
+                ? Number(Math.max(0, Number(recommendation.gainGb)).toFixed(1))
+                : 0;
 
             const kpiSummary = hasLoadDelta
                 ? `<div class="reco-metric"><span class="reco-metric-label">PRB:</span><span class="reco-metric-value">${escapeHtml(currentLoad.toFixed(1))}% → ${escapeHtml(predictedLoad.toFixed(1))}%</span></div>`
@@ -1338,6 +1417,9 @@ async function renderRecommendationsPanel(cellName) {
                     <div class="reco-body">${escapeHtml(recommendation.reason)}</div>
                     <div class="reco-metrics">
                         ${kpiSummary}
+                        <div class="reco-metric"><span class="reco-metric-label">Perte actuelle:</span><span class="reco-metric-value">${escapeHtml(String(currentLossUe))} UE / ${escapeHtml(currentLossGb.toFixed(1))} GB</span></div>
+                        <div class="reco-metric"><span class="reco-metric-label">Taux récupération:</span><span class="reco-metric-value">${escapeHtml(String(recommendation.recoveryRate))}%</span></div>
+                        <div class="reco-metric"><span class="reco-metric-label">Gain estimé:</span><span class="reco-metric-value">${escapeHtml(String(gainUe))} UE / ${escapeHtml(gainGb.toFixed(1))} GB</span></div>
                         <div class="reco-metric"><span class="reco-metric-label">Confiance:</span><span class="reco-metric-value">${escapeHtml(recommendation.confidencePct)}%</span></div>
                     </div>
                     ${buttonHtml}
@@ -1421,8 +1503,155 @@ window.applyRecommendation = function(idx) {
     }, 100);
 };
 
+function getActiveUsersMetric(metrics = {}) {
+    const candidate = metrics.active_users ?? metrics.traffic;
+    const parsed = Number(candidate);
+    return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function renderSitePlanningPanel(cellName) {
+    const panel = document.getElementById('site-planning-panel');
+    const selectedCellEl = document.getElementById('site-planning-selected-cell');
+    const runBtn = document.getElementById('site-planning-run');
+    const resultEl = document.getElementById('site-planning-result');
+    if (!panel || !selectedCellEl || !runBtn || !resultEl) return;
+
+    if (!cellName) {
+        panel.classList.add('disabled');
+        runBtn.disabled = true;
+        selectedCellEl.textContent = 'Select a cell on the map to run site planning.';
+        resultEl.innerHTML = '<div class="action-hint">Choose a cell first, then run new site simulation.</div>';
+        return;
+    }
+
+    const obs = state.currentObservations[cellName] || {};
+    const load = Number(obs.load);
+    const throughput = Number(obs.throughput);
+    const activeUsers = getActiveUsersMetric(obs);
+
+    panel.classList.remove('disabled');
+    runBtn.disabled = false;
+    selectedCellEl.innerHTML = sanitizeRichHtml(`<strong>${escapeHtml(cellName)}</strong>`);
+
+    const loadText = Number.isFinite(load) ? `${formatNumber(load)}%` : 'N/A';
+    const throughputText = Number.isFinite(throughput) ? formatThroughput(throughput) : 'N/A';
+    const usersText = formatNumber(activeUsers, 2);
+    resultEl.innerHTML = sanitizeRichHtml(
+        `<div class="action-hint">Current snapshot → Load: ${loadText} | Throughput: ${throughputText} | Active users: ${usersText}</div>`
+    );
+}
+
+function displaySitePlanningResults(result) {
+    const container = document.getElementById('site-planning-result');
+    if (!container) return;
+
+    if (result.error) {
+        container.innerHTML = '<div class="action-error"></div>';
+        const errorEl = container.querySelector('.action-error');
+        if (errorEl) errorEl.textContent = result.error;
+        return;
+    }
+
+    const before = result.before || {};
+    const after = result.after || {};
+    const impact = result.impact || {};
+    const confidence = result.confidence ?? 0.75;
+    const confidencePct = Math.round(confidence * 100);
+    const beforeUsers = getActiveUsersMetric(before);
+    const afterUsers = getActiveUsersMetric(after);
+    const usersDelta = Number.isFinite(Number(impact.active_users_change))
+        ? Number(impact.active_users_change)
+        : afterUsers - beforeUsers;
+
+    const neighbors = (impact.affected_cells || []).map((n) => {
+        const delta = n.load_change ?? n.change ?? 0;
+        return { name: n.name || n.cell_name, delta };
+    }).sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta)).slice(0, 8);
+
+    const neighborsText = neighbors.length
+        ? `Affected: ${neighbors.map((c) => `${escapeHtml(c.name)} (${escapeHtml(formatNumber(c.delta))}%)`).join(', ')}`
+        : '';
+
+    container.innerHTML = sanitizeRichHtml(`
+        <div class="action-mode-badge">⚡ Fast (${confidencePct}% confidence)</div>
+        <div class="action-comparison">
+            <div>
+                <div class="action-label">Before</div>
+                <div>Load: ${formatNumber(before.load)}%</div>
+                <div>Throughput: ${formatThroughput(before.throughput || 0)}</div>
+                <div>Active users: ${formatNumber(beforeUsers, 2)}</div>
+            </div>
+            <div class="action-arrow">→</div>
+            <div>
+                <div class="action-label">After</div>
+                <div>Load: ${formatNumber(after.load)}%</div>
+                <div>Throughput: ${formatThroughput(after.throughput || 0)}</div>
+                <div>Active users: ${formatNumber(afterUsers, 2)}</div>
+            </div>
+        </div>
+        <div class="action-impact">
+            Load: ${impact.load_change >= 0 ? '+' : ''}${formatNumber(impact.load_change ?? 0, 2)}% |
+            Throughput: ${impact.throughput_change >= 0 ? '+' : ''}${formatNumber(impact.throughput_change ?? 0, 2)} kbps |
+            Active users: ${usersDelta >= 0 ? '+' : ''}${formatNumber(usersDelta, 2)}
+        </div>
+        <div class="action-reco">${escapeHtml(result.recommendation || '')}</div>
+        ${neighborsText ? `<div class="action-affected">${neighborsText}</div>` : ''}
+    `);
+}
+
+async function runSitePlanningSimulation(cellName) {
+    const resultEl = document.getElementById('site-planning-result');
+    const runBtn = document.getElementById('site-planning-run');
+    const siteTypeSelect = document.getElementById('site-planning-site-type');
+
+    if (!resultEl || !runBtn || !siteTypeSelect) return;
+    if (!cellName) {
+        resultEl.innerHTML = '<div class="action-error">Select a cell first.</div>';
+        return;
+    }
+
+    const siteType = String(siteTypeSelect.value || 'macro').trim();
+    const timeEntry = state.timeIndex[state.currentTimeIndex] || {};
+    const requestBody = {
+        cell_name: cellName,
+        action: 'new_site',
+        params: { siteType },
+        time_entry: timeEntry,
+        mode: 'fast',
+    };
+
+    try {
+        resultEl.innerHTML = '<div class="action-hint">⚡ Simulating new site...</div>';
+        runBtn.disabled = true;
+        runBtn.innerHTML = '<span class="material-symbols-outlined">hourglass_top</span> Running...';
+
+        const response = await fetch('/api/simulate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody),
+        });
+
+        const payload = await response.json().catch(() => null);
+        if (!response.ok || !payload || typeof payload !== 'object') {
+            throw new Error(payload?.error || 'Site planning simulation failed');
+        }
+        if (payload.error) {
+            throw new Error(payload.error);
+        }
+
+        displaySitePlanningResults(payload);
+    } catch (err) {
+        resultEl.innerHTML = `<div class="action-error">Simulation failed: ${escapeHtml(err.message)}</div>`;
+    } finally {
+        runBtn.disabled = false;
+        runBtn.innerHTML = '<span class="material-symbols-outlined">play_arrow</span> Run Simulation';
+    }
+}
+
 // --- Action Simulator ---
 function renderActionPanel(cellName) {
+    renderSitePlanningPanel(cellName);
+
     const panel = document.getElementById('action-panel');
     const select = document.getElementById('action-select');
     const runBtn = document.getElementById('action-run');
@@ -5416,6 +5645,8 @@ function setupEventHandlers() {
     const actionSelect = document.getElementById('action-select');
     actionSelect?.addEventListener('change', () => buildActionParamsUI(actionSelect.value));
     document.getElementById('action-run')?.addEventListener('click', () => runSimulation(state.selectedCellName, actionSelect?.value));
+    document.getElementById('site-planning-run')?.addEventListener('click', () => runSitePlanningSimulation(state.selectedCellName));
+    document.getElementById('site-planning-site-type')?.addEventListener('change', () => renderSitePlanningPanel(state.selectedCellName));
     renderActionPanel(state.selectedCellName);
 
     // Keyboard shortcuts

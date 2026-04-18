@@ -64,6 +64,7 @@ OBSERVATION_FIELDS = [
     "throughput",
     "cqi",
     "traffic",
+    "active_users",
     "ta",
     "signal_power",
     "congested",
@@ -94,6 +95,10 @@ def clamp_load(load: float) -> float:
 
 def clamp_throughput(tp: float) -> float:
     return max(PHYSICAL_LIMITS["THROUGHPUT_MIN_KBPS"], tp) if tp else 0
+
+
+def clamp_active_users(users: float) -> float:
+    return max(0.0, float(users)) if users is not None else 0.0
 
 
 def clamp_sinr(sinr: float) -> float:
@@ -471,9 +476,61 @@ def apply_redistribute(state: Dict[str, float], params: Dict[str, Any], baseline
     }, affected, confidence
 
 
-def apply_new_site(state: Dict[str, float]) -> Dict[str, float]:
-    """DEPRECATED: Handled by separate site planning tool"""
-    raise ValueError("Deploy new site is handled in the site planning tool, not inline actions")
+def apply_new_site(state: Dict[str, float], params: Dict[str, Any]) -> Tuple[Dict[str, float], List[Dict[str, Any]], float]:
+    """
+    Deploy a capacitary site and offload the serving cell.
+
+    This model keeps calculations fast while exposing concrete KPI deltas for
+    PRB load, throughput, and active users.
+    """
+    load = state["load"]
+    throughput = state["throughput"]
+    cqi = state["cqi"]
+    active_users = clamp_active_users(state.get("active_users", state.get("traffic", 0.0)))
+
+    site_type = str(params.get("siteType") or params.get("site_type") or "macro").strip().lower()
+    profiles = {
+        "macro": {
+            "load_offload": 0.42,
+            "users_offload": 0.50,
+            "throughput_gain": 0.38,
+            "cqi_gain": 1.1,
+            "confidence": 0.82,
+        },
+        "rooftop": {
+            "load_offload": 0.33,
+            "users_offload": 0.40,
+            "throughput_gain": 0.28,
+            "cqi_gain": 0.8,
+            "confidence": 0.76,
+        },
+    }
+    profile = profiles.get(site_type, profiles["macro"])
+
+    offloaded_load = load * profile["load_offload"]
+    offloaded_users = active_users * profile["users_offload"]
+    new_load = clamp_load(load - offloaded_load)
+    new_active_users = clamp_active_users(active_users - offloaded_users)
+
+    # Throughput improves from lower contention and better serving conditions.
+    throughput_gain = throughput * profile["throughput_gain"] + offloaded_load * 75
+    new_throughput = clamp_throughput(throughput + throughput_gain)
+    new_cqi = clamp_cqi(cqi + profile["cqi_gain"])
+
+    affected = [{
+        "name": "planned_site",
+        "type": site_type,
+        "load_change": round(offloaded_load, 2),
+        "active_users_change": round(offloaded_users, 2),
+    }]
+
+    return {
+        "load": new_load,
+        "cqi": new_cqi,
+        "throughput": new_throughput,
+        "traffic": new_active_users,
+        "active_users": new_active_users,
+    }, affected, profile["confidence"]
 
 
 # ============================================================================
@@ -530,14 +587,19 @@ def build_state(baseline: Dict[str, Any], observations: Dict[str, Any], cell_nam
     throughput = obs.get("throughput")
     cqi = obs.get("cqi")
     traffic = obs.get("traffic")
+    active_users = obs.get("active_users")
     ta = obs.get("ta")
     signal_power = obs.get("signal_power")
+
+    active_users_val = active_users if active_users is not None else traffic
+    active_users_fmt = clamp_active_users(float(active_users_val)) if active_users_val is not None else 0.0
 
     return {
         "load": clamp_load(float(load)) if load is not None else 0.0,
         "throughput": clamp_throughput(float(throughput)) if throughput is not None else 0.0,
         "cqi": clamp_cqi(float(cqi)) if cqi is not None else 10.0,
-        "traffic": max(0, float(traffic)) if traffic is not None else 0.0,
+        "traffic": active_users_fmt,
+        "active_users": active_users_fmt,
         "ta": clamp(float(ta), PHYSICAL_LIMITS["TA_MIN"], PHYSICAL_LIMITS["TA_MAX"]) if ta is not None else 0.0,
         "signal_power": clamp(float(signal_power), 100, 200) if signal_power is not None else 170.0,
     }
@@ -548,6 +610,7 @@ def format_state(raw: Dict[str, float], band: int = 3) -> Dict[str, Union[float,
     load = clamp_load(raw.get("load", 0.0))
     cqi = clamp_cqi(raw.get("cqi", 10.0))
     throughput = clamp_throughput(raw.get("throughput", 0.0))
+    active_users = clamp_active_users(raw.get("active_users", raw.get("traffic", 0.0)))
     
     # Validate throughput against theoretical maximum for CQI
     max_theoretical = estimate_throughput_from_cqi(cqi, band, load)
@@ -559,6 +622,7 @@ def format_state(raw: Dict[str, float], band: int = 3) -> Dict[str, Union[float,
         "load": round(load, 2),
         "cqi": round(cqi, 2),
         "throughput": round(throughput, 2),
+        "active_users": round(active_users, 2),
         "health_score": round(health, 2),
         "issue_type": classify_issue(load, cqi),
     }
@@ -611,7 +675,6 @@ def simulate_action(base_dir: Path, cell_name: str, action: str, params: Dict[st
         "mimo_upgrade": 0.35,
         "small_cell": 0.45,
         "add_sector": 0.85,
-        "add_site": 0.90,
         "split_cell": 0.70,
     }
 
@@ -637,8 +700,10 @@ def simulate_action(base_dir: Path, cell_name: str, action: str, params: Dict[st
         target = params.get("target", "neighbors")
         recommendation = f"MLB handover bias to {target} to balance load"
         
-    elif action == "new_site":
-        raise ValueError("Deploy new site is handled in the site planning tool")
+    elif action in {"new_site", "add_site"}:
+        after_raw, affected, confidence = apply_new_site(before_state, params)
+        site_type = str(params.get("siteType") or params.get("site_type") or "macro").strip().lower()
+        recommendation = f"Deploy {site_type} capacitary site to offload demand from {cell_name}"
         
     elif action in generic_recovery:
         # Apply simplified effect using recovery rate to reduce load and improve throughput
@@ -664,6 +729,7 @@ def simulate_action(base_dir: Path, cell_name: str, action: str, params: Dict[st
     impact = {
         "load_change": round(after_fmt["load"] - before_fmt["load"], 2),
         "throughput_change": round(after_fmt["throughput"] - before_fmt["throughput"], 2),
+        "active_users_change": round(after_fmt["active_users"] - before_fmt["active_users"], 2),
         "cqi_change": round(after_fmt["cqi"] - before_fmt["cqi"], 2),
         "affected_cells": affected,
     }
@@ -699,7 +765,7 @@ def simulate_action(base_dir: Path, cell_name: str, action: str, params: Dict[st
 def main() -> None:
     parser = argparse.ArgumentParser(description="NetVision Action Simulator")
     parser.add_argument("--cell", required=True, help="Cell name")
-    parser.add_argument("--action", required=True, help="Action type: tilt|add_carrier|redistribute|new_site")
+    parser.add_argument("--action", required=True, help="Action type: tilt|add_carrier|redistribute|new_site|add_site")
     parser.add_argument("--params", default="{}", help="JSON string of parameters")
     parser.add_argument("--time-file", default=None, help="Time-slice filename (from runtime_data/time_data)")
     parser.add_argument("--mode", default="fast", choices=["fast"], help="Simulation mode (fast only; ns-3 removed)")

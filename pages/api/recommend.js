@@ -8,9 +8,34 @@ function normalizeCellName(raw) {
   return raw.trim()
 }
 
-async function fetchBackendRecommendation(cellName) {
+function normalizeOptionalKpi(raw) {
+  if (raw === null || raw === undefined) return null
+  const parsed = Number(raw)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+function extractRequestKpis(body) {
+  const kpis = {}
+  const prbLoad = normalizeOptionalKpi(body?.prb_load)
+  const throughput = normalizeOptionalKpi(body?.throughput)
+  const activeUsers = normalizeOptionalKpi(body?.active_users)
+  const cqi = normalizeOptionalKpi(body?.cqi)
+
+  if (prbLoad !== null) kpis.prb_load = prbLoad
+  if (throughput !== null) kpis.throughput = throughput
+  if (activeUsers !== null) kpis.active_users = activeUsers
+  if (cqi !== null) kpis.cqi = cqi
+
+  return kpis
+}
+
+async function fetchBackendRecommendation(cellName, requestKpis = {}) {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), Number.isFinite(BACKEND_TIMEOUT_MS) ? BACKEND_TIMEOUT_MS : 15000)
+  const backendBody = {
+    cellname: cellName,
+    ...requestKpis,
+  }
 
   try {
     const response = await fetch(`${BACKEND_BASE_URL}/predict`, {
@@ -18,7 +43,7 @@ async function fetchBackendRecommendation(cellName) {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ cellname: cellName }),
+      body: JSON.stringify(backendBody),
       signal: controller.signal,
     })
 
@@ -65,9 +90,10 @@ export default async function handler(req, res) {
   if (!cellName) {
     return res.status(400).json({ error: 'cell_name must be a non-empty string' })
   }
+  const requestKpis = extractRequestKpis(req.body)
 
   try {
-    const recommendation = await fetchBackendRecommendation(cellName)
+    const recommendation = await fetchBackendRecommendation(cellName, requestKpis)
     return res.status(200).json(recommendation)
   } catch (err) {
     const statusCode = Number.isInteger(err?.statusCode) ? err.statusCode : 502

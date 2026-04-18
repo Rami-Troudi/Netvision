@@ -84,8 +84,9 @@ def main() -> int:
     if args.validate and not run_validation():
         return 1
 
-    print("Launching FastAPI on http://0.0.0.0:8000 (reload=True)")
-    uvicorn.run("backend.api:app", host="0.0.0.0", port=8000, reload=True)
+    print("Launching FastAPI on http://0.0.0.0:8000 (reload=False)")
+    # In production, auto-reload must remain disabled for stability and predictable process behavior.
+    uvicorn.run("backend.api:app", host="0.0.0.0", port=8000, reload=False)
     return 0
 
 

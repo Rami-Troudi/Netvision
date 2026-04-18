@@ -18,10 +18,10 @@
     "chart.js": "^4.5.1",
     "ioredis": "^5.10.1",
     "maplibre-gl": "^5.15.0",
-    "next": "^15.5.9",
+    "next": "15.5.15",
     "parquetjs-lite": "^0.8.7",
-    "react": "latest",
-    "react-dom": "latest"
+    "react": "19.2.3",
+    "react-dom": "19.2.3"
   },
   "devDependencies": {
     "eslint-config-next": "^15.5.9"

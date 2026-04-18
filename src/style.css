@@ -313,12 +313,13 @@ html, body {
     display: flex;
     justify-content: space-between;
     margin-top: 4px;
-    font-size: 10px;
+    font-size: 11px;
     color: var(--text-muted);
 }
 
 .time-slider-labels .time-current {
-    font-weight: 600;
+    font-weight: 700;
+    font-size: 16px;
     color: var(--orange-primary);
 }
 
@@ -1389,9 +1390,30 @@ html, body {
     gap: 12px;
 }
 
+.panel.site-planning-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
 .panel.action-panel.disabled {
     opacity: 0.5;
     pointer-events: none;
+}
+
+.panel.site-planning-panel.disabled {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.site-planning-selected-cell {
+    width: 100%;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    padding: 10px 12px;
+    border-radius: var(--radius-md);
+    font-size: 13px;
 }
 
 .action-field {

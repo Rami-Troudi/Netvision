@@ -12,7 +12,6 @@ const pageMarkup = `
                 <span class="header-subtitle">NOC Live Operations Console</span>
             </div>
             <div class="header-center">
-                <div class="timestamp" id="timestamp"></div>
             </div>
             <div class="header-right">
                 <button class="btn-icon" id="btn-theme" title="Toggle Theme (T)">
@@ -368,6 +367,29 @@ const pageMarkup = `
                         Run Simulation
                     </button>
                     <div class="action-result" id="action-result"></div>
+                </div>
+
+                <div class="panel site-planning-panel" id="site-planning-panel">
+                    <h3 class="panel-title">
+                        <span class="material-symbols-outlined">add_location_alt</span>
+                        Site Planning
+                    </h3>
+                    <div class="action-field">
+                        <label>Selected cell</label>
+                        <div class="site-planning-selected-cell" id="site-planning-selected-cell">Select a cell on the map to run site planning.</div>
+                    </div>
+                    <div class="action-field">
+                        <label for="site-planning-site-type">Planned Site Type</label>
+                        <select id="site-planning-site-type" class="action-input">
+                            <option value="macro">Macro capacitary site</option>
+                            <option value="rooftop">Urban rooftop site</option>
+                        </select>
+                    </div>
+                    <button class="btn-primary action-run" id="site-planning-run">
+                        <span class="material-symbols-outlined">play_arrow</span>
+                        Run Simulation
+                    </button>
+                    <div class="action-result" id="site-planning-result"></div>
                 </div>
                 
                 <div class="panel">

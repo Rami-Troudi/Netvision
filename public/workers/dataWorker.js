@@ -839,11 +839,11 @@ function estimateTrafficLoss(activeUsers, load, throughput, congested) {
   const safeThroughput = Number.isFinite(throughput) ? throughput : ORANGE_CONGESTION_CONFIG.THROUGHPUT_TARGET
 
   const excessLoad = Math.max(0, safeLoad - ORANGE_CONGESTION_CONFIG.PRB_MEDIUM) / 100
-  // process_time_series.py computes throughput_gap but currently does not use it in traffic_loss_ue.
+  // Orange model: UE loss scales with both excess load and throughput degradation.
   const throughputGap =
     Math.max(0, ORANGE_CONGESTION_CONFIG.THROUGHPUT_TARGET - safeThroughput) /
     ORANGE_CONGESTION_CONFIG.THROUGHPUT_TARGET
-  const trafficLossUe = Math.max(0, Math.trunc(safeUsers * excessLoad * 0.5))
+  const trafficLossUe = Math.max(0, Math.trunc(safeUsers * excessLoad * throughputGap * 0.5))
   const trafficLossGb = Number((trafficLossUe * 2.4).toFixed(1))
 
   return {

@@ -40,6 +40,58 @@ CELL_CONGESTION_PROFILE = _load_profile(CELL_PROFILE_PATH)
 
 TIER_ORDER = {"court_terme": 0, "moyen_terme": 1, "long_terme": 2, "none": 3}
 
+ORANGE_LOSS_CONFIG = {
+    "PRB_SATURATED": 90.0,
+    "PRB_HIGH": 80.0,
+    "PRB_MEDIUM": 70.0,
+    "THROUGHPUT_DEGRADED": 4000.0,
+    "THROUGHPUT_TARGET": 10000.0,
+    "USERS_CRITICAL": 4.0,
+    "UE_LOSS_COEFF": 0.5,
+    "GB_PER_UE": 2.4,
+}
+
+
+def _is_congested_for_loss(load: float, throughput: float, active_users: float) -> bool:
+    if load >= ORANGE_LOSS_CONFIG["PRB_SATURATED"]:
+        return True
+    if load >= ORANGE_LOSS_CONFIG["PRB_HIGH"] and throughput < ORANGE_LOSS_CONFIG["THROUGHPUT_DEGRADED"]:
+        return True
+    if active_users > ORANGE_LOSS_CONFIG["USERS_CRITICAL"] and load >= ORANGE_LOSS_CONFIG["PRB_MEDIUM"]:
+        return True
+    if throughput < ORANGE_LOSS_CONFIG["THROUGHPUT_DEGRADED"] and load >= ORANGE_LOSS_CONFIG["PRB_MEDIUM"]:
+        return True
+    return False
+
+
+def _estimate_traffic_loss(active_users: float, load: float, throughput: float) -> tuple[int, float]:
+    safe_users = max(0.0, _to_float(active_users))
+    safe_load = max(0.0, _to_float(load))
+    safe_throughput = max(0.0, _to_float(throughput, ORANGE_LOSS_CONFIG["THROUGHPUT_TARGET"]))
+
+    if not _is_congested_for_loss(safe_load, safe_throughput, safe_users):
+        return 0, 0.0
+
+    excess_load = max(0.0, safe_load - ORANGE_LOSS_CONFIG["PRB_MEDIUM"]) / 100.0
+    throughput_gap = max(0.0, ORANGE_LOSS_CONFIG["THROUGHPUT_TARGET"] - safe_throughput) / ORANGE_LOSS_CONFIG[
+        "THROUGHPUT_TARGET"
+    ]
+    loss_ue = int(max(0.0, safe_users * excess_load * throughput_gap * ORANGE_LOSS_CONFIG["UE_LOSS_COEFF"]))
+    loss_gb = round(loss_ue * ORANGE_LOSS_CONFIG["GB_PER_UE"], 1)
+    return loss_ue, loss_gb
+
+
+def _enrich_action_with_gains(action: dict[str, Any], current_loss_ue: int, current_loss_gb: float) -> None:
+    recovery_rate = max(0.0, min(100.0, _to_float(action.get("estimated_recovery_pct"), 0.0)))
+    gain_ue = int(round(current_loss_ue * (recovery_rate / 100.0)))
+    gain_ue = max(0, min(current_loss_ue, gain_ue))
+    gain_gb = round(current_loss_gb * (recovery_rate / 100.0), 1)
+    gain_gb = max(0.0, min(current_loss_gb, gain_gb))
+
+    action["recovery_rate"] = recovery_rate
+    action["gain_ue"] = gain_ue
+    action["gain_gb"] = gain_gb
+
 
 def _find_column(
     df: pd.DataFrame,
@@ -89,7 +141,9 @@ def recommend_actions(cell_state: dict) -> list[dict]:
     actions: list[dict[str, Any]] = []
     added_action_names: set[str] = set()
 
+    current_users = _to_float(cell_state.get("current_users"))
     current_prb = _to_float(cell_state.get("current_prb"))
+    current_thrput = _to_float(cell_state.get("current_thrput"))
     predicted_prb_next_hour = _to_float(cell_state.get("predicted_prb_next_hour"))
     current_cqi = _to_float(cell_state.get("current_cqi"))
     avg_prb_busy_hour = _to_float(cell_state.get("avg_prb_busy_hour"))
@@ -99,6 +153,15 @@ def recommend_actions(cell_state: dict) -> list[dict]:
     is_structural_congestion = _to_bool(cell_state.get("is_structural_congestion"))
     rebalancing_opportunity = _to_bool(cell_state.get("rebalancing_opportunity"))
     frequency_band = _normalize_band(cell_state.get("frequency_band"))
+    current_loss_ue = max(0, int(round(_to_float(cell_state.get("traffic_loss_ue"), 0.0))))
+    current_loss_gb = max(0.0, _to_float(cell_state.get("traffic_loss_gb"), 0.0))
+
+    if current_loss_ue == 0 and current_loss_gb == 0.0:
+        current_loss_ue, current_loss_gb = _estimate_traffic_loss(
+            active_users=current_users,
+            load=current_prb,
+            throughput=current_thrput,
+        )
 
     def add_action(
         action: str,
@@ -236,16 +299,16 @@ def recommend_actions(cell_state: dict) -> list[dict]:
         deduplicated.append(action)
 
     if not deduplicated:
-        return [
-            {
-                "action": "Aucune action requise",
-                "tier": "none",
-                "confidence": "high",
-                "reason": "Cell KPIs within normal range",
-                "estimated_recovery_pct": 0,
-                "priority_rank": 1,
-            }
-        ]
+        no_action = {
+            "action": "Aucune action requise",
+            "tier": "none",
+            "confidence": "high",
+            "reason": "Cell KPIs within normal range",
+            "estimated_recovery_pct": 0,
+            "priority_rank": 1,
+        }
+        _enrich_action_with_gains(no_action, current_loss_ue, current_loss_gb)
+        return [no_action]
 
     sorted_actions = sorted(
         deduplicated,
@@ -253,6 +316,7 @@ def recommend_actions(cell_state: dict) -> list[dict]:
     )
     for idx, action in enumerate(sorted_actions, start=1):
         action["priority_rank"] = idx
+        _enrich_action_with_gains(action, current_loss_ue, current_loss_gb)
     return sorted_actions
 
 
@@ -418,6 +482,15 @@ def get_cell_state(
         df_name="profile_df",
     )
 
+    current_prb = _to_float(latest[prb_col])
+    current_users = _to_float(latest[users_col])
+    current_thrput = _to_float(latest[thrput_col])
+    traffic_loss_ue, traffic_loss_gb = _estimate_traffic_loss(
+        active_users=current_users,
+        load=current_prb,
+        throughput=current_thrput,
+    )
+
     return {
         "cellname": key,
         "enodeb_name": enodeb_name,
@@ -428,10 +501,12 @@ def get_cell_state(
         "predicted_prb_next_hour": _to_float(pred_prb),
         "predicted_users_next_hour": _to_float(pred_users),
         "predicted_thrput_next_hour": _to_float(pred_thrput),
-        "current_prb": _to_float(latest[prb_col]),
-        "current_users": _to_float(latest[users_col]),
-        "current_thrput": _to_float(latest[thrput_col]),
+        "current_prb": current_prb,
+        "current_users": current_users,
+        "current_thrput": current_thrput,
         "current_cqi": _to_float(latest[cqi_col]),
+        "traffic_loss_ue": traffic_loss_ue,
+        "traffic_loss_gb": traffic_loss_gb,
         "avg_prb_busy_hour": _to_float(profile_latest[avg_prb_col]),
         "avg_users_busy_hour": _to_float(profile_latest[avg_users_bh_col]),
         "pct_congested": _to_float(profile_latest[pct_congested_col]),
