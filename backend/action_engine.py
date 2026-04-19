@@ -878,15 +878,28 @@ def _site_wide_saturation_status(
     return site_wide_saturation, congested_site_cells, total_site_cells
 
 
-def _find_underloaded_low_band_peers(
+def _find_underloaded_capacity_peers(
     *,
     cell_name: str,
     all_cells_df: pd.DataFrame,
 ) -> list[str]:
     key = _to_str(cell_name)
-    if _band_suffix_from_cell_name(key) != "h":
-        return []
     if not isinstance(all_cells_df, pd.DataFrame) or all_cells_df.empty:
+        return []
+
+    target_rows = all_cells_df[all_cells_df["cell_name"].astype(str).str.strip().eq(key)]
+    if target_rows.empty:
+        return []
+
+    target_band = _to_str(target_rows.iloc[0].get("frequency_band", "")).lower()
+    look_for = []
+    
+    # Restrict extensions to B3 (1800) <-> B1 (2100) only. B20 (800) is excluded entirely.
+    if "1800" in target_band or "b3" in target_band or key.endswith("h"):
+        look_for = ["2100", "b1", "m"]  # B3 -> B1
+    elif "2100" in target_band or "b1" in target_band or key.endswith("m"):
+        look_for = ["1800", "b3", "h"]  # B1 -> B3
+    else:
         return []
 
     prefix = _site_prefix_from_cell_name(key)
@@ -897,7 +910,21 @@ def _find_underloaded_low_band_peers(
             continue
         if _site_prefix_from_cell_name(peer_name) != prefix:
             continue
-        if _band_suffix_from_cell_name(peer_name) not in {"l", "f"}:
+
+        peer_band = _to_str(getattr(row, "frequency_band", "")).lower()
+        peer_suffix = _band_suffix_from_cell_name(peer_name)
+
+        # Explicitly skip coverage bands (B20 / 800MHz)
+        if "800" in peer_band or "b20" in peer_band or peer_suffix in {"l", "f"}:
+            continue
+
+        is_match = False
+        for term in look_for:
+            if term in peer_band or term == peer_suffix:
+                is_match = True
+                break
+
+        if not is_match:
             continue
 
         peer_prb = _safe_float_or_none(getattr(row, "ft_physical_resource_blocks_load_dl", None))
@@ -1051,7 +1078,7 @@ def evaluate_cell(
     )
     top_neighbor = neighbors[0]["cell_name"] if neighbors else None
 
-    low_band_peers = _find_underloaded_low_band_peers(
+    capacity_peers = _find_underloaded_capacity_peers(
         cell_name=key,
         all_cells_df=all_cells_df,
     )
@@ -1091,7 +1118,7 @@ def evaluate_cell(
 
     if is_congested:
         rebalancing_candidate = bool(neighbors) and not site_wide_saturation
-        carrier_candidate = bool(low_band_peers)
+        carrier_candidate = bool(capacity_peers)
 
         # Tilt candidate based on high TA or excessive power or plain poor coverage
         high_ta = bool(ta is not None and ta > 2.0)
@@ -1139,12 +1166,12 @@ def evaluate_cell(
                 )
             ]
         elif carrier_candidate:
-            peer_label = ", ".join(low_band_peers)
+            peer_label = ", ".join(capacity_peers)
             recommended_actions = [
                 _build_action(
                     action_name="Carrier Extension",
                     reason=(
-                        f"{threshold_reason}; high-band cell has low/fallback same-site peers below 60% PRB "
+                        f"{threshold_reason}; target capacity peers available on same site below 60% PRB "
                         f"({peer_label})"
                     ),
                     recovery_rate=RECOVERY_RATES["carrier_extension"],
@@ -1328,16 +1355,44 @@ def evaluate_all_cells_for_export(
 
     cell_names = sorted(set(baseline_df["cell_name"].astype(str).tolist()) | set(observations_df["cell_name"].astype(str).tolist()))
 
+    busy_hour_profile = context.get("busy_hour_profile") or {}
+
     rows: list[dict[str, Any]] = []
     for cell_name in cell_names:
         if not _to_str(cell_name):
             continue
+
+        cell_timestamp = request_timestamp
+        if not cell_timestamp:
+            profile = busy_hour_profile.get(cell_name, {})
+            hour_stats = profile.get("hour_stats", {})
+            busy_hours = set(profile.get("busy_hours", []))
+
+            peak_hour = None
+            max_prb = -1.0
+
+            for hour_str, stats in hour_stats.items():
+                hour_int = int(hour_str)
+                if hour_int in busy_hours:
+                    mean_prb = stats.get("mean_prb", 0.0)
+                    if mean_prb > max_prb:
+                        max_prb = mean_prb
+                        peak_hour = hour_int
+
+            if peak_hour is not None:
+                cell_rows = observations_df[observations_df["cell_name"].astype(str).str.strip().eq(cell_name)]
+                if "hour" in cell_rows.columns:
+                    hour_rows = cell_rows[pd.to_numeric(cell_rows["hour"], errors="coerce").fillna(-1).astype(int) == peak_hour]
+                    if not hour_rows.empty:
+                        best_row = hour_rows.sort_values(["prb_load", "timestamp"]).iloc[-1]
+                        cell_timestamp = best_row.get("timestamp")
+
         try:
             evaluated = evaluate_cell(
                 cell_name=cell_name,
                 context=context,
                 request_kpis=None,
-                request_timestamp=request_timestamp,
+                request_timestamp=cell_timestamp,
             )
 
             current_kpis = evaluated.get("current_kpis") or {}
