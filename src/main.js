@@ -907,6 +907,8 @@ function setSectorGeometryResolution(steps) {
 }
 
 // --- Search Functionality ---
+const SEARCH_RESULT_CAP = 50;
+
 function performSearch(term) {
     const resEl = document.getElementById('search-results');
     if (!resEl) return;
@@ -925,7 +927,8 @@ function performSearch(term) {
     Object.keys(state.siteHierarchy).forEach(site => {
         if (site.toLowerCase().includes(q)) results.push({ type: 'site', name: site });
     });
-    const limited = results;
+    const totalCount = results.length;
+    const limited = results.slice(0, SEARCH_RESULT_CAP);
     resEl.innerHTML = '';
     const fragment = document.createDocumentFragment();
     limited.forEach((r) => {
@@ -946,6 +949,12 @@ function performSearch(term) {
         item.appendChild(name);
         fragment.appendChild(item);
     });
+    if (totalCount > SEARCH_RESULT_CAP) {
+        const overflow = document.createElement('div');
+        overflow.className = 'search-item search-overflow';
+        overflow.textContent = `… and ${totalCount - SEARCH_RESULT_CAP} more results (refine your search)`;
+        fragment.appendChild(overflow);
+    }
     resEl.appendChild(fragment);
 }
 
