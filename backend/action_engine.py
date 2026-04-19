@@ -875,6 +875,38 @@ def _site_wide_saturation_status(
             congested_site_cells += 1
 
     site_wide_saturation = (congested_site_cells / total_site_cells) > 0.5
+
+    # New logic: Time-aware check. Only return True if site is saturated on at least 3 separate days.
+    if site_wide_saturation and "timestamp" in site_rows.columns:
+        congested_days = set()
+        for ts, group in site_rows.groupby("timestamp"):
+            if len(congested_days) >= 3:
+                break
+
+            ts_cells = len(group["cell_name"].unique())
+            if ts_cells <= 0:
+                continue
+
+            ts_congested = 0
+            for r in group.itertuples(index=False):
+                r_flags = _threshold_flags({
+                    "prb_load": getattr(r, "prb_load", None),
+                    "throughput_kbps": getattr(r, "throughput_kbps", None),
+                    "active_users": getattr(r, "active_users", None),
+                    "rrc_users": getattr(r, "rrc_users", None),
+                    "cqi": getattr(r, "cqi", None),
+                })
+                if r_flags.get("congestion_confirmed"):
+                    ts_congested += 1
+            
+            if (ts_congested / ts_cells) > 0.5:
+                ts_date = pd.to_datetime(ts).date()
+                if pd.notna(ts_date):
+                    congested_days.add(ts_date)
+        
+        if len(congested_days) < 3:
+            site_wide_saturation = False
+
     return site_wide_saturation, congested_site_cells, total_site_cells
 
 
@@ -1203,28 +1235,16 @@ def evaluate_cell(
                 f"{threshold_reason}; structural congestion ratio {round(structural_ratio * 100, 1)}% "
                 f"with no rebalancing/carrier candidate"
             )
-            if structural_ratio > 0.80:
-                recommended_actions = [
-                    _build_action(
-                        action_name="Add Site",
-                        reason=structural_reason,
-                        recovery_rate=RECOVERY_RATES["new_site"],
-                        tier="long_terme",
-                        lost_ue=estimated_lost_ue,
-                        lost_gb=estimated_lost_gb,
-                    )
-                ]
-            else:
-                recommended_actions = [
-                    _build_action(
-                        action_name="Add Sector",
-                        reason=structural_reason,
-                        recovery_rate=RECOVERY_RATES["new_sector"],
-                        tier="long_terme",
-                        lost_ue=estimated_lost_ue,
-                        lost_gb=estimated_lost_gb,
-                    )
-                ]
+            recommended_actions = [
+                _build_action(
+                    action_name="Add Sector",
+                    reason=structural_reason,
+                    recovery_rate=RECOVERY_RATES["new_sector"],
+                    tier="long_terme",
+                    lost_ue=estimated_lost_ue,
+                    lost_gb=estimated_lost_gb,
+                )
+            ]
         elif tilt_candidate:
             tilt_reason = "high Timing Advance (TA) or excessive power" if (high_ta or high_power) else "poor CQI or degraded throughput"
             recommended_actions = [
