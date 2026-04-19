@@ -588,15 +588,27 @@ def _format_threshold_reason(flags: dict[str, bool]) -> str:
     return "; ".join(reasons)
 
 
-def _loss_gain_for_recovery(recovery_rate: float) -> tuple[int, float]:
+def _loss_gain_for_recovery(
+    recovery_rate: float,
+    lost_ue: int = LOST_UE_BASELINE,
+    lost_gb: float = LOST_GB_BASELINE,
+) -> tuple[int, float]:
     ratio = max(0.0, min(1.0, recovery_rate / 100.0))
-    gain_ue = int(round(LOST_UE_BASELINE * ratio))
-    gain_gb = round(LOST_GB_BASELINE * ratio, 2)
+    gain_ue = int(round(lost_ue * ratio))
+    gain_gb = round(lost_gb * ratio, 2)
     return gain_ue, gain_gb
 
 
-def _build_action(action_name: str, reason: str, recovery_rate: float, tier: str) -> dict[str, Any]:
-    gain_ue, gain_gb = _loss_gain_for_recovery(recovery_rate)
+def _build_action(
+    action_name: str,
+    reason: str,
+    recovery_rate: float,
+    tier: str,
+    *,
+    lost_ue: int = LOST_UE_BASELINE,
+    lost_gb: float = LOST_GB_BASELINE,
+) -> dict[str, Any]:
+    gain_ue, gain_gb = _loss_gain_for_recovery(recovery_rate, lost_ue=lost_ue, lost_gb=lost_gb)
     return {
         "action_name": action_name,
         "action": action_name,
@@ -1042,6 +1054,20 @@ def evaluate_cell(
     recommended_actions: list[dict[str, Any]] = []
     structural_ratio = (len(congested_busy_hours) / len(busy_hours)) if busy_hours else 0.0
 
+    # --- Bug 1 fix: dynamic estimated_lost_ue/gb based on cell severity ---
+    if is_congested:
+        user_scale = max(1.0, active_users / ORANGE_THRESHOLDS["ACTIVE_USERS_CRITICAL"])
+        prb_scale = max(1.0, prb_load / ORANGE_THRESHOLDS["PRB_SATURATED"])
+        severity_multiplier = min(3.0, (user_scale + prb_scale) / 2.0)
+        estimated_lost_ue = max(
+            LOST_UE_BASELINE // 4,
+            int(round(LOST_UE_BASELINE * severity_multiplier / 2.0)),
+        )
+        estimated_lost_gb = round(LOST_GB_BASELINE * severity_multiplier / 2.0, 2)
+    else:
+        estimated_lost_ue = 0
+        estimated_lost_gb = 0.0
+
     if is_congested:
         rebalancing_candidate = bool(neighbors) and not site_wide_saturation
         carrier_candidate = bool(low_band_peers)
@@ -1058,6 +1084,8 @@ def evaluate_cell(
                         reason=saturation_reason,
                         recovery_rate=RECOVERY_RATES["new_site"],
                         tier="long_terme",
+                        lost_ue=estimated_lost_ue,
+                        lost_gb=estimated_lost_gb,
                     )
                 ]
             else:
@@ -1067,6 +1095,8 @@ def evaluate_cell(
                         reason=saturation_reason,
                         recovery_rate=RECOVERY_RATES["new_sector"],
                         tier="long_terme",
+                        lost_ue=estimated_lost_ue,
+                        lost_gb=estimated_lost_gb,
                     )
                 ]
         elif rebalancing_candidate:
@@ -1077,6 +1107,8 @@ def evaluate_cell(
                     reason=f"{threshold_reason}; eligible neighbors with headroom ({neighbor_label})",
                     recovery_rate=RECOVERY_RATES["load_rebalancing"],
                     tier="court_terme",
+                    lost_ue=estimated_lost_ue,
+                    lost_gb=estimated_lost_gb,
                 )
             ]
         elif carrier_candidate:
@@ -1090,15 +1122,25 @@ def evaluate_cell(
                     ),
                     recovery_rate=RECOVERY_RATES["carrier_extension"],
                     tier="moyen_terme",
+                    lost_ue=estimated_lost_ue,
+                    lost_gb=estimated_lost_gb,
                 )
             ]
-        elif busy_hour_flag and prb_load > ORANGE_THRESHOLDS["PRB_SATURATED"] and not rebalancing_candidate and not carrier_candidate:
+        elif (
+            busy_hour_flag
+            and prb_load > ORANGE_THRESHOLDS["PRB_SATURATED"]
+            and not rebalancing_candidate
+            and not carrier_candidate
+            and (cqi < ORANGE_THRESHOLDS["CQI_POOR"] or throughput_kbps < ORANGE_THRESHOLDS["THROUGHPUT_DEGRADED"])
+        ):
             recommended_actions = [
                 _build_action(
                     action_name="Tilt Adjustment",
                     reason=f"{threshold_reason}; busy-hour overload with no rebalancing/carrier candidate",
                     recovery_rate=RECOVERY_RATES["tilt_adjustment"],
                     tier="court_terme",
+                    lost_ue=estimated_lost_ue,
+                    lost_gb=estimated_lost_gb,
                 )
             ]
         elif structural_ratio > 0.60 and not rebalancing_candidate and not carrier_candidate:
@@ -1113,6 +1155,8 @@ def evaluate_cell(
                         reason=structural_reason,
                         recovery_rate=RECOVERY_RATES["new_site"],
                         tier="long_terme",
+                        lost_ue=estimated_lost_ue,
+                        lost_gb=estimated_lost_gb,
                     )
                 ]
             else:
@@ -1122,15 +1166,31 @@ def evaluate_cell(
                         reason=structural_reason,
                         recovery_rate=RECOVERY_RATES["new_sector"],
                         tier="long_terme",
+                        lost_ue=estimated_lost_ue,
+                        lost_gb=estimated_lost_gb,
                     )
                 ]
-        else:
+        elif cqi < ORANGE_THRESHOLDS["CQI_POOR"] or throughput_kbps < ORANGE_THRESHOLDS["THROUGHPUT_DEGRADED"]:
             recommended_actions = [
                 _build_action(
                     action_name="Tilt Adjustment",
-                    reason=f"{threshold_reason}; safe fallback when no higher-priority candidate applies",
+                    reason=f"{threshold_reason}; poor CQI or degraded throughput with no higher-priority candidate",
                     recovery_rate=RECOVERY_RATES["tilt_adjustment"],
                     tier="court_terme",
+                    lost_ue=estimated_lost_ue,
+                    lost_gb=estimated_lost_gb,
+                )
+            ]
+        else:
+            # Cell is congested by PRB but signal quality is acceptable — capacity-driven
+            recommended_actions = [
+                _build_action(
+                    action_name="Add Sector",
+                    reason=f"{threshold_reason}; PRB-saturated but CQI/throughput acceptable — capacity-driven, manual review recommended",
+                    recovery_rate=RECOVERY_RATES["new_sector"],
+                    tier="long_terme",
+                    lost_ue=estimated_lost_ue,
+                    lost_gb=estimated_lost_gb,
                 )
             ]
 
@@ -1160,13 +1220,18 @@ def evaluate_cell(
         if _safe_float_or_none(top_action.get("recovery_rate")) is None:
             top_action["recovery_rate"] = normalized_recovery_pct
             top_action["estimated_recovery_pct"] = int(round(normalized_recovery_pct))
-            top_action["gain_ue"] = round(LOST_UE_BASELINE * top_action_recovery_ratio, 2)
-            top_action["gain_gb"] = round(LOST_GB_BASELINE * top_action_recovery_ratio, 2)
+            top_action["gain_ue"] = round(estimated_lost_ue * top_action_recovery_ratio, 2)
+            top_action["gain_gb"] = round(estimated_lost_gb * top_action_recovery_ratio, 2)
 
-    estimated_gain_ue = round(LOST_UE_BASELINE * top_action_recovery_ratio, 2) if is_congested else 0
-    estimated_gain_gb = round(LOST_GB_BASELINE * top_action_recovery_ratio, 2) if is_congested else 0.0
-    estimated_lost_ue = LOST_UE_BASELINE if is_congested else 0
-    estimated_lost_gb = LOST_GB_BASELINE if is_congested else 0.0
+    estimated_gain_ue = round(estimated_lost_ue * top_action_recovery_ratio, 2) if is_congested else 0
+    estimated_gain_gb = round(estimated_lost_gb * top_action_recovery_ratio, 2) if is_congested else 0.0
+
+    # --- Bug 4 fix: null out top_neighbor when action is not Load Rebalancing ---
+    top_action_name = str(
+        (recommended_actions[0].get("action_name") or "") if recommended_actions else ""
+    )
+    if top_action_name != "Load Rebalancing":
+        top_neighbor = None
 
     enodeb_name = _to_str(
         (baseline_meta.get("enodeb_name") if not baseline_meta.empty else "")
