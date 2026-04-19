@@ -15,38 +15,33 @@ import pandas as pd
 
 from backend.common import normalize_band as _normalize_band
 from backend.common import to_float as _to_float
+from backend.core_rules import (
+    ACTION_NAME_TO_RATE_KEY as _ACTION_NAME_TO_RATE_KEY,
+    ACTIVE_USERS_CRITICAL,
+    CQI_POOR,
+    LOST_GB_BASELINE,
+    LOST_UE_BASELINE,
+    PRB_MEDIUM,
+    PRB_SATURATED,
+    RECOVERY_RATES,
+    STRUCTURAL_BUSY_HOUR_PRB,
+    THROUGHPUT_DEGRADED,
+    is_congested as _is_congested,
+)
 
 
 ORANGE_THRESHOLDS = {
-    "PRB_SATURATED": 90.0,
-    "PRB_REBALANCE_HEADROOM": 70.0,
-    "THROUGHPUT_DEGRADED": 4000.0,
-    "ACTIVE_USERS_CRITICAL": 4.0,
-    "RRC_USERS_CRITICAL": 4.0,
-    "CQI_POOR": 8.0,
-    "STRUCTURAL_BUSY_HOUR_PRB": 75.0,
-}
-
-RECOVERY_RATES = {
-    "tilt_adjustment": 15.0,
-    "load_rebalancing": 40.0,
-    "carrier_extension": 50.0,
-    "new_sector": 85.0,
-    "new_site": 90.0,
-}
-
-_ACTION_NAME_TO_RATE_KEY = {
-    "Load Rebalancing": "load_rebalancing",
-    "Tilt Adjustment": "tilt_adjustment",
-    "Carrier Extension": "carrier_extension",
-    "Add Sector": "new_sector",
-    "Add Site": "new_site",
+    "PRB_SATURATED": PRB_SATURATED,
+    "PRB_REBALANCE_HEADROOM": PRB_MEDIUM,
+    "THROUGHPUT_DEGRADED": THROUGHPUT_DEGRADED,
+    "ACTIVE_USERS_CRITICAL": ACTIVE_USERS_CRITICAL,
+    "RRC_USERS_CRITICAL": ACTIVE_USERS_CRITICAL,
+    "CQI_POOR": CQI_POOR,
+    "STRUCTURAL_BUSY_HOUR_PRB": STRUCTURAL_BUSY_HOUR_PRB,
 }
 
 logger = logging.getLogger(__name__)
 
-LOST_UE_BASELINE = 50
-LOST_GB_BASELINE = 120.0
 NEIGHBOR_RADIUS_KM = 3.0
 
 ACTION_ORDER = {
@@ -58,7 +53,7 @@ ACTION_ORDER = {
     "No Action Required": 99,
 }
 
-BUSY_HOUR_PROFILES: dict[str, set[int]] = {}
+
 
 
 def _empty_context() -> dict[str, Any]:
@@ -421,9 +416,6 @@ def detect_busy_hours(cell_df: pd.DataFrame) -> set[int]:
 
 
 def _build_busy_hour_profile(observations_df: pd.DataFrame) -> dict[str, dict[str, Any]]:
-    global BUSY_HOUR_PROFILES
-
-    BUSY_HOUR_PROFILES = {}
     profiles: dict[str, dict[str, Any]] = {}
     if observations_df.empty:
         return profiles
@@ -440,7 +432,6 @@ def _build_busy_hour_profile(observations_df: pd.DataFrame) -> dict[str, dict[st
             columns={"prb_load": "ft_physical_resource_blocks_load_dl"}
         )
         busy_hour_set = detect_busy_hours(detect_df)
-        BUSY_HOUR_PROFILES[str(cell_name)] = set(busy_hour_set)
 
         hourly = (
             group.groupby("hour", as_index=False)["prb_load"]
@@ -485,7 +476,7 @@ def _build_context(
         "baseline_df": baseline_df.reset_index(drop=True),
         "observations_df": observations_df.reset_index(drop=True),
         "busy_hour_profile": _build_busy_hour_profile(observations_df),
-        "updated_at": datetime.utcnow().isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
         "source": source,
     }
 

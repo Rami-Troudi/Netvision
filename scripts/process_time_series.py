@@ -21,6 +21,19 @@ from typing import List, Dict, Any
 import warnings
 warnings.filterwarnings('ignore')
 
+# Ensure backend package is importable from scripts/
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, _PROJECT_ROOT)
+
+from backend.core_rules import (  # noqa: E402
+    PRB_SATURATED, PRB_HIGH, PRB_MEDIUM, PRB_LOW,
+    THROUGHPUT_DEGRADED, THROUGHPUT_TARGET, THROUGHPUT_CRITICAL,
+    ACTIVE_USERS_CRITICAL, CQI_CRITICAL, CQI_LOW,
+    SEVERITY_CONGESTED,
+    is_congested as _is_congested,
+)
+
 if sys.platform == 'win32':
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
     sys.stderr.reconfigure(encoding='utf-8', errors='replace')
@@ -31,24 +44,24 @@ if sys.platform == 'win32':
 # ============================================
 CONFIG = {
     # PRB Load Thresholds (Physical Resource Block) - Orange Standard
-    'PRB_SATURATED': 90,         # Saturé (Critical)
-    'PRB_HIGH': 80,              # Seuil cible (Target threshold)
-    'PRB_MEDIUM': 70,            # Pre-warning
-    'PRB_LOW': 50,               # Normal operation
+    'PRB_SATURATED': PRB_SATURATED,
+    'PRB_HIGH': PRB_HIGH,
+    'PRB_MEDIUM': PRB_MEDIUM,
+    'PRB_LOW': PRB_LOW,
     
     # Throughput Thresholds (kbps) - Orange Standard
-    'THROUGHPUT_DEGRADED': 4000,  # < 4 Mbps = Dégradé
-    'THROUGHPUT_TARGET': 10000,   # ≥ 10 Mbps = Target
-    'THROUGHPUT_CRITICAL': 2000,  # Very poor
+    'THROUGHPUT_DEGRADED': THROUGHPUT_DEGRADED,
+    'THROUGHPUT_TARGET': THROUGHPUT_TARGET,
+    'THROUGHPUT_CRITICAL': THROUGHPUT_CRITICAL,
     
     # Active Users (File d'attente) - Orange Standard
-    'USERS_CRITICAL': 4,          # > 4 = Critique
-    'USERS_TARGET': 1,            # ≤ 1 = Target
+    'USERS_CRITICAL': ACTIVE_USERS_CRITICAL,
+    'USERS_TARGET': 1,
     
     # CQI Thresholds (Channel Quality Indicator, 0-15)
-    'CQI_CRITICAL': 5,           # Very poor signal quality
-    'CQI_LOW': 7,                # Poor quality
-    'CQI_MEDIUM': 9,             # Acceptable quality
+    'CQI_CRITICAL': CQI_CRITICAL,
+    'CQI_LOW': CQI_LOW,
+    'CQI_MEDIUM': 9,
 }
 
 
@@ -235,28 +248,13 @@ def analyze_cell(row: pd.Series) -> Dict:
         severity += 10
         issues.append('Qualité signal faible')
     
-    # --- CONGESTION DETECTION (Orange criteria) ---
-    congested = False
-    
-    # Rule 1: PRB ≥ 90% = Always congested (Saturé)
-    if load >= CONFIG['PRB_SATURATED']:
-        congested = True
-    
-    # Rule 2: PRB ≥ 80% AND Throughput < 4 Mbps
-    elif load >= CONFIG['PRB_HIGH'] and throughput < CONFIG['THROUGHPUT_DEGRADED']:
-        congested = True
-    
-    # Rule 3: Active users > 4 AND PRB ≥ 70%
-    elif active_users > CONFIG['USERS_CRITICAL'] and load >= CONFIG['PRB_MEDIUM']:
-        congested = True
-    
-    # Rule 4: Throughput < 4 Mbps AND PRB ≥ 70% (degraded experience)
-    elif throughput < CONFIG['THROUGHPUT_DEGRADED'] and load >= CONFIG['PRB_MEDIUM']:
-        congested = True
-    
-    # Rule 5: Severity score high enough
-    elif severity >= 50:
-        congested = True
+    # --- CONGESTION DETECTION (unified Orange criteria from core_rules) ---
+    congested = _is_congested(
+        prb_load=load,
+        throughput=throughput,
+        active_users=active_users,
+        severity=severity,
+    )
     
     # Determine issue type
     if not issues:

@@ -7,7 +7,9 @@ import csv
 import importlib
 import io
 import logging
-from collections import Counter
+import os
+import threading
+from collections import Counter, OrderedDict
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
@@ -21,11 +23,56 @@ from backend.action_engine import evaluate_all_cells_for_export
 from backend.common import normalize_band as _normalize_band
 from backend.common import to_float as _to_float
 
+try:
+    import redis as _redis_mod
+except ImportError:
+    _redis_mod = None  # type: ignore[assignment]
+
 
 BACKEND_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = BACKEND_DIR.parent
+
+# ---------------------------------------------------------------------------
+# Export CSV Cache — Redis-backed (multi-worker safe)
+# Falls back to process-local OrderedDict when Redis is unavailable.
+# ---------------------------------------------------------------------------
 EXPORT_CACHE_MAX_ITEMS = 8
-_EXPORT_CSV_CACHE: dict[str, bytes] = {}
+_REDIS_EXPORT_PREFIX = "odc:export_csv:"
+_REDIS_EXPORT_TTL = 3600  # 1 hour
+
+_redis_client: Any = None  # lazy-initialized on first access
+_redis_init_lock = threading.Lock()
+
+# Fallback in-memory cache (used only when Redis is unavailable)
+_export_cache_fallback: OrderedDict[str, bytes] = OrderedDict()
+_export_cache_fallback_lock = threading.Lock()
+
+
+def _get_redis() -> Any:
+    """Lazy-initialize a Redis connection, returning None if unavailable."""
+    global _redis_client
+    if _redis_client is not None:
+        return _redis_client
+    if _redis_mod is None:
+        return None
+    with _redis_init_lock:
+        if _redis_client is not None:
+            return _redis_client
+        redis_url = os.environ.get("REDIS_URL", "redis://127.0.0.1:6379").strip()
+        try:
+            client = _redis_mod.Redis.from_url(
+                redis_url,
+                decode_responses=False,
+                socket_connect_timeout=2,
+            )
+            client.ping()
+            _redis_client = client
+            logger.info("Export cache: using Redis at %s", redis_url)
+        except Exception as exc:
+            logger.warning("Export cache: Redis unavailable (%s), falling back to in-memory", exc)
+            _redis_client = None
+    return _redis_client
+
 
 logger = logging.getLogger(__name__)
 
@@ -118,23 +165,34 @@ def _build_export_cache_key(context: dict[str, Any], timestamp: str) -> str:
 
 
 def _get_cached_export_csv(cache_key: str) -> bytes | None:
-    cached = _EXPORT_CSV_CACHE.get(cache_key)
-    if cached is None:
-        return None
-
-    # Refresh insertion order so hot keys are kept when cache reaches capacity.
-    _EXPORT_CSV_CACHE.pop(cache_key, None)
-    _EXPORT_CSV_CACHE[cache_key] = cached
-    return cached
+    """Return cached CSV bytes or None — Redis-first, in-memory fallback."""
+    r = _get_redis()
+    if r is not None:
+        try:
+            return r.get(f"{_REDIS_EXPORT_PREFIX}{cache_key}")
+        except Exception:
+            pass  # Redis down mid-flight, fall through
+    with _export_cache_fallback_lock:
+        value = _export_cache_fallback.get(cache_key)
+        if value is not None:
+            _export_cache_fallback.move_to_end(cache_key)
+        return value
 
 
 def _set_cached_export_csv(cache_key: str, csv_bytes: bytes) -> None:
-    _EXPORT_CSV_CACHE.pop(cache_key, None)
-    _EXPORT_CSV_CACHE[cache_key] = csv_bytes
-
-    while len(_EXPORT_CSV_CACHE) > EXPORT_CACHE_MAX_ITEMS:
-        oldest_key = next(iter(_EXPORT_CSV_CACHE))
-        _EXPORT_CSV_CACHE.pop(oldest_key, None)
+    """Store CSV bytes — Redis-first, in-memory fallback."""
+    r = _get_redis()
+    if r is not None:
+        try:
+            r.setex(f"{_REDIS_EXPORT_PREFIX}{cache_key}", _REDIS_EXPORT_TTL, csv_bytes)
+            return
+        except Exception:
+            pass  # Redis down, fall through to in-memory
+    with _export_cache_fallback_lock:
+        _export_cache_fallback[cache_key] = csv_bytes
+        _export_cache_fallback.move_to_end(cache_key)
+        while len(_export_cache_fallback) > EXPORT_CACHE_MAX_ITEMS:
+            _export_cache_fallback.popitem(last=False)
 
 
 @app.get("/health")

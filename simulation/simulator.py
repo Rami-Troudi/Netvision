@@ -485,6 +485,56 @@ def apply_redistribute(state: Dict[str, float], params: Dict[str, Any], baseline
         "throughput": new_throughput,
     }, affected, confidence
 
+def apply_add_sector(state: Dict[str, float], params: Dict[str, Any]) -> Tuple[Dict[str, float], List[Dict[str, Any]], float]:
+    """
+    Add a new sector to the existing site.
+
+    Unlike a full new site, a sector shares the site's backhaul, power,
+    and tower infrastructure.  This limits its offload capacity:
+      - Load relief is bounded by the sector's share of the site's
+        aggregate capacity (typically ~60% of the add_sector recovery rate).
+      - Throughput gain is smaller because backhaul bandwidth is shared.
+      - CQI improvement is modest (+0.5) since new sectors at the same
+        location add intra-site interference.
+    """
+    load = state["load"]
+    throughput = state["throughput"]
+    cqi = state["cqi"]
+    active_users = clamp_active_users(
+        state.get("active_users", state.get("traffic", 0.0))
+    )
+
+    recovery_rate = ORANGE_RECOVERY_RATES["add_sector"]  # 0.85
+
+    # A sector shares backhaul; effective offload is ~60 % of recovery rate.
+    effective_offload = recovery_rate * 0.60
+    offloaded_load = load * effective_offload
+    offloaded_users = active_users * effective_offload
+
+    new_load = clamp_load(load - offloaded_load)
+    new_active_users = clamp_active_users(active_users - offloaded_users)
+
+    # Throughput gain is proportional but capped by shared backhaul.
+    throughput_gain = throughput * effective_offload * 0.70  # 70 % of ideal
+    new_throughput = clamp_throughput(throughput + throughput_gain)
+
+    # CQI: minor improvement (same interference environment)
+    new_cqi = clamp_cqi(cqi + 0.5)
+
+    affected = [{
+        "name": "planned_sector",
+        "type": "sector",
+        "load_change": round(offloaded_load, 2),
+        "active_users_change": round(offloaded_users, 2),
+    }]
+
+    return {
+        "load": new_load,
+        "cqi": new_cqi,
+        "throughput": new_throughput,
+        "traffic": new_active_users,
+        "active_users": new_active_users,
+    }, affected, 0.75  # Higher confidence than new_site (less infra risk)
 
 def apply_new_site(state: Dict[str, float], params: Dict[str, Any]) -> Tuple[Dict[str, float], List[Dict[str, Any]], float]:
     """
@@ -718,7 +768,7 @@ def simulate_action(base_dir: Path, cell_name: str, action: str, params: Dict[st
         recommendation = f"MLB handover bias to {target} to balance load"
 
     elif action == "add_sector":
-        after_raw, affected, confidence = apply_new_site(before_state, {**params, "siteType": "sector"})
+        after_raw, affected, confidence = apply_add_sector(before_state, params)
         recovery_rate = ORANGE_RECOVERY_RATES["add_sector"]
         after_raw = apply_recovery_envelope(before_state, after_raw, recovery_rate)
         recommendation = "Add sector to increase structural capacity envelope"
