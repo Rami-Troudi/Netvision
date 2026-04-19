@@ -11,7 +11,7 @@ import uvicorn
 ROOT_DIR = Path(__file__).resolve().parent
 BACKEND_DIR = ROOT_DIR / "backend"
 MODEL_ASSETS_DIR = ROOT_DIR / "runtime_data" / "model_assets"
-CRITICAL_FILES = [BACKEND_DIR / "api.py", MODEL_ASSETS_DIR / "features_meta.json"]
+CRITICAL_FILES = [BACKEND_DIR / "api.py"]
 VALIDATION_SCRIPT = BACKEND_DIR / "validate_pipeline.py"
 VALIDATION_REPORT = ROOT_DIR / "runtime_data" / "validation_report.txt"
 READY_STATUS = "Overall pipeline status: READY FOR USE"

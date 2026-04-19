@@ -9,14 +9,8 @@ const ALLOWED_ACTIONS = new Set([
   'add_carrier',
   'redistribute',
   'new_site',
-  'power',
-  'parameter_tuning',
-  'neighbor_optimization',
-  'mimo_upgrade',
-  'small_cell',
   'add_sector',
-  'add_site',
-  'split_cell'
+  'add_site'
 ])
 const ALLOWED_MODES = new Set(['fast']) // fast is the only supported mode
 

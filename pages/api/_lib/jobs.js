@@ -6,7 +6,6 @@ import IORedis from 'ioredis'
 
 export const JOB_TYPES = Object.freeze({
   SIMULATE: 'simulate',
-  FORECAST: 'forecast',
 })
 
 export const JOB_STATUSES = Object.freeze({

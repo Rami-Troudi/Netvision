@@ -1,37 +1,33 @@
-# Requirements: fastapi, uvicorn, pandas, numpy, duckdb, joblib, pyarrow
+"""FastAPI layer for rule-based congestion recommendations."""
+# ruff: noqa: E501
 
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
+import csv
 import importlib
-import inspect
-import json
-import os
+import io
+import logging
+from collections import Counter
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, JSONResponse
-import numpy as np
+from fastapi.responses import JSONResponse, Response
 import pandas as pd
 from pydantic import BaseModel
 
+from backend.action_engine import evaluate_all_cells_for_export
 from backend.common import normalize_band as _normalize_band
-from backend.common import to_bool as _to_bool
 from backend.common import to_float as _to_float
 
 
 BACKEND_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = BACKEND_DIR.parent
-MODEL_ASSETS_DIR = PROJECT_ROOT / "runtime_data" / "model_assets"
-NO_ACTION_LABEL = "Aucune action requise"
-STALE_ACTION_LABEL = "Data too stale for decision"
-MODEL_VERSIONS = ["forecast_model"]
+EXPORT_CACHE_MAX_ITEMS = 8
+_EXPORT_CSV_CACHE: dict[str, bytes] = {}
 
-# Forecast request defaults can be tuned via environment for deterministic ops/tests.
-FORECAST_CONFIDENCE_DECAY = float(os.getenv("FORECAST_CONFIDENCE_DECAY", "0.003"))
-FORECAST_HOURS_AHEAD = int(os.getenv("FORECAST_HOURS_AHEAD", "1"))
-FORECAST_STOCHASTIC = os.getenv("FORECAST_STOCHASTIC", "false").strip().lower() in {"1", "true", "yes", "y"}
+logger = logging.getLogger(__name__)
 
 
 class PredictRequest(BaseModel):
@@ -39,20 +35,9 @@ class PredictRequest(BaseModel):
     prb_load: float | None = None
     throughput: float | None = None
     active_users: float | None = None
+    rrc_users: float | None = None
     cqi: float | None = None
-
-
-def _extract_request_kpis(body: PredictRequest) -> dict[str, float]:
-    request_kpis: dict[str, float] = {}
-    for key in ("prb_load", "throughput", "active_users", "cqi"):
-        raw_value = getattr(body, key, None)
-        if raw_value is None:
-            continue
-        parsed = float(raw_value)
-        if not np.isfinite(parsed):
-            continue
-        request_kpis[key] = parsed
-    return request_kpis
+    timestamp: str | None = None
 
 
 class CellNotFoundError(Exception):
@@ -61,187 +46,16 @@ class CellNotFoundError(Exception):
         self.cellname = cellname
 
 
-def _load_feature_columns(meta_path: Path) -> list[str]:
-    metadata = json.loads(meta_path.read_text(encoding="utf-8"))
-    feature_cols = list(metadata.get("feature_cols", []))
-    if not feature_cols:
-        raise ValueError("features_meta.json has no feature_cols.")
-    return feature_cols
-
-
-def _predict_next_with_forecaster(
-    forecaster: Any,
-    cellname: str,
-    target_dt: Any,
-    baseline_info: dict[str, Any],
-) -> dict[str, Any]:
-    forecast_kwargs = {
-        "cell_name": cellname,
-        "target_dt": target_dt,
-        "baseline_info": baseline_info,
-        "confidence_decay": FORECAST_CONFIDENCE_DECAY,
-        "hours_ahead": FORECAST_HOURS_AHEAD,
-        "stochastic": FORECAST_STOCHASTIC,
-    }
-
-    # Pass only supported kwargs to avoid masking TypeErrors raised inside forecast_cell.
-    supported_params = set(inspect.signature(forecaster.forecast_cell).parameters)
-    call_kwargs = {k: v for k, v in forecast_kwargs.items() if k in supported_params}
-    out = forecaster.forecast_cell(**call_kwargs)
-
-    if not isinstance(out, dict):
-        raise ValueError("Forecast model returned an invalid prediction payload.")
-    return out
-
-
-def _normalize_cellname(cellname: str) -> str:
-    key = str(cellname).strip()
-    if not key:
-        raise HTTPException(status_code=400, detail="cellname must be a non-empty string.")
-    return key
-
-
-def _latest_non_imputed_frame(cell_hist: pd.DataFrame) -> pd.DataFrame:
-    non_imputed = cell_hist[cell_hist["IS_IMPUTED"].map(_to_bool).eq(False)]
-    if non_imputed.empty:
-        raise ValueError("Cell has no non-imputed row in features_with_score.parquet.")
-
-    ordered = non_imputed.sort_values("DATE_ID")
-    return ordered.tail(1)
-
-
-def _latest_non_imputed_row(cell_hist: pd.DataFrame) -> pd.Series:
-    return _latest_non_imputed_frame(cell_hist).iloc[0]
-
-
-def _get_cell_history_df(app: FastAPI, cellname: str) -> pd.DataFrame:
-    key = _normalize_cellname(cellname)
-    try:
-        return app.state.features_by_cell.loc[[key]].copy().reset_index(drop=True)
-    except KeyError as exc:
-        raise CellNotFoundError(key) from exc
-
-
-def _get_profile_row(app: FastAPI, cellname: str) -> pd.Series:
-    key = _normalize_cellname(cellname)
-    try:
-        row = app.state.profile_by_cell.loc[key]
-    except KeyError as exc:
-        raise CellNotFoundError(key) from exc
-    if isinstance(row, pd.DataFrame):
-        return row.iloc[-1]
-    return row
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    paths = {
-        "features": MODEL_ASSETS_DIR / "features_with_score.parquet",
-        "meta": MODEL_ASSETS_DIR / "features_meta.json",
-        "forecast_model": PROJECT_ROOT / "models" / "forecast_model.pkl",
-        "profile": MODEL_ASSETS_DIR / "cell_congestion_profile.parquet",
-        "thresholds": MODEL_ASSETS_DIR / "thresholds.json",
-        "recommendations_parquet": MODEL_ASSETS_DIR / "all_cell_recommendations.parquet",
-        "recommendations_csv": MODEL_ASSETS_DIR / "all_cell_recommendations.csv",
-        "action_engine": BACKEND_DIR / "action_engine.py",
-    }
+    action_engine_module = importlib.import_module("backend.action_engine")
 
-    try:
-        required_path_keys = [
-            "features",
-            "meta",
-            "forecast_model",
-            "profile",
-            "thresholds",
-            "recommendations_parquet",
-            "recommendations_csv",
-            "action_engine",
-        ]
-        missing = [f"{name}: {paths[name]}" for name in required_path_keys if not paths[name].exists()]
-        if missing:
-            raise FileNotFoundError("Missing startup files: " + "; ".join(missing))
+    runtime_context = action_engine_module.build_context_from_runtime(PROJECT_ROOT)
 
-        action_engine_module = importlib.import_module("backend.action_engine")
-        thresholds = json.loads(paths["thresholds"].read_text(encoding="utf-8"))
-        feature_cols = _load_feature_columns(paths["meta"])
-
-        features_df = pd.read_parquet(paths["features"])
-        profile_df = pd.read_parquet(paths["profile"])
-        recommendations_df = pd.read_parquet(paths["recommendations_parquet"])
-
-        for required_col in [
-            "CELLNAME",
-            "DATE_ID",
-            "IS_IMPUTED",
-            "prb_load",
-            "active_users",
-            "throughput",
-            "cqi",
-            "congestion_score",
-        ]:
-            if required_col not in features_df.columns:
-                raise ValueError(f"features_with_score.parquet missing required column: {required_col}")
-
-        for required_col in [
-            "CELLNAME",
-            "ENODEB_NAME",
-            "FREQUENCY_BAND",
-            "is_structural_congestion",
-            "avg_prb_busy_hour",
-        ]:
-            if required_col not in profile_df.columns:
-                raise ValueError(f"cell_congestion_profile.parquet missing required column: {required_col}")
-
-        for required_col in [
-            "CELLNAME",
-            "action",
-            "tier",
-            "priority_rank",
-            "avg_prb_busy_hour",
-            "ENODEB_NAME",
-            "FREQUENCY_BAND",
-            "is_structural_congestion",
-        ]:
-            if required_col not in recommendations_df.columns:
-                raise ValueError(f"all_cell_recommendations.parquet missing required column: {required_col}")
-
-        features_df = features_df.copy()
-        profile_df = profile_df.copy()
-        recommendations_df = recommendations_df.copy()
-
-        features_df["CELLNAME"] = features_df["CELLNAME"].astype(str).str.strip()
-        profile_df["CELLNAME"] = profile_df["CELLNAME"].astype(str).str.strip()
-        recommendations_df["CELLNAME"] = recommendations_df["CELLNAME"].astype(str).str.strip()
-        features_df["DATE_ID"] = pd.to_datetime(features_df["DATE_ID"], errors="coerce")
-        features_df = features_df.sort_values(["CELLNAME", "DATE_ID"]).reset_index(drop=True)
-
-        profile_latest = (
-            profile_df.reset_index(drop=True).groupby("CELLNAME", as_index=False, sort=False).tail(1).reset_index(drop=True)
-        )
-
-        prediction_backend = "trained_forecaster"
-        forecast_model = None
-        forecast_model_baseline: dict[str, Any] = {}
-
-        from scripts.forecast_hf import load_trained_forecaster  # type: ignore
-
-        forecast_model, forecast_model_baseline, _ = load_trained_forecaster(paths["forecast_model"])
-
-        app.state.paths = paths
-        app.state.thresholds = thresholds
-        app.state.feature_cols = feature_cols
-        app.state.action_engine = action_engine_module
-        app.state.prediction_backend = prediction_backend
-        app.state.forecast_model = forecast_model
-        app.state.forecast_model_baseline = forecast_model_baseline
-        app.state.features_df = features_df
-        app.state.features_by_cell = features_df.set_index("CELLNAME", drop=False)
-        app.state.profile_df = profile_latest
-        app.state.profile_by_cell = profile_latest.set_index("CELLNAME", drop=False)
-        app.state.recommendations_df = recommendations_df
-        app.state.n_cells_loaded = int(profile_latest["CELLNAME"].nunique())
-    except Exception as exc:
-        raise RuntimeError(f"Startup loading failed: {exc}") from exc
+    app.state.action_engine = action_engine_module
+    app.state.runtime_context = runtime_context
+    app.state.active_context = runtime_context
+    app.state.context_source = str(runtime_context.get("source") or "runtime")
 
     yield
 
@@ -257,230 +71,347 @@ async def cell_not_found_handler(_: Any, exc: CellNotFoundError) -> JSONResponse
     )
 
 
+def _normalize_cellname(cellname: str) -> str:
+    key = str(cellname or "").strip()
+    if not key:
+        raise HTTPException(status_code=400, detail="cellname must be a non-empty string")
+    return key
+
+
+def _get_active_context(app: FastAPI) -> dict[str, Any]:
+    context = getattr(app.state, "active_context", None)
+    if not isinstance(context, dict):
+        context = getattr(app.state, "runtime_context", None)
+    if not isinstance(context, dict):
+        context = app.state.action_engine._empty_context()  # type: ignore[attr-defined]
+    return context
+
+
+def _extract_request_kpis(body: PredictRequest) -> dict[str, Any]:
+    return {
+        key: float(val)
+        for key, val in [
+            ("prb_load", body.prb_load),
+            ("throughput", body.throughput),
+            ("active_users", body.active_users),
+            ("rrc_users", body.rrc_users),
+            ("cqi", body.cqi),
+        ]
+        if val is not None
+    }
+
+
+def _normalize_export_date(value: Any) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    parsed = pd.to_datetime(text, errors="coerce")
+    if pd.isna(parsed):
+        return ""
+    return parsed.strftime("%Y-%m-%d")
+
+
+def _build_export_cache_key(context: dict[str, Any], timestamp: str) -> str:
+    source = str(context.get("source") or "runtime")
+    updated_at = str(context.get("updated_at") or "")
+    return f"{source}|{updated_at}|{timestamp.strip()}"
+
+
+def _get_cached_export_csv(cache_key: str) -> bytes | None:
+    cached = _EXPORT_CSV_CACHE.get(cache_key)
+    if cached is None:
+        return None
+
+    # Refresh insertion order so hot keys are kept when cache reaches capacity.
+    _EXPORT_CSV_CACHE.pop(cache_key, None)
+    _EXPORT_CSV_CACHE[cache_key] = cached
+    return cached
+
+
+def _set_cached_export_csv(cache_key: str, csv_bytes: bytes) -> None:
+    _EXPORT_CSV_CACHE.pop(cache_key, None)
+    _EXPORT_CSV_CACHE[cache_key] = csv_bytes
+
+    while len(_EXPORT_CSV_CACHE) > EXPORT_CACHE_MAX_ITEMS:
+        oldest_key = next(iter(_EXPORT_CSV_CACHE))
+        _EXPORT_CSV_CACHE.pop(oldest_key, None)
+
+
 @app.get("/health")
 def health() -> dict[str, Any]:
+    context = _get_active_context(app)
+    baseline_df = context.get("baseline_df")
+    observations_df = context.get("observations_df")
+
+    n_cells = 0
+    if isinstance(baseline_df, pd.DataFrame):
+        n_cells = max(n_cells, int(baseline_df["cell_name"].nunique()))
+    if isinstance(observations_df, pd.DataFrame):
+        n_cells = max(n_cells, int(observations_df["cell_name"].nunique()))
+
     return {
         "status": "ok",
-        "n_cells_loaded": int(app.state.n_cells_loaded),
-        "model_versions": MODEL_VERSIONS,
-        "prediction_backend": str(getattr(app.state, "prediction_backend", "unknown")),
+        "n_cells_loaded": n_cells,
+        "context_source": str(getattr(app.state, "context_source", "runtime")),
+        "context_updated_at": str(context.get("updated_at") or ""),
     }
 
 
 @app.get("/cells")
 def cells() -> list[dict[str, Any]]:
+    context = _get_active_context(app)
+    baseline_df = context.get("baseline_df")
+    observations_df = context.get("observations_df")
+
     rows: list[dict[str, Any]] = []
-    for row in app.state.profile_df.itertuples(index=False):
-        rows.append(
-            {
-                "cellname": str(row.CELLNAME),
-                "enodeb": str(row.ENODEB_NAME),
-                "band": _normalize_band(getattr(row, "FREQUENCY_BAND", "")),
-                "is_structural_congestion": bool(_to_bool(getattr(row, "is_structural_congestion", False))),
-                "avg_prb_busy_hour": _to_float(getattr(row, "avg_prb_busy_hour", 0.0)),
-            }
-        )
+
+    if isinstance(baseline_df, pd.DataFrame) and not baseline_df.empty:
+        for row in baseline_df.itertuples(index=False):
+            rows.append(
+                {
+                    "cellname": str(row.cell_name),
+                    "enodeb": str(getattr(row, "enodeb_name", "")),
+                    "band": _normalize_band(getattr(row, "frequency_band", "")),
+                }
+            )
+    elif isinstance(observations_df, pd.DataFrame) and not observations_df.empty:
+        latest = observations_df.sort_values("timestamp").groupby("cell_name", as_index=False).tail(1)
+        for row in latest.itertuples(index=False):
+            rows.append(
+                {
+                    "cellname": str(row.cell_name),
+                    "enodeb": str(getattr(row, "enodeb_name", "")),
+                    "band": _normalize_band(getattr(row, "frequency_band", "")),
+                }
+            )
+
     rows.sort(key=lambda item: item["cellname"])
     return rows
+
+
+@app.post("/context/upload")
+def upload_context(payload: dict[str, Any]) -> dict[str, Any]:
+    action_engine = app.state.action_engine
+
+    try:
+        context = action_engine.build_context_from_payload(payload)
+    except Exception as exc:  # pragma: no cover - returned to API caller
+        raise HTTPException(status_code=400, detail=f"Invalid context payload: {exc}") from exc
+
+    app.state.active_context = context
+    app.state.context_source = str(context.get("source") or "uploaded")
+
+    baseline_df = context.get("baseline_df")
+    observations_df = context.get("observations_df")
+    busy_hour_profile = context.get("busy_hour_profile") or {}
+
+    return {
+        "success": True,
+        "context_source": app.state.context_source,
+        "cells": int(baseline_df["cell_name"].nunique()) if isinstance(baseline_df, pd.DataFrame) else 0,
+        "observations": int(len(observations_df)) if isinstance(observations_df, pd.DataFrame) else 0,
+        "busy_hour_profiles": int(len(busy_hour_profile)),
+        "updated_at": str(context.get("updated_at") or ""),
+    }
+
+
+@app.delete("/context/reset")
+def reset_context() -> dict[str, Any]:
+    app.state.active_context = app.state.runtime_context
+    runtime_source = app.state.runtime_context.get("source") if isinstance(app.state.runtime_context, dict) else "runtime"
+    app.state.context_source = str(runtime_source or "runtime")
+    return {
+        "success": True,
+        "context_source": app.state.context_source,
+    }
 
 
 @app.post("/predict")
 def predict(body: PredictRequest) -> dict[str, Any]:
     cellname = _normalize_cellname(body.cellname)
-    cell_hist = _get_cell_history_df(app, cellname)
-    _get_profile_row(app, cellname)
     request_kpis = _extract_request_kpis(body)
+    context = _get_active_context(app)
 
-    if request_kpis:
-        ordered_hist = cell_hist.sort_values("DATE_ID")
-        if ordered_hist.empty:
-            raise ValueError(f"Cell '{cellname}' has no history row in features_with_score.parquet.")
+    try:
+        payload = app.state.action_engine.evaluate_cell(
+            cell_name=cellname,
+            context=context,
+            request_kpis=request_kpis,
+            request_timestamp=body.timestamp,
+        )
+    except ValueError as exc:
+        message = str(exc)
+        if "no KPI data" in message:
+            raise CellNotFoundError(cellname) from exc
+        raise HTTPException(status_code=400, detail=message) from exc
 
-        latest = ordered_hist.iloc[-1].copy()
-        if "prb_load" in request_kpis:
-            latest["prb_load"] = request_kpis["prb_load"]
-        if "throughput" in request_kpis:
-            latest["throughput"] = request_kpis["throughput"]
-        if "active_users" in request_kpis:
-            latest["active_users"] = request_kpis["active_users"]
-        if "cqi" in request_kpis:
-            latest["cqi"] = request_kpis["cqi"]
-        latest["IS_IMPUTED"] = False
-
-        latest_frame = latest.to_frame().T
-        if "DATE_ID" in latest_frame.columns:
-            latest_frame["DATE_ID"] = pd.to_datetime(latest_frame["DATE_ID"], errors="coerce")
-        cell_hist_for_state = pd.concat([cell_hist, latest_frame], ignore_index=True)
-    else:
-        latest_frame = _latest_non_imputed_frame(cell_hist)
-        latest = latest_frame.iloc[0]
-        cell_hist_for_state = cell_hist
-
-    prediction_backend = str(getattr(app.state, "prediction_backend", "trained_forecaster"))
-
-    latest_ts = pd.to_datetime(latest.get("DATE_ID"), errors="coerce")
-    if pd.isna(latest_ts):
-        latest_ts = pd.Timestamp.utcnow().floor("h")
-    target_dt = (latest_ts + pd.Timedelta(hours=1)).to_pydatetime()
-
-    baseline_lookup = getattr(app.state, "forecast_model_baseline", {})
-    baseline_info = baseline_lookup.get(cellname, {}) if isinstance(baseline_lookup, dict) else {}
-    if not isinstance(baseline_info, dict):
-        baseline_info = {}
-
-    pred_obs = _predict_next_with_forecaster(
-        forecaster=app.state.forecast_model,
-        cellname=cellname,
-        target_dt=target_dt,
-        baseline_info=baseline_info,
-    )
-
-    pred_prb = float(np.clip(_to_float(pred_obs.get("load"), _to_float(latest.get("prb_load"))), 0.0, 100.0))
-    pred_users_raw = pred_obs.get(
-        "active_users",
-        pred_obs.get("traffic", _to_float(latest.get("active_users"), 0.0)),
-    )
-    pred_users = float(np.clip(_to_float(pred_users_raw), 0.0, 500.0))
-    pred_thrput = float(
-        np.clip(_to_float(pred_obs.get("throughput"), _to_float(latest.get("throughput"))), 0.0, 500000.0)
-    )
-
-    cell_state = app.state.action_engine.get_cell_state(
-        cellname=cellname,
-        features_df=cell_hist_for_state,
-        profile_df=app.state.profile_df,
-        pred_prb=pred_prb,
-        pred_users=pred_users,
-        pred_thrput=pred_thrput,
-    )
-    actions = app.state.action_engine.recommend_actions(cell_state)
-    current_loss_ue = max(0, int(round(_to_float(cell_state.get("traffic_loss_ue"), 0.0))))
-    current_loss_gb = round(max(0.0, _to_float(cell_state.get("traffic_loss_gb"), 0.0)), 1)
-
-    return {
-        "cellname": cellname,
-        "enodeb_name": str(cell_state["enodeb_name"]),
-        "frequency_band": str(cell_state["frequency_band"]),
-        "current_kpis": {
-            "prb_load": _to_float(cell_state["current_prb"]),
-            "active_users": _to_float(cell_state["current_users"]),
-            "throughput_kbps": _to_float(cell_state["current_thrput"]),
-            "cqi": _to_float(cell_state["current_cqi"]),
-            "traffic_loss_ue": current_loss_ue,
-            "traffic_loss_gb": current_loss_gb,
-        },
-        "current_loss": {
-            "ue": current_loss_ue,
-            "gb": current_loss_gb,
-        },
-        "predicted_next_hour": {
-            "prb_load": pred_prb,
-            "active_users": pred_users,
-            "throughput_kbps": pred_thrput,
-        },
-        "congestion_score": int(round(_to_float(latest.get("congestion_score"), 0.0))),
-        "is_structural_congestion": bool(_to_bool(cell_state["is_structural_congestion"])),
-        "recommended_actions": [
-            {
-                "action": str(action["action"]),
-                "tier": str(action["tier"]),
-                "confidence": str(action["confidence"]),
-                "reason": str(action["reason"]),
-                "estimated_recovery_pct": int(action["estimated_recovery_pct"]),
-                "recovery_rate": max(
-                    0.0,
-                    min(
-                        100.0,
-                        _to_float(action.get("recovery_rate", action.get("estimated_recovery_pct")), 0.0),
-                    ),
-                ),
-                "gain_ue": max(0, int(round(_to_float(action.get("gain_ue"), 0.0)))),
-                "gain_gb": round(max(0.0, _to_float(action.get("gain_gb"), 0.0)), 1),
-                "priority_rank": int(action["priority_rank"]),
-            }
-            for action in actions
-        ],
-    }
+    return payload
 
 
 @app.get("/recommendations/summary")
 def recommendations_summary() -> dict[str, Any]:
-    rec_df = app.state.recommendations_df
-    top_rec_per_cell = (
-        rec_df.sort_values(["CELLNAME", "priority_rank"]).groupby("CELLNAME", as_index=False).first().reset_index(drop=True)
-    )
+    context = _get_active_context(app)
+    rows = app.state.action_engine.evaluate_all_cells_for_export(context=context)
 
-    tier_sets = rec_df.groupby("CELLNAME")["tier"].agg(lambda series: set(str(t) for t in series.tolist()))
-    by_tier = {
-        "court_terme": int(sum("court_terme" in tiers for tiers in tier_sets)),
-        "moyen_terme": int(sum("moyen_terme" in tiers for tiers in tier_sets)),
-        "long_terme": int(sum("long_terme" in tiers for tiers in tier_sets)),
-    }
-
-    action_frequency_df = (
-        rec_df[
-            rec_df["action"].ne(NO_ACTION_LABEL)
-            & rec_df["action"].ne(STALE_ACTION_LABEL)
-        ]
-        .groupby("action")["CELLNAME"]
-        .nunique()
-        .sort_values(ascending=False)
-        .reset_index(name="n_cells")
-    )
-
-    top_congested = top_rec_per_cell.sort_values("avg_prb_busy_hour", ascending=False).head(20)
-    top_congested_cells = [
-        {
-            "cellname": str(row.CELLNAME),
-            "enodeb": str(row.ENODEB_NAME),
-            "band": _normalize_band(getattr(row, "FREQUENCY_BAND", "")),
-            "avg_prb_busy_hour": _to_float(getattr(row, "avg_prb_busy_hour", 0.0)),
-            "is_structural_congestion": bool(_to_bool(getattr(row, "is_structural_congestion", False))),
+    if not rows:
+        return {
+            "total_cells": 0,
+            "congested_cells": 0,
+            "action_frequency": [],
         }
-        for row in top_congested.itertuples(index=False)
+
+    total_cells = len(rows)
+    congested_cells = sum(1 for row in rows if bool(row.get("is_congested")))
+
+    counter: Counter[str] = Counter()
+    for row in rows:
+        actions = row.get("recommended_actions")
+        if not isinstance(actions, list):
+            continue
+        for action in actions:
+            action_name = str(action.get("action_name") or action.get("action") or "").strip()
+            if not action_name or action_name == "No Action Required":
+                continue
+            counter[action_name] += 1
+
+    action_frequency = [
+        {"action": name, "n_cells": count}
+        for name, count in counter.most_common()
     ]
 
     return {
-        "total_cells": int(top_rec_per_cell["CELLNAME"].nunique()),
-        "no_action_needed": int(top_rec_per_cell["action"].eq(NO_ACTION_LABEL).sum()),
-        "by_tier": by_tier,
-        "action_frequency": [
-            {"action": str(row.action), "n_cells": int(row.n_cells)}
-            for row in action_frequency_df.itertuples(index=False)
-        ],
-        "top_congested_cells": top_congested_cells,
+        "total_cells": total_cells,
+        "congested_cells": congested_cells,
+        "action_frequency": action_frequency,
+        "context_source": str(getattr(app.state, "context_source", "runtime")),
     }
 
 
 @app.get("/recommendations/export")
-def recommendations_export() -> FileResponse:
-    csv_path = app.state.paths["recommendations_csv"]
-    return FileResponse(
-        path=csv_path,
-        media_type="text/csv",
-        filename=csv_path.name,
+def recommendations_export(timestamp: str = "") -> Response:
+    context = _get_active_context(app)
+    request_timestamp = timestamp.strip() if timestamp else None
+
+    cache_key = _build_export_cache_key(context, request_timestamp or "")
+    cached_csv = _get_cached_export_csv(cache_key)
+    if cached_csv is not None:
+        return Response(
+            content=cached_csv,
+            media_type="text/csv; charset=utf-8",
+            headers={
+                "Content-Disposition": "attachment; filename=recommendations_export.csv",
+                "X-Export-Cache": "hit",
+            },
+        )
+
+    rows = evaluate_all_cells_for_export(
+        context=context,
+        request_timestamp=request_timestamp or None,
+    )
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(
+        [
+            "cell_name",
+            "enodeb_name",
+            "date",
+            "hour",
+            "prb_load",
+            "throughput_kbps",
+            "active_users",
+            "rrc_users",
+            "cqi",
+            "is_congested",
+            "busy_hour_flag",
+            "recommended_actions",
+            "top_neighbor_for_rebalancing",
+            "estimated_lost_ue",
+            "estimated_lost_gb",
+            "estimated_gain_ue",
+            "estimated_gain_gb",
+        ]
+    )
+
+    for row in rows:
+        kpis = row.get("current_kpis") or {}
+        actions = row.get("recommended_actions") or []
+        is_congested = bool(row.get("is_congested", False))
+
+        action_names = [
+            str(action.get("action_name") or action.get("action") or "").strip()
+            for action in actions
+            if isinstance(action, dict)
+            and str(action.get("action_name") or action.get("action") or "").strip()
+            and str(action.get("action_name") or action.get("action") or "").strip() != "No Action Required"
+        ]
+        if is_congested and not action_names:
+            logger.warning("Congested cell %s has no recommended actions, exporting with empty actions", row.get('cellname', ''))
+
+        writer.writerow(
+            [
+                row.get("cellname", ""),
+                row.get("enodeb_name", ""),
+                row.get("date", ""),
+                row.get("hour", ""),
+                kpis.get("prb_load", ""),
+                kpis.get("throughput_kbps", ""),
+                kpis.get("active_users", ""),
+                kpis.get("rrc_users", ""),
+                kpis.get("cqi", ""),
+                str(is_congested).lower(),
+                str(bool(row.get("busy_hour_flag", False))).lower(),
+                ";".join(action_names),
+                row.get("top_neighbor_for_rebalancing") or "",
+                row.get("estimated_lost_ue", 0),
+                row.get("estimated_lost_gb", 0),
+                row.get("estimated_gain_ue", 0),
+                row.get("estimated_gain_gb", 0),
+            ]
+        )
+
+    csv_bytes = output.getvalue().encode("utf-8-sig")
+    _set_cached_export_csv(cache_key, csv_bytes)
+
+    return Response(
+        content=csv_bytes,
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": "attachment; filename=recommendations_export.csv",
+            "X-Export-Cache": "miss",
+        },
     )
 
 
 @app.get("/cell/{cellname}/history")
 def cell_history(cellname: str) -> list[dict[str, Any]]:
-    cell_hist = _get_cell_history_df(app, cellname).sort_values("DATE_ID")
+    key = _normalize_cellname(cellname)
+    context = _get_active_context(app)
+    observations_df = context.get("observations_df")
+
+    if not isinstance(observations_df, pd.DataFrame) or observations_df.empty:
+        raise CellNotFoundError(key)
+
+    rows = observations_df[observations_df["cell_name"].astype(str).str.strip().eq(key)].copy()
+    if rows.empty:
+        raise CellNotFoundError(key)
+
+    rows = rows.sort_values("timestamp")
+
     history: list[dict[str, Any]] = []
-    for row in cell_hist.itertuples(index=False):
-        ts = pd.to_datetime(getattr(row, "DATE_ID"), errors="coerce")
-        if pd.isna(ts):
-            datetime_str = str(getattr(row, "DATE_ID"))
-        else:
-            datetime_str = ts.isoformat()
+    for row in rows.itertuples(index=False):
+        ts = pd.to_datetime(getattr(row, "timestamp"), errors="coerce")
         history.append(
             {
-                "datetime": datetime_str,
-                "prb_load": _to_float(getattr(row, "prb_load", 0.0)),
-                "active_users": _to_float(getattr(row, "active_users", 0.0)),
-                "throughput_kbps": _to_float(getattr(row, "throughput", 0.0)),
-                "congestion_score": int(round(_to_float(getattr(row, "congestion_score", 0.0)))),
+                "datetime": ts.isoformat() if pd.notna(ts) else "",
+                "prb_load": _to_float(getattr(row, "prb_load", None), 0.0),
+                "active_users": _to_float(getattr(row, "active_users", None), 0.0),
+                "rrc_users": _to_float(getattr(row, "rrc_users", None), 0.0),
+                "throughput_kbps": _to_float(getattr(row, "throughput_kbps", None), 0.0),
+                "cqi": _to_float(getattr(row, "cqi", None), 0.0),
             }
         )
+
     return history
 
 

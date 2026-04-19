@@ -1,14 +1,13 @@
 const DEFAULT_CQI_THRESHOLD = 8
 const ORANGE_CONGESTION_CONFIG = Object.freeze({
   PRB_SATURATED: 90,
-  PRB_HIGH: 80,
-  PRB_MEDIUM: 70,
+  PRB_REBALANCE_HEADROOM: 70,
   THROUGHPUT_DEGRADED: 4000,
-  THROUGHPUT_TARGET: 10000,
-  THROUGHPUT_CRITICAL: 2000,
-  USERS_CRITICAL: 4,
-  CQI_CRITICAL: 5,
-  CQI_LOW: 7,
+  ACTIVE_USERS_CRITICAL: 4,
+  RRC_USERS_CRITICAL: 4,
+  CQI_POOR: 8,
+  LOST_UE_BASELINE: 50,
+  LOST_GB_BASELINE: 120,
 })
 
 function normalizeText(value) {
@@ -280,8 +279,6 @@ function buildFeatureUpdates(payload) {
     observations = {},
     cqiThreshold = DEFAULT_CQI_THRESHOLD,
     colors = {},
-    isForecast = false,
-    confidence = null,
   } = payload || {}
 
   return cellNames.map((cellName) => {
@@ -312,14 +309,14 @@ function buildFeatureUpdates(payload) {
       throughput: obs?.throughput ?? null,
       cqi,
       has_low_cqi: hasLowCQI,
+      active_users: obs?.active_users ?? obs?.l_traffic_activeuser_dl_avg ?? null,
+      rrc_users: obs?.rrc_users ?? obs?.ft_average_nb_of_users__ues_rrc_connected ?? null,
       traffic: obs?.traffic ?? null,
       traffic_loss_ue: obs?.traffic_loss_ue ?? 0,
       traffic_loss_gb: obs?.traffic_loss_gb ?? 0,
       ta: taValue,
       signal_power: obs?.signal_power ?? null,
       dynamic_radius_supported: dynamicRadiusSupported,
-      is_forecast: isForecast,
-      confidence: isForecast && confidence !== null && confidence !== undefined ? confidence : null,
     }
 
     return baseUpdate
@@ -540,8 +537,13 @@ const FIELD_ALIASES = {
   cqi: ['ft_4g_lte_average_reported_cqi', 'cqi', 'reported cqi'],
   active_users: [
     'l_traffic_activeuser_dl_avg',
-    'ft_average_nb_of_users__ues_rrc_connected',
     'active users',
+    'dl active users',
+  ],
+  rrc_users: [
+    'ft_average_nb_of_users__ues_rrc_connected',
+    'rrc users',
+    'ues rrc connected',
     'connected users',
   ],
   traffic: ['ft_4g_lte_dl_traffic_volume__gbytes', 'traffic', 'dl traffic', 'gbytes'],
@@ -669,7 +671,16 @@ function applyFieldPenalty(fieldKey, headerNormalized, baseScore) {
       score = Math.min(1, score + 0.05)
     }
     if (headerNormalized.includes('uesrrcconnected')) {
-      score *= 0.9
+      score *= 0.45
+    }
+  }
+
+  if (fieldKey === 'rrc_users') {
+    if (headerNormalized.includes('uesrrcconnected')) {
+      score = Math.min(1, score + 0.08)
+    }
+    if (headerNormalized.includes('ltrafficactiveuserdlavg')) {
+      score *= 0.5
     }
   }
 
@@ -834,17 +845,10 @@ function estimateTrafficLoss(activeUsers, load, throughput, congested) {
     }
   }
 
-  const safeUsers = Number.isFinite(activeUsers) ? activeUsers : 0
-  const safeLoad = Number.isFinite(load) ? load : ORANGE_CONGESTION_CONFIG.PRB_MEDIUM
-  const safeThroughput = Number.isFinite(throughput) ? throughput : ORANGE_CONGESTION_CONFIG.THROUGHPUT_TARGET
-
-  const excessLoad = Math.max(0, safeLoad - ORANGE_CONGESTION_CONFIG.PRB_MEDIUM) / 100
-  // Orange model: UE loss scales with both excess load and throughput degradation.
-  const throughputGap =
-    Math.max(0, ORANGE_CONGESTION_CONFIG.THROUGHPUT_TARGET - safeThroughput) /
-    ORANGE_CONGESTION_CONFIG.THROUGHPUT_TARGET
-  const trafficLossUe = Math.max(0, Math.trunc(safeUsers * excessLoad * throughputGap * 0.5))
-  const trafficLossGb = Number((trafficLossUe * 2.4).toFixed(1))
+  const safeThroughput = Number.isFinite(throughput) ? throughput : ORANGE_CONGESTION_CONFIG.THROUGHPUT_DEGRADED
+  const throughputGap = Math.max(0, ORANGE_CONGESTION_CONFIG.THROUGHPUT_DEGRADED - safeThroughput)
+  const trafficLossUe = ORANGE_CONGESTION_CONFIG.LOST_UE_BASELINE
+  const trafficLossGb = ORANGE_CONGESTION_CONFIG.LOST_GB_BASELINE
 
   return {
     trafficLossUe,
@@ -860,11 +864,13 @@ function classifyRow(metrics = {}, explicitFields = {}, options = {}) {
   const throughputValue = toFiniteNumber(metrics?.throughput)
   const cqiValue = toFiniteNumber(metrics?.cqi)
   const activeUsersValue = toFiniteNumber(metrics?.active_users)
+  const rrcUsersValue = toFiniteNumber(metrics?.rrc_users)
 
   const load = loadValue !== null ? loadValue : 0
-  const throughput = throughputValue !== null ? throughputValue : ORANGE_CONGESTION_CONFIG.THROUGHPUT_TARGET
+  const throughput = throughputValue !== null ? throughputValue : ORANGE_CONGESTION_CONFIG.THROUGHPUT_DEGRADED
   const cqi = cqiValue !== null ? cqiValue : 10
   const activeUsers = activeUsersValue !== null ? activeUsersValue : 0
+  const rrcUsers = rrcUsersValue !== null ? rrcUsersValue : activeUsers
 
   const explicitCongested = toBooleanLike(explicitFields?.congested)
   const explicitSeverityRaw = toFiniteNumber(explicitFields?.severity)
@@ -876,8 +882,8 @@ function classifyRow(metrics = {}, explicitFields = {}, options = {}) {
 
   if (strictNoFallback) {
     const congested = explicitCongested === true
-    const severity = explicitSeverity ?? (congested ? 80 : 0)
-    const issueType = explicitIssueType || (congested ? 'Congestion' : 'Normal')
+    const severity = explicitSeverity ?? (congested ? 75 : 0)
+    const issueType = explicitIssueType || (congested ? 'Congestion Confirmed' : 'Normal')
     const rootCause = explicitRootCause || (congested ? 'Capacity saturation' : 'Normal')
     const healthScore = explicitHealth ?? Math.max(0, 100 - severity)
     const trafficLoss = estimateTrafficLoss(activeUsers, load, throughput, congested)
@@ -894,80 +900,30 @@ function classifyRow(metrics = {}, explicitFields = {}, options = {}) {
     }
   }
 
-  let severity = 0
+  const prbSaturated = load > ORANGE_CONGESTION_CONFIG.PRB_SATURATED
+  const throughputDegraded = throughput < ORANGE_CONGESTION_CONFIG.THROUGHPUT_DEGRADED
+  const activeQueueCritical = activeUsers > ORANGE_CONGESTION_CONFIG.ACTIVE_USERS_CRITICAL
+  const rrcQueueSignal = rrcUsers > ORANGE_CONGESTION_CONFIG.RRC_USERS_CRITICAL
+  const cqiPoor = cqi < ORANGE_CONGESTION_CONFIG.CQI_POOR
+
+  const congested = prbSaturated && (throughputDegraded || activeQueueCritical || cqiPoor)
+
   const issues = []
+  if (prbSaturated) issues.push('PRB load above 90%')
+  if (throughputDegraded) issues.push('throughput below 4000 kbps')
+  if (activeQueueCritical) issues.push('active users above 4')
+  if (rrcQueueSignal) issues.push('RRC users above 4')
+  if (cqiPoor) issues.push('CQI below 8')
 
-  // Parity with scripts/process_time_series.py::analyze_cell thresholds and rules.
-  if (load >= ORANGE_CONGESTION_CONFIG.PRB_SATURATED) {
-    severity += 50
-    issues.push('PRB saturated')
-  } else if (load >= ORANGE_CONGESTION_CONFIG.PRB_HIGH) {
-    severity += 30
-    issues.push('PRB high')
-  } else if (load >= ORANGE_CONGESTION_CONFIG.PRB_MEDIUM) {
-    severity += 15
-    issues.push('PRB elevated')
-  }
+  let severity = 0
+  if (prbSaturated) severity += 45
+  if (throughputDegraded) severity += 20
+  if (activeQueueCritical || rrcQueueSignal) severity += 20
+  if (cqiPoor) severity += 15
+  if (!congested) severity = Math.min(severity, 49)
 
-  if (throughput < ORANGE_CONGESTION_CONFIG.THROUGHPUT_CRITICAL) {
-    severity += 35
-    issues.push('Throughput critical')
-  } else if (throughput < ORANGE_CONGESTION_CONFIG.THROUGHPUT_DEGRADED) {
-    severity += 20
-    issues.push('Throughput degraded')
-  }
-
-  if (activeUsers > ORANGE_CONGESTION_CONFIG.USERS_CRITICAL) {
-    severity += 25
-    issues.push('Queue high')
-  }
-
-  if (cqi < ORANGE_CONGESTION_CONFIG.CQI_CRITICAL) {
-    severity += 20
-    issues.push('CQI critical')
-  } else if (cqi < ORANGE_CONGESTION_CONFIG.CQI_LOW) {
-    severity += 10
-    issues.push('CQI low')
-  }
-
-  let congested = false
-  if (load >= ORANGE_CONGESTION_CONFIG.PRB_SATURATED) {
-    congested = true
-  } else if (load >= ORANGE_CONGESTION_CONFIG.PRB_HIGH && throughput < ORANGE_CONGESTION_CONFIG.THROUGHPUT_DEGRADED) {
-    congested = true
-  } else if (activeUsers > ORANGE_CONGESTION_CONFIG.USERS_CRITICAL && load >= ORANGE_CONGESTION_CONFIG.PRB_MEDIUM) {
-    congested = true
-  } else if (throughput < ORANGE_CONGESTION_CONFIG.THROUGHPUT_DEGRADED && load >= ORANGE_CONGESTION_CONFIG.PRB_MEDIUM) {
-    congested = true
-  } else if (severity >= 50) {
-    congested = true
-  }
-
-  let issueType = 'Normal'
-  let rootCause = 'Normal'
-
-  if (!issues.length) {
-    issueType = 'Normal'
-    rootCause = 'Normal'
-  } else if (load >= ORANGE_CONGESTION_CONFIG.PRB_SATURATED) {
-    issueType = 'Saturation Capacite'
-    rootCause = 'PRB satures - renforcement capacitaire requis'
-  } else if (load >= ORANGE_CONGESTION_CONFIG.PRB_HIGH && throughput < ORANGE_CONGESTION_CONFIG.THROUGHPUT_DEGRADED) {
-    issueType = 'Congestion + Degradation'
-    rootCause = 'Charge elevee avec debit degrade'
-  } else if (throughput < ORANGE_CONGESTION_CONFIG.THROUGHPUT_DEGRADED) {
-    issueType = 'Degradation QoE'
-    rootCause = 'Debit utilisateur insuffisant'
-  } else if (activeUsers > ORANGE_CONGESTION_CONFIG.USERS_CRITICAL) {
-    issueType = "File d'attente"
-    rootCause = 'Trop d utilisateurs actifs'
-  } else if (cqi < ORANGE_CONGESTION_CONFIG.CQI_LOW) {
-    issueType = 'Qualite Signal'
-    rootCause = 'Interference ou couverture faible'
-  } else {
-    issueType = 'Performance Warning'
-    rootCause = issues.join(', ')
-  }
+  const issueType = congested ? 'Congestion Confirmed' : issues.length ? 'Threshold Warning' : 'Normal'
+  const rootCause = issues.length ? issues.join('; ') : 'Normal'
 
   const healthScore = Math.max(0, 100 - severity)
   const trafficLoss = estimateTrafficLoss(activeUsers, load, throughput, congested)
@@ -1121,13 +1077,24 @@ function applyCsvMapping(payload) {
     normalizedImportType === IMPORT_TYPE_KPI
       ? String(findHeaderByNormalizedName(rows, 'l_traffic_activeuser_dl_avg') || '').trim()
       : ''
+  const canonicalRrcUsersHeader =
+    normalizedImportType === IMPORT_TYPE_KPI
+      ? String(findHeaderByNormalizedName(rows, 'ft_average_nb_of_users__ues_rrc_connected') || '').trim()
+      : ''
   const mappedActiveUsersHeader =
     normalizedImportType === IMPORT_TYPE_KPI ? String(mapping.active_users || '').trim() : ''
+  const mappedRrcUsersHeader =
+    normalizedImportType === IMPORT_TYPE_KPI ? String(mapping.rrc_users || '').trim() : ''
   const activeUsersHeaderMismatch =
     normalizedImportType === IMPORT_TYPE_KPI &&
     Boolean(canonicalActiveUsersHeader) &&
     Boolean(mappedActiveUsersHeader) &&
     normalizeText(canonicalActiveUsersHeader) !== normalizeText(mappedActiveUsersHeader)
+  const rrcUsersHeaderMismatch =
+    normalizedImportType === IMPORT_TYPE_KPI &&
+    Boolean(canonicalRrcUsersHeader) &&
+    Boolean(mappedRrcUsersHeader) &&
+    normalizeText(canonicalRrcUsersHeader) !== normalizeText(mappedRrcUsersHeader)
   const hasTimestampMapping =
     normalizedImportType !== IMPORT_TYPE_KPI || Boolean(timestampHeader) || (Boolean(dateHeader) && Boolean(timeHeader))
   let unmatchedKpiRows = 0
@@ -1139,6 +1106,7 @@ function applyCsvMapping(payload) {
   let rowsWithExplicitCongestion = 0
   let rowsWithoutExplicitCongestion = 0
   let rowsProcessed = 0
+  let rowsFilteredZeroTraffic = 0
 
   rows.forEach((row, rowIndex) => {
     const rawCellName = String(row?.[mapping.cell_name] || '').trim()
@@ -1217,7 +1185,10 @@ function applyCsvMapping(payload) {
     const cqi = toFiniteNumber(row?.[mapping.cqi])
     const mappedActiveUsers = toFiniteNumber(row?.[mapping.active_users])
     const canonicalActiveUsers = canonicalActiveUsersHeader ? toFiniteNumber(row?.[canonicalActiveUsersHeader]) : null
+    const mappedRrcUsers = toFiniteNumber(row?.[mapping.rrc_users])
+    const canonicalRrcUsers = canonicalRrcUsersHeader ? toFiniteNumber(row?.[canonicalRrcUsersHeader]) : null
     const activeUsers = canonicalActiveUsers !== null ? canonicalActiveUsers : mappedActiveUsers
+    const rrcUsers = canonicalRrcUsers !== null ? canonicalRrcUsers : mappedRrcUsers
     const traffic = toFiniteNumber(row?.[mapping.traffic])
     const ta = toFiniteNumber(row?.[mapping.ta])
     const signalPower = toFiniteNumber(row?.[mapping.signal_power])
@@ -1238,12 +1209,20 @@ function applyCsvMapping(payload) {
       else rowsWithExplicitCongestion += 1
     }
 
+    const isZeroTrafficRow = [load, throughput, cqi, activeUsers, rrcUsers, traffic]
+      .every((value) => value === null || Number(value) <= 0)
+    if (isZeroTrafficRow) {
+      rowsFilteredZeroTraffic += 1
+      return
+    }
+
     const classification = classifyRow(
       {
         load,
         throughput,
         cqi,
         active_users: activeUsers,
+        rrc_users: rrcUsers,
       },
       explicitFields,
       {
@@ -1258,6 +1237,7 @@ function applyCsvMapping(payload) {
       throughput,
       cqi,
       active_users: activeUsers,
+      rrc_users: rrcUsers,
       traffic,
       ta,
       signal_power: signalPower,
@@ -1307,6 +1287,16 @@ function applyCsvMapping(payload) {
       warnings.push(
         `Active Users congestion rule used "${canonicalActiveUsersHeader}" (Orange queue KPI) instead of mapped "${mappedActiveUsersHeader}".`
       )
+    }
+
+    if (rrcUsersHeaderMismatch) {
+      warnings.push(
+        `RRC Users congestion rule used "${canonicalRrcUsersHeader}" instead of mapped "${mappedRrcUsersHeader}".`
+      )
+    }
+
+    if (rowsFilteredZeroTraffic > 0) {
+      warnings.push(`${rowsFilteredZeroTraffic} KPI rows were filtered because all traffic KPIs were empty or zero.`)
     }
 
     if (strictScopeToReference && droppedRowsByScope > 0) {
@@ -1396,6 +1386,7 @@ function applyCsvMapping(payload) {
             timestamp_mapping_available: hasTimestampMapping,
             rows_with_explicit_congestion: rowsWithExplicitCongestion,
             rows_without_explicit_congestion: rowsWithoutExplicitCongestion,
+            rows_filtered_zero_traffic: rowsFilteredZeroTraffic,
             scope_to_reference_enforced: strictScopeToReference,
             strict_no_fallback: effectiveStrictNoFallback,
           }

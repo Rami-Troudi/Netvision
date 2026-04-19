@@ -11,15 +11,13 @@ const ALLOWED_ROOT_FILES = new Set([
   'baseline.json',
   'time_index.json',
   'stats.json',
-  'forecast_index.json',
 ])
 
 const ALLOWED_DATA_DIRS = new Set([
   'time_data',
-  'forecast_data',
 ])
 
-const OBSERVATION_BOOLEAN_KEYS = new Set(['congested', 'is_forecast'])
+const OBSERVATION_BOOLEAN_KEYS = new Set(['congested'])
 
 function isPathInsideDirectory(targetPath, directoryPath) {
   const relative = path.relative(directoryPath, targetPath)
@@ -123,13 +121,12 @@ function normalizeObservationValue(key, value) {
 // Module-level metadata cache
 const _metadataCache = {
   time_data: { mtime: 0, entries: [] },
-  forecast_data: { mtime: 0, entries: [] }
 }
 
 async function loadSliceMetadata(projectRoot, dataDir, filename) {
   const dataRoot = path.resolve(projectRoot, 'runtime_data')
-  if (dataDir === 'time_data' || dataDir === 'forecast_data') {
-    const indexFileName = dataDir === 'time_data' ? 'time_index.json' : 'forecast_index.json'
+  if (dataDir === 'time_data') {
+    const indexFileName = 'time_index.json'
     const indexPath = path.resolve(dataRoot, indexFileName)
     
     let currentMtime = 0
@@ -189,9 +186,6 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: 'Data file not found (not a file)' })
     }
   } catch (err) {
-    if (path.basename(filePath).includes('forecast')) {
-      return res.status(404).json({ error: 'Forecast data unavailable currently', code: 'FORECAST_NOT_READY' })
-    }
     return res.status(404).json({ error: 'Data file not found on disk' })
   }
 

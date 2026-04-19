@@ -19,12 +19,16 @@ function extractRequestKpis(body) {
   const prbLoad = normalizeOptionalKpi(body?.prb_load)
   const throughput = normalizeOptionalKpi(body?.throughput)
   const activeUsers = normalizeOptionalKpi(body?.active_users)
+  const rrcUsers = normalizeOptionalKpi(body?.rrc_users)
   const cqi = normalizeOptionalKpi(body?.cqi)
+  const timestamp = typeof body?.timestamp === 'string' ? body.timestamp.trim() : ''
 
   if (prbLoad !== null) kpis.prb_load = prbLoad
   if (throughput !== null) kpis.throughput = throughput
   if (activeUsers !== null) kpis.active_users = activeUsers
+  if (rrcUsers !== null) kpis.rrc_users = rrcUsers
   if (cqi !== null) kpis.cqi = cqi
+  if (timestamp) kpis.timestamp = timestamp
 
   return kpis
 }
