@@ -7,7 +7,8 @@ import csv
 import importlib
 import io
 import logging
-from collections import Counter
+import threading
+from collections import Counter, OrderedDict
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
@@ -24,8 +25,13 @@ from backend.common import to_float as _to_float
 
 BACKEND_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = BACKEND_DIR.parent
+# NOTE: In a multi-worker Uvicorn deployment each worker has its own
+# cache.  For cross-worker sharing, swap to Redis (the project already
+# uses Redis for BullMQ).  The current approach is thread-safe within
+# a single worker process.
 EXPORT_CACHE_MAX_ITEMS = 8
-_EXPORT_CSV_CACHE: dict[str, bytes] = {}
+_export_cache: OrderedDict[str, bytes] = OrderedDict()
+_export_cache_lock = threading.Lock()
 
 logger = logging.getLogger(__name__)
 
@@ -118,23 +124,21 @@ def _build_export_cache_key(context: dict[str, Any], timestamp: str) -> str:
 
 
 def _get_cached_export_csv(cache_key: str) -> bytes | None:
-    cached = _EXPORT_CSV_CACHE.get(cache_key)
-    if cached is None:
-        return None
-
-    # Refresh insertion order so hot keys are kept when cache reaches capacity.
-    _EXPORT_CSV_CACHE.pop(cache_key, None)
-    _EXPORT_CSV_CACHE[cache_key] = cached
-    return cached
+    """Return cached CSV bytes or None (thread-safe)."""
+    with _export_cache_lock:
+        value = _export_cache.get(cache_key)
+        if value is not None:
+            _export_cache.move_to_end(cache_key)
+        return value
 
 
 def _set_cached_export_csv(cache_key: str, csv_bytes: bytes) -> None:
-    _EXPORT_CSV_CACHE.pop(cache_key, None)
-    _EXPORT_CSV_CACHE[cache_key] = csv_bytes
-
-    while len(_EXPORT_CSV_CACHE) > EXPORT_CACHE_MAX_ITEMS:
-        oldest_key = next(iter(_EXPORT_CSV_CACHE))
-        _EXPORT_CSV_CACHE.pop(oldest_key, None)
+    """Store CSV bytes in the cache (thread-safe, auto-evicts)."""
+    with _export_cache_lock:
+        _export_cache[cache_key] = csv_bytes
+        _export_cache.move_to_end(cache_key)
+        while len(_export_cache) > EXPORT_CACHE_MAX_ITEMS:
+            _export_cache.popitem(last=False)
 
 
 @app.get("/health")
