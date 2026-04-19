@@ -158,6 +158,37 @@ const pageMarkup = `
                     </div>
                 </div>
 
+                <div class="panel" id="network-summary-panel">
+                    <h3 class="panel-title">
+                        <span class="material-symbols-outlined">assessment</span>
+                        Network Impact Summary
+                    </h3>
+                    <div class="summary-stats-grid">
+                        <div class="summary-stat">
+                            <div class="summary-stat-value" id="summary-congestion-rate">--%</div>
+                            <div class="summary-stat-label">Congestion Rate</div>
+                        </div>
+                        <div class="summary-stat">
+                            <div class="summary-stat-value" id="summary-lost-ue">--</div>
+                            <div class="summary-stat-label">Potential Lost UE</div>
+                        </div>
+                        <div class="summary-stat">
+                            <div class="summary-stat-value" id="summary-lost-gb">--</div>
+                            <div class="summary-stat-label">Potential Lost GB</div>
+                        </div>
+                        <div class="summary-stat">
+                            <div class="summary-stat-value" id="summary-recoverable">--</div>
+                            <div class="summary-stat-label">Recoverable UE</div>
+                        </div>
+                    </div>
+                    <div style="height:180px;margin-top:8px;">
+                        <canvas id="chart-action-distribution"></canvas>
+                    </div>
+                    <div style="height:160px;margin-top:8px;">
+                        <canvas id="chart-congestion-severity"></canvas>
+                    </div>
+                </div>
+
                 <div class="panel">
                     <h3 class="panel-title">
                         <span class="material-symbols-outlined">warning</span>

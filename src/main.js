@@ -1630,6 +1630,72 @@ function renderSitePlanningPanel(cellName) {
     );
 }
 
+// --- Before/After Chart Rendering ---
+const _simCharts = { action: null, sitePlanning: null };
+
+function renderBeforeAfterChart(canvasId, before, after, chartKey) {
+    if (_simCharts[chartKey]) {
+        _simCharts[chartKey].destroy();
+        _simCharts[chartKey] = null;
+    }
+    const ctx = document.getElementById(canvasId);
+    if (!ctx) return;
+
+    const bLoad = Number(before.load || 0);
+    const aLoad = Number(after.load || 0);
+    const bCqi  = Number(before.cqi || 0);
+    const aCqi  = Number(after.cqi || 0);
+    // Normalize throughput to Mbps for readability
+    const bThp  = Number(before.throughput || 0) / 1000;
+    const aThp  = Number(after.throughput || 0) / 1000;
+    const bUsers = Number(before.active_users || before.traffic || 0);
+    const aUsers = Number(after.active_users || after.traffic || 0);
+
+    _simCharts[chartKey] = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: ['PRB Load (%)', 'CQI', 'Throughput (Mbps)', 'Active Users'],
+            datasets: [
+                {
+                    label: 'Before',
+                    data: [bLoad, bCqi, bThp, bUsers],
+                    backgroundColor: 'rgba(255, 121, 0, 0.35)',
+                    borderColor: '#FF7900',
+                    borderWidth: 2,
+                    borderRadius: 4,
+                },
+                {
+                    label: 'After',
+                    data: [aLoad, aCqi, aThp, aUsers],
+                    backgroundColor: 'rgba(102, 187, 106, 0.45)',
+                    borderColor: '#66BB6A',
+                    borderWidth: 2,
+                    borderRadius: 4,
+                }
+            ],
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    labels: { color: '#ccc', font: { size: 11 } },
+                    position: 'top',
+                },
+                tooltip: {
+                    callbacks: {
+                        label: (ctx) => `${ctx.dataset.label}: ${ctx.raw.toFixed(2)}`
+                    },
+                },
+            },
+            scales: {
+                y: { beginAtZero: true, grid: { color: '#333' }, ticks: { color: '#ccc' } },
+                x: { grid: { display: false }, ticks: { color: '#ccc', font: { size: 10 } } },
+            },
+        },
+    });
+}
+
 function displaySitePlanningResults(result) {
     const container = document.getElementById('site-planning-result');
     if (!container) return;
@@ -1685,7 +1751,9 @@ function displaySitePlanningResults(result) {
         </div>
         <div class="action-reco">${escapeHtml(result.recommendation || '')}</div>
         ${neighborsText ? `<div class="action-affected">${neighborsText}</div>` : ''}
+        <div class="action-chart-wrap" style="height:220px;margin-top:12px;"><canvas id="chart-sim-site-planning"></canvas></div>
     `);
+    renderBeforeAfterChart('chart-sim-site-planning', before, after, 'sitePlanning');
 }
 
 async function runSitePlanningSimulation(cellName) {
@@ -2000,7 +2068,9 @@ function displaySimulationResults(result) {
         <div class="action-impact">Load: ${impact.load_change >= 0 ? '+' : ''}${impact.load_change ?? 0}% | Throughput: ${impact.throughput_change >= 0 ? '+' : ''}${impact.throughput_change ?? 0} kbps</div>
         <div class="action-reco">${escapeHtml(result.recommendation || '')}</div>
         ${neighborsText ? `<div class="action-affected">${neighborsText}</div>` : ''}
+        <div class="action-chart-wrap" style="height:220px;margin-top:12px;"><canvas id="chart-sim-action"></canvas></div>
     `);
+    renderBeforeAfterChart('chart-sim-action', before, after, 'action');
 }
 
 async function runSimulation(cellName, action) {
@@ -4156,6 +4226,7 @@ async function restoreLiveDatasetSession() {
     } else {
         applyFilters();
         updateStatsUI(state.currentStats || {});
+        updateNetworkSummary(state.filteredPointFeatures || state.pointFeatures, state.currentObservations);
         updateAlertsUI(state.filteredPointFeatures);
         updateMapData();
     }
@@ -4316,6 +4387,7 @@ async function applyImportedDataset(datasetPayload, options = {}) {
     } else {
         applyFilters();
         updateStatsUI(state.currentStats || {});
+        updateNetworkSummary(state.filteredPointFeatures || state.pointFeatures, state.currentObservations);
         updateAlertsUI(state.filteredPointFeatures);
         updateMapData();
     }
@@ -4818,6 +4890,7 @@ async function loadHistoricalSliceInternal(timeEntry, localIndex, requestContext
         applyFilters();
         updateTimeSliderUI();
         updateStatsUI(customSlice.stats || {});
+        updateNetworkSummary(state.filteredPointFeatures || state.pointFeatures, state.currentObservations);
         updateAlertsUI(state.filteredPointFeatures);
         if (state.selectedSite) {
             refreshSiteInfoStats(state.selectedSite);
@@ -4843,6 +4916,7 @@ async function loadHistoricalSliceInternal(timeEntry, localIndex, requestContext
 
         updateTimeSliderUI();
         updateStatsUI(sliceData.stats);
+        updateNetworkSummary(state.filteredPointFeatures || state.pointFeatures, state.currentObservations);
         updateAlertsUI(state.filteredPointFeatures);
 
         if (state.selectedSite) {
@@ -5090,6 +5164,107 @@ function updateStatsUI(stats) {
         const length = 157;
         const dash = (hs / 100) * length;
         gaugeFill.style.strokeDasharray = `${dash} ${length}`;
+    }
+}
+
+// --- Network Impact Summary ---
+const _summaryCharts = { actionDist: null, severity: null };
+
+function updateNetworkSummary(features, observations) {
+    const totalCells = features.length;
+    const congested = features.filter(f => f.properties.congested);
+    const congestedCount = congested.length;
+    const congestionRate = totalCells > 0 ? ((congestedCount / totalCells) * 100).toFixed(1) : '0';
+
+    // Traffic loss estimation matching Slide 10 constants
+    const LOST_UE_PER_CELL = 50;
+    const LOST_GB_PER_CELL = 120;
+    const AVG_RECOVERY = 0.55; // weighted average of all action recovery rates
+
+    const totalLostUE = congestedCount * LOST_UE_PER_CELL;
+    const totalLostGB = congestedCount * LOST_GB_PER_CELL;
+    const recoverableUE = Math.round(totalLostUE * AVG_RECOVERY);
+
+    // Update stat cards
+    const el = (id, txt) => { const e = document.getElementById(id); if (e) e.textContent = txt; };
+    el('summary-congestion-rate', `${congestionRate}%`);
+    el('summary-lost-ue', String(totalLostUE));
+    el('summary-lost-gb', `${totalLostGB} GB`);
+    el('summary-recoverable', `~${recoverableUE} UE`);
+
+    // Classify congested cells by severity for charts
+    let critical = 0, high = 0, medium = 0;
+    const actionCounts = { tilt: 0, add_carrier: 0, redistribute: 0, add_sector: 0, new_site: 0 };
+
+    congested.forEach(f => {
+        const p = f.properties;
+        const load = Number(p.load || p.prb_load || 0);
+        const thp = Number(p.throughput || p.dl_throughput || 0);
+        const sev = Number(p.severity || 0);
+
+        if (sev >= 3 || load >= 95) { critical++; actionCounts.new_site++; }
+        else if (sev >= 2 || load >= 85) { high++; actionCounts.add_sector++; }
+        else { medium++; actionCounts.redistribute++; }
+
+        if (thp < 2000 && load >= 80) actionCounts.add_carrier++;
+        if (load >= 70 && load < 90) actionCounts.tilt++;
+    });
+
+    // Action Distribution Doughnut
+    const distCtx = document.getElementById('chart-action-distribution');
+    if (distCtx) {
+        if (_summaryCharts.actionDist) _summaryCharts.actionDist.destroy();
+        _summaryCharts.actionDist = new Chart(distCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Tilt', 'Add Carrier', 'Rebalancing', 'Add Sector', 'New Site'],
+                datasets: [{
+                    data: [actionCounts.tilt, actionCounts.add_carrier, actionCounts.redistribute, actionCounts.add_sector, actionCounts.new_site],
+                    backgroundColor: ['#42A5F5', '#66BB6A', '#FFB74D', '#FF7900', '#E53935'],
+                    borderWidth: 0,
+                }],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '55%',
+                plugins: {
+                    legend: { position: 'right', labels: { color: '#ccc', font: { size: 10 }, boxWidth: 12, padding: 6 } },
+                    title: { display: true, text: 'Recommended Actions', color: '#ccc', font: { size: 11 } },
+                },
+            },
+        });
+    }
+
+    // Congestion Severity Bar
+    const sevCtx = document.getElementById('chart-congestion-severity');
+    if (sevCtx) {
+        if (_summaryCharts.severity) _summaryCharts.severity.destroy();
+        _summaryCharts.severity = new Chart(sevCtx, {
+            type: 'bar',
+            data: {
+                labels: ['Critical', 'High', 'Medium', 'Healthy'],
+                datasets: [{
+                    data: [critical, high, medium, totalCells - congestedCount],
+                    backgroundColor: ['#E53935', '#FF7900', '#FFB74D', '#66BB6A'],
+                    borderRadius: 4,
+                    borderWidth: 0,
+                }],
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    title: { display: true, text: 'Cell Health Distribution', color: '#ccc', font: { size: 11 } },
+                },
+                scales: {
+                    x: { beginAtZero: true, grid: { color: '#333' }, ticks: { color: '#ccc' } },
+                    y: { grid: { display: false }, ticks: { color: '#ccc', font: { size: 10 } } },
+                },
+            },
+        });
     }
 }
 
