@@ -2560,194 +2560,36 @@ async function exportCSV(filteredOnly = false) {
             .filter(Boolean)
     );
 
-    const bulkCsv = await fetchBulkRecommendationExportCsv(activeTimestamp);
-    if (!filteredOnly) {
-        const bulkCsvContent = bulkCsv.startsWith('\uFEFF') ? bulkCsv : `\uFEFF${bulkCsv}`;
-        downloadBlob('netvision-analysis.csv', bulkCsvContent, 'text/csv;charset=utf-8');
-        showNotification('CSV export generated successfully.', 'success');
+    let bulkCsv;
+    try {
+        bulkCsv = await fetchBulkRecommendationExportCsv(activeTimestamp);
+    } catch (err) {
+        const detail = err instanceof Error ? err.message : String(err);
+        console.error('[exportCSV] Bulk export failed:', detail);
+        showNotification(
+            'CSV export failed — make sure the Python backend is running. ' + detail.slice(0, 120),
+            'error'
+        );
         return;
     }
 
-    const filteredCsv = await filterBulkRecommendationCsv(bulkCsv, rowCellNames);
-    const filteredCsvContent = filteredCsv.startsWith('\uFEFF') ? filteredCsv : `\uFEFF${filteredCsv}`;
-    downloadBlob('netvision-analysis.csv', filteredCsvContent, 'text/csv;charset=utf-8');
-    showNotification('CSV export generated successfully.', 'success');
-    return;
-
-    const uniqueCellNames = Array.from(new Set(
-        rows
-            .map((feature) => String(feature?.properties?.cell_name || '').trim())
-            .filter(Boolean)
-    ));
-
-    const recommendationByCell = new Map();
-    const batchSize = 8;
-    for (let index = 0; index < uniqueCellNames.length; index += batchSize) {
-        const batch = uniqueCellNames.slice(index, index + batchSize);
-        const results = await Promise.all(batch.map((cellName) => fetchRecommendationForExport(cellName)));
-        batch.forEach((cellName, resultIndex) => {
-            recommendationByCell.set(cellName, results[resultIndex]);
-        });
-    }
-
-    const fallbackDateHour = timestampToExportDateHour(activeTimestamp);
-
-    const header = [
-        'cell_name',
-        'enodeb_name',
-        'date',
-        'hour',
-        'prb_load',
-        'throughput_kbps',
-        'active_users',
-        'rrc_users',
-        'cqi',
-        'is_congested',
-        'busy_hour_flag',
-        'recommended_actions',
-        'top_neighbor_for_rebalancing',
-        'estimated_lost_ue',
-        'estimated_lost_gb',
-        'estimated_gain_ue',
-        'estimated_gain_gb',
-    ];
-
-    const lines = [header.join(',')];
-    let exportedRows = 0;
-    let exportDebugCount = 0;
-
-    rows.forEach((feature) => {
-        const props = feature?.properties || {};
-        const cellName = String(props.cell_name || '').trim();
-        const rec = normalizeRecommendationPayloadForExport(recommendationByCell.get(cellName));
-        const hasRecommendationPayload = Boolean(rec && typeof rec === 'object');
-        const currentKpis = rec?.current_kpis || rec?.currentKpis || {};
-        const rawRecommendedActions = normalizeRecommendedActionsForExport(rec);
-        let recommendedActions = rawRecommendedActions
-            .map((action) => extractActionNameForExport(action))
-            .filter(Boolean);
-
-        const date = normalizeExportDateISO(rec?.date, fallbackDateHour.date);
-        const hour = rec?.hour || fallbackDateHour.hour;
-        const prbLoad = currentKpis?.prb_load ?? props.load ?? '';
-        const throughput = currentKpis?.throughput_kbps ?? props.throughput ?? '';
-        const activeUsers = currentKpis?.active_users ?? props.active_users ?? props.l_traffic_activeuser_dl_avg ?? props.traffic ?? '';
-        const rrcUsers = currentKpis?.rrc_users ?? props.rrc_users ?? props.ft_average_nb_of_users__ues_rrc_connected ?? '';
-        const cqi = currentKpis?.cqi ?? props.cqi ?? '';
-        const isCongested = Boolean(rec?.is_congested ?? rec?.isCongested ?? props.congested ?? false);
-        const busyHourFlag = Boolean(rec?.busy_hour_flag ?? rec?.busyHourFlag ?? (toFiniteNumberOrZero(prbLoad) > 75));
-        const topNeighbor = rec?.top_neighbor_for_rebalancing || rec?.topNeighborForRebalancing || '';
-
-        if (isCongested && exportDebugCount < 5) {
-            console.log('[export-debug]', cellName, JSON.stringify(rec));
-            exportDebugCount += 1;
-        }
-
-        if (!hasLoggedExportActionShape && isCongested && rawRecommendedActions.length) {
-            const firstAction = rawRecommendedActions[0];
-            console.info('[exportCSV] Sample congested recommended_action shape:', {
-                cell_name: cellName,
-                keys: Object.keys(firstAction),
-                action_name: firstAction.action_name,
-                recovery_rate: firstAction.recovery_rate,
-            });
-            hasLoggedExportActionShape = true;
-        }
-
-        const hasSignal =
-            toFiniteNumberOrZero(prbLoad) > 0 ||
-            toFiniteNumberOrZero(throughput) > 0 ||
-            toFiniteNumberOrZero(activeUsers) > 0;
-        if (!hasSignal) {
+    try {
+        if (!filteredOnly) {
+            const bulkCsvContent = bulkCsv.startsWith('\uFEFF') ? bulkCsv : `\uFEFF${bulkCsv}`;
+            downloadBlob('netvision-analysis.csv', bulkCsvContent, 'text/csv;charset=utf-8');
+            showNotification('CSV export generated successfully.', 'success');
             return;
         }
 
-        if (isCongested) {
-            recommendedActions = recommendedActions.filter((actionName) => actionName !== 'No Action Required');
-            if (!recommendedActions.length && rawRecommendedActions.length) {
-                console.warn('[exportCSV] Congested row has action objects but no action_name values.', {
-                    cell_name: cellName,
-                    first_action: rawRecommendedActions[0],
-                });
-            }
-        }
-
-        if (isCongested && !recommendedActions.length) {
-            throw new Error(`[exportCSV] Missing recommended_actions for congested cell: ${cellName}`);
-        }
-
-        const estimatedLostUe = isCongested ? Number(rec?.estimated_lost_ue ?? props.traffic_loss_ue ?? 50) : 0;
-        const estimatedLostGb = isCongested ? Number(rec?.estimated_lost_gb ?? props.traffic_loss_gb ?? 120) : 0;
-        let estimatedGainUe = 0;
-        let estimatedGainGb = 0;
-
-        if (isCongested) {
-            const topRecommendedAction = rawRecommendedActions.find((action) => {
-                const name = extractActionNameForExport(action);
-                return Boolean(name) && name !== 'No Action Required';
-            }) || rawRecommendedActions[0];
-
-            const topActionName = extractActionNameForRecoveryLookup(topRecommendedAction) || recommendedActions[0] || '';
-            let recoveryRateRatio = deriveRecoveryRateRatioForExport(topRecommendedAction, topActionName);
-            if (recoveryRateRatio <= 0) {
-                recoveryRateRatio = getFallbackRecoveryRateRatioForExport(topActionName);
-            }
-
-            estimatedGainUe = Number((50 * recoveryRateRatio).toFixed(2));
-            estimatedGainGb = Number((120 * recoveryRateRatio).toFixed(2));
-
-            if (estimatedGainUe <= 0 && estimatedGainGb <= 0) {
-                const fallbackActionName = topActionName || recommendedActions[0] || 'Load Rebalancing';
-                const hardFallbackRatio = getFallbackRecoveryRateRatioForExport(fallbackActionName)
-                    || getFallbackRecoveryRateRatioForExport('Load Rebalancing');
-                if (hardFallbackRatio > 0) {
-                    estimatedGainUe = Number((50 * hardFallbackRatio).toFixed(2));
-                    estimatedGainGb = Number((120 * hardFallbackRatio).toFixed(2));
-                }
-
-                console.log('[exportCSV][zero-gain-congested-row]', {
-                    cell_name: cellName,
-                    timestamp: activeTimestamp,
-                    recommendation_payload: rec,
-                    top_recommended_action: topRecommendedAction,
-                    derived_recovery_ratio: recoveryRateRatio,
-                    hard_fallback_ratio: hardFallbackRatio,
-                });
-            }
-        }
-
-        const values = [
-            cellName,
-            rec?.enodeb_name || props.enodeb_name || props.site_name || '',
-            date,
-            hour,
-            prbLoad,
-            throughput,
-            activeUsers,
-            rrcUsers,
-            cqi,
-            Boolean(isCongested),
-            Boolean(busyHourFlag),
-            recommendedActions.join(';'),
-            topNeighbor,
-            estimatedLostUe,
-            estimatedLostGb,
-            estimatedGainUe,
-            estimatedGainGb,
-        ];
-
-        lines.push(values.map(csvEscape).join(','));
-        exportedRows += 1;
-    });
-
-    if (!exportedRows) {
-        showNotification('No non-empty KPI rows available for CSV export.', 'warning');
-        return;
+        const filteredCsv = await filterBulkRecommendationCsv(bulkCsv, rowCellNames);
+        const filteredCsvContent = filteredCsv.startsWith('\uFEFF') ? filteredCsv : `\uFEFF${filteredCsv}`;
+        downloadBlob('netvision-analysis.csv', filteredCsvContent, 'text/csv;charset=utf-8');
+        showNotification('CSV export generated successfully.', 'success');
+    } catch (err) {
+        const detail = err instanceof Error ? err.message : String(err);
+        console.error('[exportCSV] CSV filtering/download failed:', detail);
+        showNotification('CSV export failed: ' + detail.slice(0, 120), 'error');
     }
-
-    const csvContent = `\uFEFF${lines.join('\n')}`;
-    downloadBlob('netvision-analysis.csv', csvContent, 'text/csv;charset=utf-8');
-    showNotification('CSV export generated successfully.', 'success');
 }
 
 function simpleReport() {

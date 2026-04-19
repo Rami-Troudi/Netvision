@@ -117,9 +117,13 @@ export default async function handler(req, res) {
     res.setHeader('Content-Disposition', backend.contentDisposition)
     return res.status(200).send(backend.csvText)
   } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err)
+    const isConnectionError = /fetch failed|econnrefused|econnreset|etimedout/i.test(detail)
     return res.status(502).json({
-      error: 'Recommendations export unavailable',
-      detail: err instanceof Error ? err.message : String(err),
+      error: isConnectionError
+        ? 'Python backend is not reachable — make sure it is running on the configured port'
+        : 'Recommendations export unavailable',
+      detail,
       attempts: BACKEND_RETRY_ATTEMPTS,
       elapsedMs: Date.now() - startedAt,
       backend: BACKEND_BASE_URL,
