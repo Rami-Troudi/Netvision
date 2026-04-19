@@ -4,14 +4,11 @@ const fsPromises = require('fs/promises')
 const path = require('path')
 const { DatabaseSync } = require('node:sqlite')
 const IORedis = require('ioredis')
-const { Queue, Worker } = require('bullmq')
+const { Worker } = require('bullmq')
 
 const JOB_QUEUE_NAME = (process.env.JOB_QUEUE_NAME || 'netvision-jobs').trim()
-const MAINTENANCE_QUEUE_NAME = (process.env.MAINTENANCE_QUEUE_NAME || 'netvision-maintenance').trim()
 const REDIS_URL = (process.env.REDIS_URL || 'redis://127.0.0.1:6379').trim()
-const ENABLE_WEEKLY_RETRAIN = String(process.env.ENABLE_WEEKLY_RETRAIN || 'true').trim().toLowerCase() !== 'false'
-const WEEKLY_RETRAIN_CRON = (process.env.WEEKLY_RETRAIN_CRON || '0 3 * * 1').trim()
-const WEEKLY_RETRAIN_TZ = (process.env.WEEKLY_RETRAIN_TZ || 'UTC').trim()
+
 const JOB_STATUSES = {
   PENDING: 'pending',
   RUNNING: 'running',
@@ -23,22 +20,13 @@ const PROJECT_ROOT = process.cwd()
 const RUNTIME_DIR = path.resolve(PROJECT_ROOT, '.runtime')
 const DB_PATH = path.resolve(RUNTIME_DIR, 'jobs.sqlite')
 const JOB_RESULTS_DIR = path.resolve(RUNTIME_DIR, 'job-results')
-const FORECAST_DIR = path.resolve(PROJECT_ROOT, 'runtime_data', 'forecast_data')
-const FORECAST_INDEX_PATH = path.resolve(PROJECT_ROOT, 'runtime_data', 'forecast_index.json')
-const RETRAIN_RESULTS_DIR = path.resolve(PROJECT_ROOT, 'runtime_data', 'retraining')
-const RETRAIN_SUMMARY_PATH = path.resolve(RETRAIN_RESULTS_DIR, 'last_retrain_summary.json')
 
 let db = null
 let allowTimeFileSet = null
-let maintenanceQueue = null
 
 function ensureRuntimeDirectories() {
   fs.mkdirSync(RUNTIME_DIR, { recursive: true })
   fs.mkdirSync(JOB_RESULTS_DIR, { recursive: true })
-}
-
-function ensureRetrainDirectories() {
-  fs.mkdirSync(RETRAIN_RESULTS_DIR, { recursive: true })
 }
 
 function getNowIso() {
@@ -124,12 +112,6 @@ function parseJsonString(raw, fallbackValue = null) {
   }
 }
 
-function parseLastJsonLine(raw) {
-  const lines = String(raw || '').split('\n').map((line) => line.trim()).filter(Boolean)
-  if (!lines.length) return null
-  return parseJsonString(lines[lines.length - 1], null)
-}
-
 async function fileExists(filePath) {
   try {
     await fsPromises.access(filePath)
@@ -163,13 +145,13 @@ async function loadAllowedTimeFiles() {
   return allowTimeFileSet
 }
 
-function runPython({ args, timeout, env = null }) {
+function runPython({ args, timeout }) {
   return new Promise((resolve, reject) => {
     const child = spawn('python', args, {
       cwd: PROJECT_ROOT,
       timeout,
       shell: false,
-      env: env ? { ...process.env, ...env } : process.env,
+      env: process.env,
     })
 
     let stdout = ''
@@ -255,100 +237,6 @@ async function runSimulationJob(payload) {
   return parsed
 }
 
-async function clearForecastData() {
-  if (await fileExists(FORECAST_INDEX_PATH)) {
-    await fsPromises.unlink(FORECAST_INDEX_PATH)
-  }
-
-  if (await fileExists(FORECAST_DIR)) {
-    await fsPromises.rm(FORECAST_DIR, { recursive: true, force: true })
-  }
-}
-
-async function runForecastJob(payload) {
-  const scriptPath = path.resolve(PROJECT_ROOT, 'scripts', 'forecast_hf.py')
-  if (!(await fileExists(scriptPath))) {
-    throw new Error('Forecast script missing')
-  }
-
-  const parsedDays = Number.parseInt(payload?.days, 10)
-  const validDays = Number.isFinite(parsedDays) ? Math.min(30, Math.max(1, parsedDays)) : 7
-  const startDate = typeof payload?.start_date === 'string' && payload.start_date.trim()
-    ? payload.start_date.trim()
-    : null
-
-  await clearForecastData()
-
-  const args = [scriptPath, '--days', String(validDays)]
-  if (startDate) {
-    args.push('--start-date', startDate)
-  }
-
-  const { code, signal, stdout, stderr } = await runPython({
-    args,
-    timeout: 120_000,
-    env: { PYTHONIOENCODING: 'utf-8' },
-  })
-
-  if (code !== 0) {
-    throw new Error(`Forecast generation failed (code=${code}, signal=${signal || 'none'}): ${stderr || stdout}`)
-  }
-
-  const lines = stdout.trim().split('\n').filter(Boolean)
-  const parsedSummary = lines.length ? parseJsonString(lines[lines.length - 1], null) : null
-  const summary = parsedSummary && typeof parsedSummary === 'object'
-    ? parsedSummary
-    : { success: true, output: stdout }
-
-  let forecasts = []
-  if (await fileExists(FORECAST_INDEX_PATH)) {
-    const raw = await fsPromises.readFile(FORECAST_INDEX_PATH, 'utf8')
-    const parsed = parseJsonString(raw, [])
-    forecasts = Array.isArray(parsed) ? parsed : []
-  }
-
-  return {
-    success: true,
-    ...summary,
-    forecasts_count: forecasts.length,
-    forecasts: forecasts.slice(0, 10),
-  }
-}
-
-async function runWeeklyRetrainJob() {
-  const scriptPath = path.resolve(PROJECT_ROOT, 'scripts', 'train_forecast_model.py')
-  if (!(await fileExists(scriptPath))) {
-    throw new Error('Retraining script missing')
-  }
-
-  ensureRetrainDirectories()
-  const args = [scriptPath, '--history-limit', '0']
-  const startedAt = getNowIso()
-
-  const { code, signal, stdout, stderr } = await runPython({
-    args,
-    timeout: 300_000,
-    env: { PYTHONIOENCODING: 'utf-8' },
-  })
-
-  if (code !== 0) {
-    throw new Error(`Weekly retrain failed (code=${code}, signal=${signal || 'none'}): ${stderr || stdout}`)
-  }
-
-  const parsedSummary = parseLastJsonLine(stdout)
-  const summary = {
-    success: true,
-    started_at: startedAt,
-    finished_at: getNowIso(),
-    model_path: 'models/forecast_model.pkl',
-    script: 'scripts/train_forecast_model.py',
-    details: parsedSummary || { output: stdout },
-  }
-
-  await fsPromises.writeFile(RETRAIN_SUMMARY_PATH, JSON.stringify(summary, null, 2), 'utf8')
-  return summary
-}
-
 async function writeResultArtifact(jobId, type, result) {
   ensureRuntimeDirectories()
   const artifactPath = path.resolve(JOB_RESULTS_DIR, `${jobId}.json`)
@@ -366,18 +254,10 @@ async function executeJobByType(type, payload) {
   if (type === 'simulate') {
     return runSimulationJob(payload)
   }
-  if (type === 'forecast') {
-    return runForecastJob(payload)
-  }
   throw new Error(`Unsupported job type: ${type}`)
 }
 
 const connection = new IORedis(REDIS_URL, {
-  maxRetriesPerRequest: null,
-  enableReadyCheck: false,
-})
-
-const maintenanceConnection = new IORedis(REDIS_URL, {
   maxRetriesPerRequest: null,
   enableReadyCheck: false,
 })
@@ -443,65 +323,6 @@ const worker = new Worker(
   }
 )
 
-const maintenanceWorker = ENABLE_WEEKLY_RETRAIN
-  ? new Worker(
-      MAINTENANCE_QUEUE_NAME,
-      async (job) => {
-        if (job?.name !== 'weekly-retrain') {
-          throw new Error(`Unsupported maintenance job: ${job?.name || 'unknown'}`)
-        }
-        const result = await runWeeklyRetrainJob()
-        return {
-          ok: true,
-          ...result,
-        }
-      },
-      {
-        connection: maintenanceConnection,
-        concurrency: 1,
-      }
-    )
-  : null
-
-async function scheduleWeeklyRetraining() {
-  if (!ENABLE_WEEKLY_RETRAIN) {
-    console.log('[job-worker] Weekly retraining scheduler disabled via ENABLE_WEEKLY_RETRAIN=false')
-    return
-  }
-
-  if (!maintenanceQueue) {
-    maintenanceQueue = new Queue(MAINTENANCE_QUEUE_NAME, {
-      connection: maintenanceConnection,
-      defaultJobOptions: {
-        removeOnComplete: 50,
-        removeOnFail: 50,
-      },
-    })
-  }
-
-  await maintenanceQueue.waitUntilReady()
-  await maintenanceQueue.add(
-    'weekly-retrain',
-    {
-      schedule: 'weekly',
-      created_at: getNowIso(),
-    },
-    {
-      jobId: 'weekly-retrain',
-      repeat: {
-        pattern: WEEKLY_RETRAIN_CRON,
-        tz: WEEKLY_RETRAIN_TZ,
-      },
-      removeOnComplete: 50,
-      removeOnFail: 50,
-    }
-  )
-
-  console.log(
-    `[job-worker] Weekly retraining scheduled on queue ${MAINTENANCE_QUEUE_NAME} with cron "${WEEKLY_RETRAIN_CRON}" (${WEEKLY_RETRAIN_TZ})`
-  )
-}
-
 worker.on('ready', () => {
   console.log(`[job-worker] Ready. Queue=${JOB_QUEUE_NAME}`)
 })
@@ -515,25 +336,6 @@ worker.on('failed', (job, err) => {
   console.error(`[job-worker] Failed job ${id}:`, err)
 })
 
-if (maintenanceWorker) {
-  maintenanceWorker.on('ready', () => {
-    console.log(`[job-worker] Maintenance worker ready. Queue=${MAINTENANCE_QUEUE_NAME}`)
-  })
-
-  maintenanceWorker.on('completed', (job) => {
-    console.log(`[job-worker] Completed maintenance job ${job.id}`)
-  })
-
-  maintenanceWorker.on('failed', (job, err) => {
-    const id = job?.id ?? 'unknown'
-    console.error(`[job-worker] Failed maintenance job ${id}:`, err)
-  })
-}
-
-scheduleWeeklyRetraining().catch((err) => {
-  console.error('[job-worker] Failed to schedule weekly retraining:', err)
-})
-
 async function shutdown(signal) {
   console.log(`[job-worker] Received ${signal}, shutting down...`)
   try {
@@ -541,29 +343,10 @@ async function shutdown(signal) {
   } catch (err) {
     console.error('[job-worker] Worker close failed:', err)
   }
-  if (maintenanceWorker) {
-    try {
-      await maintenanceWorker.close()
-    } catch (err) {
-      console.error('[job-worker] Maintenance worker close failed:', err)
-    }
-  }
-  if (maintenanceQueue) {
-    try {
-      await maintenanceQueue.close()
-    } catch (err) {
-      console.error('[job-worker] Maintenance queue close failed:', err)
-    }
-  }
   try {
     await connection.quit()
   } catch (err) {
     console.error('[job-worker] Redis connection close failed:', err)
-  }
-  try {
-    await maintenanceConnection.quit()
-  } catch (err) {
-    console.error('[job-worker] Maintenance redis connection close failed:', err)
   }
   process.exit(0)
 }

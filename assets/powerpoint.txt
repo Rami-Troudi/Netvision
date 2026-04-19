@@ -1,0 +1,121 @@
+
+Slide 1
+Automatisation de la décongestion du réseaux 4G/5G
+
+Slide 2
+Constat de performance en Heure de pointe
+Indicateur clé | Valeur observée | Seuil cible | État
+Taux de charge cellule | > 90 % | < 80 % | 🔴 Saturé
+Clients en file d'attente | > 4 | ≤ 1 | 🔴 Critique
+Débit utilisateur moyen (THP) | < 4 Mbps | ≥ 10 Mbps | 🔴 Dégradé
+Lecture exécutive :
+La cellule fonctionne au-delà de sa capacité nominale. Les ressources radio (PRB usage) sont totalement consommées. Les utilisateurs subissent une forte dégradation de débit DL. La saturation est structurelle aux heures de pointe (BH).
+Exemple de cellules congestionnées :
+CellName | SectorName | Nb Cells | Congested Cells | L.Traffic.ActiveUser.DL.Avg | FT_AVE 4G/LTE DL USER THRPUT without Last TTI | FT_PHYSICAL RESOURCE BLOCKS LOAD DL | FT_4G/LTE AVERAGE REPORTED CQI
+AAA_h2 | AAA_sect2 | 4 | 4 | 73,90 | 1062,34 | 99,63 | 8,44
+BBB_h3 | BBB_sect3 | 4 | 3 | 51,13 | 1687,92 | 95,58 | 9,61
+ZZZ_h1 | ZZZ_sect1 | 4 | 3 | 51,04 | 1572,34 | 99,89 | 9,79
+SSS_h2 | SSS_sect2 | 3 | 2 | 46,11 | 794,33 | 99,67 | 7,00
+
+Slide 3
+Modélisation trafic – Interprétation
+Temps / Capacité / > 90% utilisé / Fils d'attente clients en BH
+Relation directe observée : Charge élevée ⟶ Files d'attente ⟶ Baisse du Débit
+Conclusion décisionnelle : La modélisation du trafic confirme une saturation critique de la cellule 4G, impactant directement l'expérience client. Un renforcement capacitaire est nécessaire pour rétablir des niveaux de performance acceptables et absorber la demande.
+Actions recommandées :
+
+Déploiement d'un site radio capacitaire
+Ajout de capacité (nouvelle cellule / secteur / bande)
+
+
+Slide 4
+Graphes : Charge réseau avant et après ajout du site capacitaire
+Un nouveau site radio capacitaire est une infrastructure radio ajoutée dans une zone déjà couverte afin de désaturer le réseau, absorber un trafic élevé et améliorer la qualité de service (débit, latence, stabilité).
+Objectifs :
+
+Gérer la forte densité d'utilisateurs
+Réduire la congestion des cellules existantes
+Améliorer les débits utilisateurs (DL/UL)
+Maintenir les KPIs (QoS, QoE) aux heures de pointe (BH)
+
+Site capacitaire
+
+Slide 5
+Constat : Cellules existantes saturées / Dégradation des débits / Risque de coupures et mauvaise QoE
+Résultat : Répartition du trafic entre les sites / Baisse du taux de charge par cellule / Amélioration des débits et de la stabilité réseau
+Bénéfices : Augmentation de la capacité réseau / Désaturation des sites voisins / Amélioration durable de la QoS / QoE / Préparation aux usages 4G+ / 5G
+Conclusion : Le déploiement d'un site radio capacitaire constitue une réponse efficace et pérenne à la saturation réseau. Il permet d'augmenter significativement la capacité, d'améliorer la qualité de service et de sécuriser les performances réseau à moyen et long terme.
+
+Slide 6
+Plan d'action : Down tilt de la cellule congestionnée
+Résultat :
+
+Diminution de la portée de cellule
+Amélioration de PRB usage
+Amélioration de Débit DL
+Amélioration de la qualité de service
+
+Réclamation : [section présente, sans contenu textuel supplémentaire]
+
+Slide 7
+Action : extension d'une nouvelle bande 4G (LTE 800) sur le secteur congestionné
+Résultat :
+
+Amélioration de Débit DL
+Amélioration de la qualité de service
+
+
+Slide 8
+Action : Equilibrage de charge entre les bandes 4G sur le secteur congestionné
+On note un déséquilibre de charge entre les différents bandes du même secteur qui comporte une cellule A congestionnée.
+Résultat :
+
+Décongestion de la cellule A
+Amélioration de Débit DL de la cellule A
+Amélioration de la qualité de service
+
+
+Slide 9
+Autres exemples d'actions
+Secteur | Nbre RRC connected users | Dl User thrpt (Kb/s) | Commentaires
+AAA_0060_sect3 | 215,85 | 934,26 | Ajout 4ème secteur
+BBB_0068_sect1 | 72,25 | 696,04 | Ajout extension L1800
+BBB_0068_sect3 | 96,09 | 802,12 | Ajout extension L1800
+BBB_0127_sect2 | 46,86 | 970,98 | Ajout extension L1800
+BBB_0148_sect2 | 58,44 | 777,31 | Ajout extension L1800
+GGG_0063_sect3 | 44,01 | 992,36 | Up tilt site en face (40 ==> 20)
+GGG_0071_sect3 | 90,68 | 763,01 | Down Tilt 20 ==> 40
+JJJ_0057_sect2 | 71,39 | 751,14 | Ajout extension L1800
+JJJ_sect2 | 55,65 | 817,55 | Down Tilt
+JJJ_0073_sect3 | 46,09 | 964,30 | Ajout extension L1800
+
+Slide 10
+Modélisation du manque à gagner
+Exemple – Cellule AAA congestionnée. Hypothèses initiales : PRB actuel : 90,42 % (> 90%) / THP moyen : 1,78 Mbps (< 4 Mbps) / File d'attente : 6 UE > 4 / Perte actuelle estimée : 50 UE / 120 GB/mois
+Actions | Métriques observées | Effet attendu | Taux récupération (%) | Gain estimé (UE / GB)
+Tilt / Ajustement puissance | PRB 90,42%, THP 1,78 Mbps | Amélioration couverture | 15 % | 8 UE / 18 GB
+Ajout secteur | PRB 90,42%, THP 1,78 Mbps | Capacité totale x1.8 | 85 % | 43 UE / 102 GB
+Ajout site | PRB 90,42%, THP 1,78 Mbps | Réduction UE par cellule, nouvelle capacité additionnelle | 90 % | 45 UE / 108 GB
+Équilibrage / Rebalancing charge | PRB 90,42%, file d'attente 6 UE | Déplacer 20 UE vers cellules voisines | 40 % | 20 UE / 48 GB
+Action sur secteurs voisins | PRB voisins < 70 % | Redistribution PRB | 35 % | 17 UE / 42 GB
+Ajout de bande (carrier) | PRB 90,42%, THP 1,78 Mbps | Carrier additionnel 10 MHz → capacité +50 % | 50 % | 25 UE / 60 GB
+
+Slide 11
+Perte actuelle = ce qui n'est pas servi actuellement (UE ou GB). Taux de récupération = calculé en fonction de l'effet attendu sur la capacité réelle (PRB, THP, file d'attente). Gain estimé = Perte × Taux récupération.
+Actions | Effet sur capacité | Comment estimer le gain
+Tilt / Puissance | Meilleure couverture | Amélioration THP de ~10–20 % → gain sur certains UE
+Ajout secteur / antenne | Capacité totale × 1.5–2 | Peut servir presque toute la file d'attente → gain élevé
+Ajout site | Redistribution UE et capacité additionnelle | Taux récupération proche de 80–90 % si site bien placé
+Équilibrage / Rebalancing | Déplacement UE vers cellules voisines | Gain = nombre UE déplacés / nombre UE en file d'attente
+Actions sur secteurs voisins | Optimisation interference / PRB | Gain limité, dépend de PRB libre sur voisins
+Ajout de bande | Plus de RB → débit par UE augmente | Gain = proportionnel à l'augmentation de PRB ou du carrier
+Chaque type d'action agit différemment sur les ressources.
+Priorisation :
+
+Court terme : Tilt / puissance, rebalancing, actions sur voisins
+Moyen terme : Ajout de bande
+Long terme / forte capacité : Ajout secteur ou nouveau site
+
+
+Slide 12
+Merci

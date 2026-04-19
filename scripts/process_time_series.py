@@ -15,6 +15,7 @@ import json
 import os
 import sys
 import argparse
+import re
 from datetime import datetime
 from typing import List, Dict, Any
 import warnings
@@ -83,6 +84,100 @@ def load_data(file_paths: List[str]) -> pd.DataFrame:
     return combined
 
 
+def _float_from_text(text: str) -> float | None:
+    try:
+        value = float(text)
+    except (TypeError, ValueError):
+        return None
+    if not np.isfinite(value):
+        return None
+    return float(value)
+
+
+def _in_range(value: float, min_value: float | None, max_value: float | None) -> bool:
+    if min_value is not None and value < min_value:
+        return False
+    if max_value is not None and value > max_value:
+        return False
+    return True
+
+
+def _numeric_candidates(raw: Any) -> List[float]:
+    if raw is None:
+        return []
+
+    if isinstance(raw, (int, float, np.integer, np.floating)):
+        value = float(raw)
+        return [value] if np.isfinite(value) else []
+
+    text = str(raw).strip()
+    if not text:
+        return []
+
+    lowered = text.lower()
+    if lowered in {'nan', 'none', 'null'}:
+        return []
+
+    text = text.replace('\u00a0', '').replace(' ', '').replace('\u2212', '-')
+    text = re.sub(r'[^0-9,\.\-+eE]', '', text)
+    if not text:
+        return []
+
+    variants: List[str] = []
+
+    if ',' in text and '.' in text:
+        # Handle locale combinations like 1.234,56 and 1,234.56
+        if text.rfind(',') > text.rfind('.'):
+            variants.append(text.replace('.', '').replace(',', '.'))
+        else:
+            variants.append(text.replace(',', ''))
+    elif ',' in text:
+        decimal_variant = text.replace(',', '.')
+        thousands_variant = text.replace(',', '')
+
+        comma_parts = text.split(',')
+        is_grouped_thousands = (
+            len(comma_parts) > 1
+            and all(len(part) == 3 for part in comma_parts[1:])
+            and re.fullmatch(r'[+-]?\d+', comma_parts[0] or '0') is not None
+        )
+
+        # Prefer grouped-thousands interpretation only when the pattern clearly matches.
+        if is_grouped_thousands:
+            variants.extend([thousands_variant, decimal_variant])
+        else:
+            variants.extend([decimal_variant, thousands_variant])
+    else:
+        variants.append(text)
+
+    out: List[float] = []
+    for variant in variants:
+        value = _float_from_text(variant)
+        if value is None:
+            continue
+        if not any(abs(existing - value) < 1e-12 for existing in out):
+            out.append(value)
+    return out
+
+
+def parse_numeric(
+    raw: Any,
+    default: float | None = None,
+    min_value: float | None = None,
+    max_value: float | None = None,
+) -> float | None:
+    """Parse numeric values robustly, including decimal-comma formats."""
+    candidates = _numeric_candidates(raw)
+    if not candidates:
+        return default
+
+    for value in candidates:
+        if _in_range(value, min_value, max_value):
+            return value
+
+    return default if default is not None else candidates[0]
+
+
 def analyze_cell(row: pd.Series) -> Dict:
     """
     Analyze a single cell observation using Orange DRS standards.
@@ -99,10 +194,10 @@ def analyze_cell(row: pd.Series) -> Dict:
     active_users = row.get('l_traffic_activeuser_dl_avg')
     
     # Normalize values
-    load = float(load) if pd.notna(load) else 0
-    throughput = float(throughput) if pd.notna(throughput) else 10000
-    cqi = float(cqi) if pd.notna(cqi) else 10
-    active_users = float(active_users) if pd.notna(active_users) else 0
+    load = parse_numeric(load, default=0, min_value=0, max_value=100) or 0
+    throughput = parse_numeric(throughput, default=10000, min_value=0) or 10000
+    cqi = parse_numeric(cqi, default=10, min_value=0, max_value=15) or 10
+    active_users = parse_numeric(active_users, default=0, min_value=0) or 0
     
     # Calculate severity score (0-100) based on Orange criteria
     severity = 0
@@ -237,6 +332,55 @@ def process_time_series_data(
     # Clean data
     print("\n🧹 PHASE 2: Cleaning data...")
     print("-" * 50)
+
+    # Some KPI files do not include geometry/static columns on every row.
+    # Backfill missing static metadata by cell_name from rows that do have it.
+    if 'cell_name' in df.columns:
+        df['cell_name'] = df['cell_name'].astype(str).str.strip()
+        geo_seed = df.dropna(subset=['longitude_sector', 'latitude_sector']).copy()
+        if not geo_seed.empty:
+            geo_seed = geo_seed.drop_duplicates(subset=['cell_name'], keep='first')
+            seed_lookup = geo_seed.set_index('cell_name')
+            for static_col in [
+                'longitude_sector',
+                'latitude_sector',
+                'azimuth',
+                'frequency_band',
+                'localcell_id',
+                'enodeb_name',
+            ]:
+                if static_col in df.columns and static_col in seed_lookup.columns:
+                    df[static_col] = df[static_col].where(
+                        df[static_col].notna(),
+                        df['cell_name'].map(seed_lookup[static_col])
+                    )
+
+    # Normalize potentially locale-formatted numeric fields before filtering.
+    numeric_specs = {
+        'longitude_sector': (-180, 180),
+        'latitude_sector': (-90, 90),
+        'azimuth': (0, 360),
+        'frequency_band': (None, None),
+        'localcell_id': (None, None),
+        'ft_physical_resource_blocks_load_dl': (0, 100),
+        'ft_ave_4g_lte_dl_user_thrput_without_last_tti_all___kbps__kbit_': (0, None),
+        'ft_4g_lte_average_reported_cqi': (0, 15),
+        'l_traffic_activeuser_dl_avg': (0, None),
+        'ft_average_nb_of_users__ues_rrc_connected': (0, None),
+        'ot_average_ta': (0, None),
+        'referencesignalpwr': (None, None),
+    }
+    for numeric_col, (min_value, max_value) in numeric_specs.items():
+        if numeric_col in df.columns:
+            df[numeric_col] = df[numeric_col].apply(
+                lambda value: parse_numeric(
+                    value,
+                    default=np.nan,
+                    min_value=min_value,
+                    max_value=max_value,
+                )
+            )
+
     df = df.dropna(subset=['longitude_sector', 'latitude_sector'])
     df = df[(df['longitude_sector'].between(-180, 180)) & (df['latitude_sector'].between(-90, 90))]
     print(f"  → Valid records: {len(df):,}")
@@ -244,7 +388,25 @@ def process_time_series_data(
     # Parse timestamps
     print("\n⏰ PHASE 3: Analyzing time structure...")
     print("-" * 50)
-    df['date'] = df['date'].astype(str).str.strip()
+    raw_date = df['date'].astype(str).str.strip()
+    if 'time' in df.columns:
+        raw_time = df['time'].astype(str).str.strip()
+        date_has_time = raw_date.str.contains(r'\d{1,2}:\d{2}', regex=True, na=False)
+        raw_date = raw_date.where(date_has_time, (raw_date + ' ' + raw_time).str.strip())
+
+    raw_date = raw_date.str.replace(r'\s+', ' ', regex=True).str.strip()
+    parsed_ts = pd.to_datetime(raw_date, format='%d-%m-%Y %H:%M', errors='coerce')
+    missing_time_mask = parsed_ts.isna()
+    if missing_time_mask.any():
+        parsed_ts.loc[missing_time_mask] = pd.to_datetime(
+            raw_date.loc[missing_time_mask],
+            format='%d-%m-%Y',
+            errors='coerce'
+        )
+
+    df = df.loc[parsed_ts.notna()].copy()
+    parsed_ts = parsed_ts.loc[parsed_ts.notna()]
+    df['date'] = parsed_ts.dt.strftime('%d-%m-%Y %H:%M')
     
     # Get unique timestamps
     timestamps = sorted(
@@ -320,17 +482,28 @@ def process_time_series_data(
             load = row.get('ft_physical_resource_blocks_load_dl')
             throughput = row.get('ft_ave_4g_lte_dl_user_thrput_without_last_tti_all___kbps__kbit_')
             cqi = row.get('ft_4g_lte_average_reported_cqi')
-            traffic = row.get('l_traffic_activeuser_dl_avg')
+            active_users_raw = row.get('l_traffic_activeuser_dl_avg')
+            rrc_users_raw = row.get('ft_average_nb_of_users__ues_rrc_connected')
             ta = row.get('ot_average_ta')
             signal = row.get('referencesignalpwr')
+
+            load_value = parse_numeric(load, default=None, min_value=0, max_value=100)
+            throughput_value = parse_numeric(throughput, default=None, min_value=0)
+            cqi_value = parse_numeric(cqi, default=None, min_value=0, max_value=15)
+            active_users_value = parse_numeric(active_users_raw, default=None, min_value=0)
+            rrc_users_value = parse_numeric(rrc_users_raw, default=None, min_value=0)
+            ta_value = parse_numeric(ta, default=None, min_value=0)
+            signal_value = parse_numeric(signal, default=None)
             
             observation = {
-                'load': float(load) if pd.notna(load) else None,
-                'throughput': float(throughput) if pd.notna(throughput) else None,
-                'cqi': float(cqi) if pd.notna(cqi) else None,
-                'traffic': float(traffic) if pd.notna(traffic) else None,
-                'ta': float(ta) if pd.notna(ta) else None,
-                'signal_power': float(signal) if pd.notna(signal) else None,
+                'load': load_value,
+                'throughput': throughput_value,
+                'cqi': cqi_value,
+                'active_users': active_users_value,
+                'rrc_users': rrc_users_value,
+                'traffic': active_users_value,
+                'ta': ta_value,
+                'signal_power': signal_value,
                 'congested': analysis['congested'],
                 'severity': analysis['severity'],
                 'issue_type': analysis['issue_type'],
@@ -346,14 +519,14 @@ def process_time_series_data(
             if analysis['congested']:
                 congested_count += 1
             
-            if pd.notna(load):
-                total_load += load
+            if load_value is not None:
+                total_load += load_value
                 load_count += 1
-            if pd.notna(throughput):
-                total_throughput += throughput
+            if throughput_value is not None:
+                total_throughput += throughput_value
                 throughput_count += 1
-            if pd.notna(cqi):
-                total_cqi += cqi
+            if cqi_value is not None:
+                total_cqi += cqi_value
                 cqi_count += 1
             total_health += analysis['health_score']
         

@@ -142,6 +142,13 @@ def check_3_model_prediction_sanity(results: list[dict], state: dict) -> None:
     check_name = "CHECK 3 — Model prediction sanity"
     try:
         val_df = pd.read_parquet(ROOT_DIR / "val_predictions.parquet")
+        
+        # Convert to datetime to match features_df regardless of string type
+        try:
+            val_df["DATE_ID"] = pd.to_datetime(val_df["DATE_ID"]).dt.tz_localize(None)
+        except Exception:
+            pass
+            
         state["val_df"] = val_df
 
         required_val_cols = {"CELLNAME", "DATE_ID", "y_true_prb", "y_pred_prb"}

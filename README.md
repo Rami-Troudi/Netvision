@@ -1,134 +1,75 @@
 # NetVision Digital Twin (Next.js)
 
-Real-time radio network monitoring, analytics, and action simulation for Orange NOC teams.
+Real-time radio network monitoring, KPI analytics, rule-based congestion recommendations, and action simulation for Orange NOC teams.
 
 ## Stack
-- **Next.js (pages router)** with MapLibre GL + Chart.js UI
-- **Python** time-series processing + trained forecaster pipeline
-- **Simulation**: fast estimator only (ns-3/precise mode removed)
+- Next.js (pages router) frontend with MapLibre GL + Chart.js
+- Python FastAPI backend for rule-based recommendations (`backend/api.py`)
+- Python simulation engine (`simulation/simulator.py`)
+- BullMQ + Redis queue for async simulation jobs only
 
-## Quickstart
-```bash
-npm install
-npm run dev        # http://localhost:3000
-npm run worker     # BullMQ worker (requires Redis)
-# Python deps
-python -m pip install -r requirements.txt
-# Data (recommended, parquet time-series pipeline)
-python scripts/process_time_series.py \
-  --input cleaned_data.csv data_set_radio_1.csv \
-  --output runtime_data
+## Current Architecture
+- No forecasting pipeline: no model training scripts, no forecast endpoint, no forecast jobs, and no forecast timeline controls.
+- Recommendations are deterministic and threshold-based, with busy-hour profiling and neighbor scoring.
+- Import flow can push uploaded KPI context to the backend (`/api/recommend-context`) so recommendations run on imported data.
+- CSV export is UTF-8, comma separated, and normalized for downstream tools.
 
-# Train production forecast model on full history
-python scripts/train_forecast_model.py --history-limit 0
+## Quickstart (Windows)
+1. Install dependencies:
+   ```bash
+   npm install
+   python -m pip install -r requirements.txt
+   ```
+2. Build runtime data (recommended):
+   ```bash
+   python scripts/process_time_series.py --input data/data_set_radio_1.csv --output runtime_data
+   ```
+3. Start full local stack with one command:
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File .\\start.ps1
+   ```
 
-# Generate 1-day forecast
-python scripts/forecast_hf.py --days 1
-```
+## Manual Run
+- Frontend: `npm run dev` (http://localhost:3000)
+- Worker: `npm run worker`
+- Backend: `python run_backend.py`
+- Production build: `npm run build` then `npm start`
 
-## Data Pipelines
-- **Time-series (recommended)**: `scripts/process_time_series.py`
-  - Outputs: `runtime_data/baseline.json`, `runtime_data/time_index.json`, `runtime_data/stats.json`, `runtime_data/time_data/*.parquet`
-  - Powers the time slider, alerts, and analytics in `src/main.js`
-- **Forecast model training (production)**: `scripts/train_forecast_model.py`
-  - Inputs: `runtime_data/baseline.json`, `runtime_data/time_index.json`, `runtime_data/time_data/*.parquet`
-  - Outputs: `models/forecast_model.pkl`
-  - This model is used by `scripts/forecast_hf.py` for forecast generation and by `backend/api.py` for `/predict` decisions.
-- **Decision artifacts (backend inputs)**:
-  - Location: `runtime_data/model_assets/`
-  - Files: `features_meta.json`, `features_with_score.parquet`, `cell_congestion_profile.parquet`, `all_cell_recommendations.*`, `thresholds.json`, `val_predictions.parquet`
-- **Forecast generation**: `scripts/forecast_hf.py`
-  - Default mode uses `models/forecast_model.pkl`
-  - Predicts active cells by weekday/hour slot to avoid inflated congestion counts
-- **Leakage-safe walk-forward validation**: `run_cross_val.py`
-  - Example: `python run_cross_val.py`
-  - Last measured accuracy (1 - WAPE): `86.6%`
+## API Surface
+### Next.js API routes
+- `POST /api/recommend`
+- `POST /api/recommend-context`
+- `POST /api/simulate`
+- `POST /api/jobs` (simulation jobs only)
+- `GET /api/jobs/:id`
+- `GET /api/data/*` (path-restricted static runtime data)
 
-## Running
-- Dev: `npm run dev` → http://localhost:3000
-- Worker: `npm run worker` (needs Redis, default `redis://127.0.0.1:6379`)
-- Prod build: `npm run build` then `npm start`
-
-## API
-- `POST /api/simulate` supports actions: `tilt`, `add_carrier`, `redistribute` (fast mode only)
-- `time_entry.filename` must exist in `time_index.json` (whitelisted at the API layer)
-- Heavy routes (`/api/simulate`, `/api/forecast`, `/api/data/*`) require auth token via `Authorization: Bearer <token>`
-- Data contract rule: storage/processing uses Parquet, API responses remain JSON for browser consumption
-- Queue API (Phase 4):
-  - `POST /api/jobs` → enqueue simulation/forecast work, returns `{ jobId }`
-  - `GET /api/jobs/:id` → poll status/result (`pending | running | done | failed`)
-  - Legacy synchronous `/api/simulate` and `/api/forecast` are kept as fallback routes
+### Python backend routes
+- `GET /health`
+- `GET /cells`
+- `POST /predict`
+- `POST /context/upload`
+- `DELETE /context/reset`
+- `GET /recommendations/summary`
+- `GET /recommendations/export`
+- `GET /cell/{cellname}/history`
 
 ## Project Structure (key paths)
-```
-pages/           # Next.js pages (index, api/simulate, site-planning)
-public/          # static frontend assets only
-backend/         # api.py, action_engine.py, validate_pipeline.py
-scripts/         # process_time_series.py, forecast_hf.py
-                # train_forecast_model.py
+```text
+pages/           # Next.js pages (index, api/*)
+public/          # static assets + browser worker
+backend/         # rule engine API + helpers
+scripts/         # time-series processing pipeline
 runtime_data/    # baseline/index/slices + model_assets
 simulation/      # simulator.py (fast estimator)
-src/             # main.js (UI logic), style.css
+workers/         # BullMQ worker (simulation only)
+src/             # frontend app logic + styles
 ```
 
-## Notes & Hygiene
-- Large generated data files should live outside git; see .gitignore updates.
-- `ENGINEERING_RECOMMENDATIONS.md` holds architecture notes—link here instead of leaving it orphaned.
-- Zero-byte placeholders in the repo root (`Add`, `InstallEnbDevice`, etc.) are legacy artifacts; safe to remove if unused.
-- No ns-3 bridge files are shipped; precise mode is intentionally removed.
+## Notes
+- Heavy routes require auth token unless `AUTH_BYPASS=true` is set for local use.
+- `start.ps1` starts Redis (Docker), backend, worker, and frontend for local testing.
+- Keep generated runtime artifacts out of git when working with large datasets.
 
-## Performance Tips
-- Prefer time-series pipeline outputs; they are pre-shaped for the UI.
-- For large datasets, consider moving feature-building to a Web Worker (see comments in `src/main.js`).
-
-## Links
-- Architecture notes: [ENGINEERING_RECOMMENDATIONS.md](ENGINEERING_RECOMMENDATIONS.md)
-
-## Next Steps
-1. Add a scheduled retraining job (daily/weekly) for `models/forecast_model.pkl`.
-2. Add alert thresholds for forecast-vs-actual drift by hour and by site.
-3. Version forecast artifacts (`forecast_model_YYYYMMDD.pkl`) and keep rollback support.
-
-## Latest Validation Snapshot
-- Date run: 2026-04-10
-- Command: `python run_cross_val.py`
-- Model: `models/forecast_model.pkl`
-- Result: `86.6%` walk-forward accuracy (`1 - WAPE`)
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/AmazingFeature`
-3. Commit changes: `git commit -m 'Add AmazingFeature'`
-4. Push to branch: `git push origin feature/AmazingFeature`
-5. Open a Pull Request
-
-## 📝 Version History
-
-### v1.0.0 (2025-12-22)
-- ✨ Initial production release
-- 🎨 Modern responsive UI with theme support
-- 🚀 GPU-accelerated rendering with MapLibre GL
-- 📊 Advanced analytics dashboard
-- ⚡ Performance optimizations for large datasets
-- 🔍 Enhanced search and filtering
-- 📤 Export functionality
-
-## 📄 License
-
-MIT License - See LICENSE file for details
-
-## 🙏 Acknowledgments
-
-- **Orange Tunisie** - Network data provider
-- **MapLibre GL** - Open-source mapping library
-- **Vite** - Next-generation build tool
-- **Chart.js** - Simple yet flexible charting
-
-## 📧 Contact
-
-For questions or support, please open an issue on GitHub.
-
----
-
-**Built with ❤️ for Orange Digital Center - Tunisia Summer Youth Program**
+## License
+MIT License - See LICENSE file for details.

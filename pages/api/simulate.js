@@ -8,14 +8,9 @@ const ALLOWED_ACTIONS = new Set([
   'tilt',
   'add_carrier',
   'redistribute',
-  'power',
-  'parameter_tuning',
-  'neighbor_optimization',
-  'mimo_upgrade',
-  'small_cell',
+  'new_site',
   'add_sector',
-  'add_site',
-  'split_cell'
+  'add_site'
 ])
 const ALLOWED_MODES = new Set(['fast']) // fast is the only supported mode
 
@@ -129,11 +124,6 @@ export default async function handler(req, res) {
 
   if (!cellName || !action) {
     return res.status(400).json({ error: 'Missing cell_name or action' })
-  }
-
-  // Keep site deployment separate from per-cell remediation actions
-  if (action === 'new_site') {
-    return res.status(400).json({ error: 'Deploy new site is handled in the site planning tool, not inline actions' })
   }
 
   const projectRoot = process.cwd()

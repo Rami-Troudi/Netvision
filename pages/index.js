@@ -12,7 +12,6 @@ const pageMarkup = `
                 <span class="header-subtitle">NOC Live Operations Console</span>
             </div>
             <div class="header-center">
-                <div class="timestamp" id="timestamp"></div>
             </div>
             <div class="header-right">
                 <button class="btn-icon" id="btn-theme" title="Toggle Theme (T)">
@@ -49,7 +48,6 @@ const pageMarkup = `
                 <div class="time-slider-wrapper">
                     <div class="slider-track" id="slider-track">
                         <div class="track-historical" id="track-historical"></div>
-                        <div class="track-forecast" id="track-forecast"></div>
                     </div>
                     <input type="range" id="time-slider" class="time-slider" min="0" max="100" value="0">
                     <div class="time-slider-labels">
@@ -66,18 +64,6 @@ const pageMarkup = `
                 <button class="time-play-btn" id="time-play" title="Play/Pause (Space)">
                     <span class="material-symbols-outlined">play_arrow</span>
                 </button>
-                
-                <div class="forecast-controls">
-                    <input type="number" id="forecast-days" class="forecast-days-input" min="1" max="30" value="7" title="Days to forecast">
-                    <button class="generate-btn" id="btn-generate-forecast" title="Generate forecast">
-                        <span class="material-symbols-outlined">model_training</span>
-                        Generate Forecast
-                    </button>
-                    <button class="btn-secondary" id="btn-clear-forecast" title="Clear generated forecasts">
-                        <span class="material-symbols-outlined">delete</span>
-                        Clear
-                    </button>
-                </div>
             </div>
         </div>
 
@@ -183,28 +169,6 @@ const pageMarkup = `
                     </div>
                 </div>
 
-                <div class="panel drift-panel">
-                    <h3 class="panel-title">
-                        <span class="material-symbols-outlined">monitoring</span>
-                        Forecast Drift Alerts
-                        <span class="alert-badge" id="drift-alert-count">0</span>
-                    </h3>
-                    <div class="drift-thresholds">
-                        <label>Abs Delta
-                            <input type="number" id="drift-threshold-abs" min="1" step="1" value="15" />
-                        </label>
-                        <label>Pct Delta
-                            <input type="number" id="drift-threshold-pct" min="1" step="1" value="30" />
-                        </label>
-                        <button class="btn-secondary" id="btn-refresh-drift">
-                            <span class="material-symbols-outlined">sync</span>
-                            Refresh
-                        </button>
-                    </div>
-                    <div class="alerts-list" id="drift-alerts-list">
-                        <div class="alert-placeholder">Loading drift alerts...</div>
-                    </div>
-                </div>
             </aside>
 
             <!-- Map Container -->
@@ -346,19 +310,14 @@ const pageMarkup = `
                             <option value="">-- Select an action --</option>
                             <optgroup label="Short-Term (OPEX)">
                                 <option value="tilt">Tilt Adjustment</option>
-                                <option value="power">Power Adjustment</option>
-                                <option value="redistribute">MLB Redistribution</option>
-                                <option value="parameter_tuning">Radio Parameter Tuning</option>
+                                <option value="redistribute">Load Rebalancing</option>
                             </optgroup>
                             <optgroup label="Mid-Term">
-                                <option value="add_carrier">Carrier Activation (CA)</option>
-                                <option value="mimo_upgrade">MIMO Upgrade</option>
-                                <option value="small_cell">Small Cell / Micro Cell</option>
+                                <option value="add_carrier">Carrier Extension</option>
                             </optgroup>
                             <optgroup label="Long-Term (CAPEX)">
-                                <option value="add_sector">Add 4th Sector</option>
-                                <option value="add_site">New Macro Site</option>
-                                <option value="split_cell">Cell Split</option>
+                                <option value="add_sector">Add Sector</option>
+                                <option value="add_site">Add Capacitary Site</option>
                             </optgroup>
                         </select>
                     </div>
@@ -368,6 +327,29 @@ const pageMarkup = `
                         Run Simulation
                     </button>
                     <div class="action-result" id="action-result"></div>
+                </div>
+
+                <div class="panel site-planning-panel" id="site-planning-panel">
+                    <h3 class="panel-title">
+                        <span class="material-symbols-outlined">add_location_alt</span>
+                        Site Planning
+                    </h3>
+                    <div class="action-field">
+                        <label>Selected cell</label>
+                        <div class="site-planning-selected-cell" id="site-planning-selected-cell">Select a cell on the map to run site planning.</div>
+                    </div>
+                    <div class="action-field">
+                        <label for="site-planning-site-type">Planned Site Type</label>
+                        <select id="site-planning-site-type" class="action-input">
+                            <option value="macro">Macro capacitary site</option>
+                            <option value="rooftop">Urban rooftop site</option>
+                        </select>
+                    </div>
+                    <button class="btn-primary action-run" id="site-planning-run">
+                        <span class="material-symbols-outlined">play_arrow</span>
+                        Run Simulation
+                    </button>
+                    <div class="action-result" id="site-planning-result"></div>
                 </div>
                 
                 <div class="panel">

@@ -11,7 +11,7 @@ import uvicorn
 ROOT_DIR = Path(__file__).resolve().parent
 BACKEND_DIR = ROOT_DIR / "backend"
 MODEL_ASSETS_DIR = ROOT_DIR / "runtime_data" / "model_assets"
-CRITICAL_FILES = [BACKEND_DIR / "api.py", MODEL_ASSETS_DIR / "features_meta.json"]
+CRITICAL_FILES = [BACKEND_DIR / "api.py"]
 VALIDATION_SCRIPT = BACKEND_DIR / "validate_pipeline.py"
 VALIDATION_REPORT = ROOT_DIR / "runtime_data" / "validation_report.txt"
 READY_STATUS = "Overall pipeline status: READY FOR USE"
@@ -84,8 +84,9 @@ def main() -> int:
     if args.validate and not run_validation():
         return 1
 
-    print("Launching FastAPI on http://0.0.0.0:8000 (reload=True)")
-    uvicorn.run("backend.api:app", host="0.0.0.0", port=8000, reload=True)
+    print("Launching FastAPI on http://0.0.0.0:8000 (reload=False)")
+    # In production, auto-reload must remain disabled for stability and predictable process behavior.
+    uvicorn.run("backend.api:app", host="0.0.0.0", port=8000, reload=False)
     return 0
 
 

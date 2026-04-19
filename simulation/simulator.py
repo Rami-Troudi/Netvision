@@ -59,11 +59,22 @@ BAND_PARAMETERS = {
 }
 
 DEFAULT_BAND_PARAMS = {"name": "Unknown", "bw_mhz": 10, "max_prb": 50, "path_loss_exp": 3.5, "capacity_mbps": 100}
+
+ORANGE_RECOVERY_RATES = {
+    "tilt": 0.15,
+    "redistribute": 0.40,
+    "add_carrier": 0.50,
+    "add_sector": 0.85,
+    "add_site": 0.90,
+    "new_site": 0.90,
+}
+
 OBSERVATION_FIELDS = [
     "load",
     "throughput",
     "cqi",
     "traffic",
+    "active_users",
     "ta",
     "signal_power",
     "congested",
@@ -94,6 +105,10 @@ def clamp_load(load: float) -> float:
 
 def clamp_throughput(tp: float) -> float:
     return max(PHYSICAL_LIMITS["THROUGHPUT_MIN_KBPS"], tp) if tp else 0
+
+
+def clamp_active_users(users: float) -> float:
+    return max(0.0, float(users)) if users is not None else 0.0
 
 
 def clamp_sinr(sinr: float) -> float:
@@ -367,7 +382,7 @@ def apply_add_carrier(state: Dict[str, float], params: Dict[str, Any], baseline_
     
     try:
         new_band = int(new_band)
-    except:
+    except (TypeError, ValueError):
         new_band = 7
     
     # Physical model for carrier aggregation
@@ -471,9 +486,73 @@ def apply_redistribute(state: Dict[str, float], params: Dict[str, Any], baseline
     }, affected, confidence
 
 
-def apply_new_site(state: Dict[str, float]) -> Dict[str, float]:
-    """DEPRECATED: Handled by separate site planning tool"""
-    raise ValueError("Deploy new site is handled in the site planning tool, not inline actions")
+def apply_new_site(state: Dict[str, float], params: Dict[str, Any]) -> Tuple[Dict[str, float], List[Dict[str, Any]], float]:
+    """
+    Deploy a capacitary site and offload the serving cell.
+
+    This model keeps calculations fast while exposing concrete KPI deltas for
+    PRB load, throughput, and active users.
+    """
+    load = state["load"]
+    throughput = state["throughput"]
+    cqi = state["cqi"]
+    active_users = clamp_active_users(state.get("active_users", state.get("traffic", 0.0)))
+
+    site_type = str(params.get("siteType") or params.get("site_type") or "macro").strip().lower()
+    recovery_rate = ORANGE_RECOVERY_RATES["add_site"]
+
+    offloaded_load = load * recovery_rate
+    offloaded_users = active_users * recovery_rate
+    new_load = clamp_load(load - offloaded_load)
+    new_active_users = clamp_active_users(active_users - offloaded_users)
+
+    # Throughput improves proportionally to recovered capacity envelope.
+    throughput_gain = throughput * recovery_rate
+    new_throughput = clamp_throughput(throughput + throughput_gain)
+    new_cqi = clamp_cqi(cqi + 1.2)
+
+    affected = [{
+        "name": "planned_site",
+        "type": site_type,
+        "load_change": round(offloaded_load, 2),
+        "active_users_change": round(offloaded_users, 2),
+    }]
+
+    return {
+        "load": new_load,
+        "cqi": new_cqi,
+        "throughput": new_throughput,
+        "traffic": new_active_users,
+        "active_users": new_active_users,
+    }, affected, 0.82
+
+
+def apply_recovery_envelope(before_state: Dict[str, float], after_state: Dict[str, float], recovery_rate: float) -> Dict[str, float]:
+    """
+    Normalize action output to Orange deck recovery rates.
+    This keeps deterministic recovery behavior across supported actions.
+    """
+    rr = max(0.0, min(1.0, float(recovery_rate)))
+
+    before_load = clamp_load(before_state.get("load", 0.0))
+    before_throughput = clamp_throughput(before_state.get("throughput", 0.0))
+    before_users = clamp_active_users(before_state.get("active_users", before_state.get("traffic", 0.0)))
+
+    target_load = clamp_load(before_load * (1.0 - rr))
+    target_throughput = clamp_throughput(before_throughput * (1.0 + rr))
+    target_users = clamp_active_users(before_users * (1.0 - rr))
+
+    normalized = dict(after_state)
+    normalized["load"] = min(clamp_load(after_state.get("load", before_load)), target_load)
+    normalized["throughput"] = max(clamp_throughput(after_state.get("throughput", before_throughput)), target_throughput)
+
+    if "active_users" in normalized or "traffic" in normalized:
+        users_after = clamp_active_users(after_state.get("active_users", after_state.get("traffic", before_users)))
+        users_after = min(users_after, target_users)
+        normalized["active_users"] = users_after
+        normalized["traffic"] = users_after
+
+    return normalized
 
 
 # ============================================================================
@@ -530,14 +609,19 @@ def build_state(baseline: Dict[str, Any], observations: Dict[str, Any], cell_nam
     throughput = obs.get("throughput")
     cqi = obs.get("cqi")
     traffic = obs.get("traffic")
+    active_users = obs.get("active_users")
     ta = obs.get("ta")
     signal_power = obs.get("signal_power")
+
+    active_users_val = active_users if active_users is not None else traffic
+    active_users_fmt = clamp_active_users(float(active_users_val)) if active_users_val is not None else 0.0
 
     return {
         "load": clamp_load(float(load)) if load is not None else 0.0,
         "throughput": clamp_throughput(float(throughput)) if throughput is not None else 0.0,
         "cqi": clamp_cqi(float(cqi)) if cqi is not None else 10.0,
-        "traffic": max(0, float(traffic)) if traffic is not None else 0.0,
+        "traffic": active_users_fmt,
+        "active_users": active_users_fmt,
         "ta": clamp(float(ta), PHYSICAL_LIMITS["TA_MIN"], PHYSICAL_LIMITS["TA_MAX"]) if ta is not None else 0.0,
         "signal_power": clamp(float(signal_power), 100, 200) if signal_power is not None else 170.0,
     }
@@ -548,6 +632,7 @@ def format_state(raw: Dict[str, float], band: int = 3) -> Dict[str, Union[float,
     load = clamp_load(raw.get("load", 0.0))
     cqi = clamp_cqi(raw.get("cqi", 10.0))
     throughput = clamp_throughput(raw.get("throughput", 0.0))
+    active_users = clamp_active_users(raw.get("active_users", raw.get("traffic", 0.0)))
     
     # Validate throughput against theoretical maximum for CQI
     max_theoretical = estimate_throughput_from_cqi(cqi, band, load)
@@ -559,6 +644,7 @@ def format_state(raw: Dict[str, float], band: int = 3) -> Dict[str, Union[float,
         "load": round(load, 2),
         "cqi": round(cqi, 2),
         "throughput": round(throughput, 2),
+        "active_users": round(active_users, 2),
         "health_score": round(health, 2),
         "issue_type": classify_issue(load, cqi),
     }
@@ -603,20 +689,10 @@ def simulate_action(base_dir: Path, cell_name: str, action: str, params: Dict[st
     if load < 50 and cqi > 10 and action in ["tilt", "add_carrier", "redistribute"]:
         healthy_cell_warning = "Cell is healthy - simulation still applied for testing purposes"
 
-    # Generic recovery profiles for actions not explicitly modeled
-    generic_recovery = {
-        "power": 0.20,
-        "parameter_tuning": 0.25,
-        "neighbor_optimization": 0.35,
-        "mimo_upgrade": 0.35,
-        "small_cell": 0.45,
-        "add_sector": 0.85,
-        "add_site": 0.90,
-        "split_cell": 0.70,
-    }
-
     if action == "tilt":
         after_raw, affected, confidence = apply_tilt_scenario(before_state, params, cell_info)
+        recovery_rate = ORANGE_RECOVERY_RATES["tilt"]
+        after_raw = apply_recovery_envelope(before_state, after_raw, recovery_rate)
         
         delta = params.get("degrees", 0)
         if delta > 0:
@@ -626,6 +702,8 @@ def simulate_action(base_dir: Path, cell_name: str, action: str, params: Dict[st
             
     elif action == "add_carrier":
         after_raw, confidence = apply_add_carrier(before_state, params, cell_info)
+        recovery_rate = ORANGE_RECOVERY_RATES["add_carrier"]
+        after_raw = apply_recovery_envelope(before_state, after_raw, recovery_rate)
         affected = []
         new_band = params.get("band", 7)
         recommendation = f"Add Band {new_band} carrier for capacity offload (CA enabled)"
@@ -634,29 +712,26 @@ def simulate_action(base_dir: Path, cell_name: str, action: str, params: Dict[st
         after_raw, affected, confidence = apply_redistribute(
             before_state, params, baseline, observations
         )
+        recovery_rate = ORANGE_RECOVERY_RATES["redistribute"]
+        after_raw = apply_recovery_envelope(before_state, after_raw, recovery_rate)
         target = params.get("target", "neighbors")
         recommendation = f"MLB handover bias to {target} to balance load"
+
+    elif action == "add_sector":
+        after_raw, affected, confidence = apply_new_site(before_state, {**params, "siteType": "sector"})
+        recovery_rate = ORANGE_RECOVERY_RATES["add_sector"]
+        after_raw = apply_recovery_envelope(before_state, after_raw, recovery_rate)
+        recommendation = "Add sector to increase structural capacity envelope"
         
-    elif action == "new_site":
-        raise ValueError("Deploy new site is handled in the site planning tool")
-        
-    elif action in generic_recovery:
-        # Apply simplified effect using recovery rate to reduce load and improve throughput
-        rec = generic_recovery[action]
-        after_raw = before_state.copy()
-        load_reduction = before_state["load"] * rec
-        after_raw["load"] = clamp(before_state["load"] - load_reduction, 0, 100)
-        throughput_gain = before_state["throughput"] * rec
-        after_raw["throughput"] = before_state["throughput"] + throughput_gain
-        after_raw["cqi"] = clamp(before_state["cqi"] + rec * 3, 0, 15)
-        affected = []
-        confidence = 0.55
-        recommendation = f"Applied {action} with estimated recovery of {int(rec * 100)}%"
-    
+    elif action in {"new_site", "add_site"}:
+        after_raw, affected, confidence = apply_new_site(before_state, params)
+        recovery_rate = ORANGE_RECOVERY_RATES["add_site"]
+        after_raw = apply_recovery_envelope(before_state, after_raw, recovery_rate)
+        site_type = str(params.get("siteType") or params.get("site_type") or "macro").strip().lower()
+        recommendation = f"Deploy {site_type} capacitary site to offload demand from {cell_name}"
+
     else:
-        after_raw = before_state.copy()
-        recommendation = "No action applied"
-        confidence = 0.3
+        raise ValueError(f"Unsupported action for simulator: {action}")
 
     before_fmt = format_state(before_state, band)
     after_fmt = format_state(after_raw, band)
@@ -664,6 +739,7 @@ def simulate_action(base_dir: Path, cell_name: str, action: str, params: Dict[st
     impact = {
         "load_change": round(after_fmt["load"] - before_fmt["load"], 2),
         "throughput_change": round(after_fmt["throughput"] - before_fmt["throughput"], 2),
+        "active_users_change": round(after_fmt["active_users"] - before_fmt["active_users"], 2),
         "cqi_change": round(after_fmt["cqi"] - before_fmt["cqi"], 2),
         "affected_cells": affected,
     }
@@ -672,6 +748,7 @@ def simulate_action(base_dir: Path, cell_name: str, action: str, params: Dict[st
         "cell": cell_name,
         "action": action,
         "timestamp": timestamp,
+        "recovery_rate": int(round(ORANGE_RECOVERY_RATES.get(action, ORANGE_RECOVERY_RATES.get("add_site", 0.0)) * 100)),
         "before": before_fmt,
         "after": after_fmt,
         "impact": impact,
@@ -699,7 +776,7 @@ def simulate_action(base_dir: Path, cell_name: str, action: str, params: Dict[st
 def main() -> None:
     parser = argparse.ArgumentParser(description="NetVision Action Simulator")
     parser.add_argument("--cell", required=True, help="Cell name")
-    parser.add_argument("--action", required=True, help="Action type: tilt|add_carrier|redistribute|new_site")
+    parser.add_argument("--action", required=True, help="Action type: tilt|add_carrier|redistribute|add_sector|new_site|add_site")
     parser.add_argument("--params", default="{}", help="JSON string of parameters")
     parser.add_argument("--time-file", default=None, help="Time-slice filename (from runtime_data/time_data)")
     parser.add_argument("--mode", default="fast", choices=["fast"], help="Simulation mode (fast only; ns-3 removed)")

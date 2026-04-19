@@ -19,16 +19,6 @@ def to_float(value: Any, default: float = 0.0) -> float:
     return out
 
 
-def to_bool(value: Any) -> bool:
-    if isinstance(value, bool):
-        return value
-    if value is None or pd.isna(value):
-        return False
-    if isinstance(value, str):
-        return value.strip().lower() in {"1", "true", "t", "yes", "y"}
-    return bool(value)
-
-
 def normalize_band(value: Any) -> str:
     if value is None or pd.isna(value):
         return ""

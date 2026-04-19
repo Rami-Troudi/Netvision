@@ -717,6 +717,8 @@ function buildFeaturesForTime() {
                 throughput: null,
                 cqi: null,
                 has_low_cqi: false,
+                active_users: null,
+                rrc_users: null,
                 traffic: null,
                 traffic_loss_ue: 0,
                 traffic_loss_gb: 0,
@@ -731,8 +733,7 @@ function buildFeaturesForTime() {
                 band,
                 azimuth,
                 localcell_id: baseInfo.localcell_id,
-                duplex: baseInfo.cell_fdd_tdd_indication || 'FDD',
-                is_forecast: false
+                duplex: baseInfo.cell_fdd_tdd_indication || 'FDD'
             },
             geometry: { type: 'Point', coordinates: center }
         });
@@ -759,8 +760,7 @@ function buildFeaturesForTime() {
                 arc_steps: CONFIG.SECTOR_ARC_STEPS_DEFAULT,
                 dynamic_radius_supported: true,
                 severity: 0,
-                issue_type: 'Normal',
-                is_forecast: false
+                issue_type: 'Normal'
             },
             geometry: { type: 'Polygon', coordinates: geometry }
         });
@@ -850,18 +850,14 @@ function applyWorkerFeatureUpdates(featureUpdates = []) {
         pointFeature.properties.throughput = update.throughput;
         pointFeature.properties.cqi = update.cqi;
         pointFeature.properties.has_low_cqi = update.has_low_cqi;
+        pointFeature.properties.active_users = update.active_users;
+        pointFeature.properties.rrc_users = update.rrc_users;
         pointFeature.properties.traffic = update.traffic;
         pointFeature.properties.traffic_loss_ue = update.traffic_loss_ue ?? 0;
         pointFeature.properties.traffic_loss_gb = update.traffic_loss_gb ?? 0;
         pointFeature.properties.ta = update.ta;
         pointFeature.properties.dynamic_radius_supported = update.dynamic_radius_supported !== false;
         pointFeature.properties.signal_power = update.signal_power;
-        pointFeature.properties.is_forecast = update.is_forecast;
-        if (update.confidence !== null && update.confidence !== undefined) {
-            pointFeature.properties.confidence = update.confidence;
-        } else {
-            delete pointFeature.properties.confidence;
-        }
 
         sectorFeature.properties.status = update.status;
         sectorFeature.properties.color = update.color;
@@ -873,12 +869,6 @@ function applyWorkerFeatureUpdates(featureUpdates = []) {
         sectorFeature.properties.severity = update.severity;
         sectorFeature.properties.issue_type = update.issue_type;
         sectorFeature.properties.dynamic_radius_supported = update.dynamic_radius_supported !== false;
-        sectorFeature.properties.is_forecast = update.is_forecast;
-        if (update.confidence !== null && update.confidence !== undefined) {
-            sectorFeature.properties.confidence = update.confidence;
-        } else {
-            delete sectorFeature.properties.confidence;
-        }
     }
 
     applyPeakAndDriftMetadataToFeatures();
@@ -886,7 +876,7 @@ function applyWorkerFeatureUpdates(featureUpdates = []) {
     state.needsSectorGeometrySync = true;
 }
 
-async function updateFeaturesForTime(observations = {}, options = {}) {
+async function updateFeaturesForTime(observations = {}) {
     const cellNames = state.pointFeatures.map((feature) => feature?.properties?.cell_name || '');
     const updates = await callDataWorker(
         'buildFeatureUpdates',
@@ -895,8 +885,6 @@ async function updateFeaturesForTime(observations = {}, options = {}) {
             observations,
             cqiThreshold: CONFIG.CQI_THRESHOLD,
             colors: CONFIG.COLORS,
-            isForecast: options?.isForecast || false,
-            confidence: options?.confidence ?? null,
         },
         45000
     );
@@ -937,7 +925,7 @@ function performSearch(term) {
     Object.keys(state.siteHierarchy).forEach(site => {
         if (site.toLowerCase().includes(q)) results.push({ type: 'site', name: site });
     });
-    const limited = results.slice(0, 20);
+    const limited = results;
     resEl.innerHTML = '';
     const fragment = document.createDocumentFragment();
     limited.forEach((r) => {
@@ -1121,31 +1109,20 @@ function hideSiteInfoPanel() {
 // --- Backend Recommendation Engine ---
 
 const BACKEND_ACTION_TO_SIM_ACTION = Object.freeze({
-    'Équilibrage MLB': 'redistribute',
-    'Ajustement Tilt': 'tilt',
-    'Ajustement Puissance': 'power',
-    'Activation carrier (CA)': 'add_carrier',
-    'Tuning paramètres radio': 'parameter_tuning',
-    'Upgrade MIMO': 'mimo_upgrade',
-    'Small Cell / Micro': 'small_cell',
-    'Ajout 4ème secteur': 'add_sector',
-    'Nouveau site macro': 'add_site',
-    'Cell Split': 'split_cell',
-    'Aucune action requise': null,
-    'Data too stale for decision': null,
+    'Load Rebalancing': 'redistribute',
+    'Tilt Adjustment': 'tilt',
+    'Carrier Extension': 'add_carrier',
+    'Add Sector': 'add_sector',
+    'Add Site': 'add_site',
+    'No Action Required': null,
 });
 
 const ACTION_UI_METADATA = Object.freeze({
-    tilt: { name: 'Ajustement Tilt', timeline: 'court_terme', recoveryRate: 15, capex: false, effect: 'Optimisation couverture et interférences' },
-    power: { name: 'Ajustement Puissance', timeline: 'court_terme', recoveryRate: 20, capex: false, effect: 'Réduction interférence et empreinte radio' },
-    redistribute: { name: 'Équilibrage MLB', timeline: 'court_terme', recoveryRate: 40, capex: false, effect: 'Déplacement charge vers voisins moins chargés' },
-    parameter_tuning: { name: 'Tuning paramètres radio', timeline: 'court_terme', recoveryRate: 25, capex: false, effect: 'Ajustement paramètres handover/scheduler' },
-    add_carrier: { name: 'Activation carrier (CA)', timeline: 'moyen_terme', recoveryRate: 50, capex: true, effect: 'Ajout capacité spectrale' },
-    mimo_upgrade: { name: 'Upgrade MIMO', timeline: 'moyen_terme', recoveryRate: 35, capex: true, effect: 'Amélioration efficacité spectrale' },
-    small_cell: { name: 'Small Cell / Micro', timeline: 'moyen_terme', recoveryRate: 45, capex: true, effect: 'Décharge locale hotspot' },
-    add_sector: { name: 'Ajout 4ème secteur', timeline: 'long_terme', recoveryRate: 85, capex: true, effect: 'Augmentation capacité sectorielle' },
-    add_site: { name: 'Nouveau site macro', timeline: 'long_terme', recoveryRate: 90, capex: true, effect: 'Nouvelle capacité de zone' },
-    split_cell: { name: 'Cell Split', timeline: 'long_terme', recoveryRate: 70, capex: true, effect: 'Subdivision cellule haute charge' },
+    tilt: { name: 'Tilt Adjustment', timeline: 'court_terme', recoveryRate: 15, capex: false, effect: 'Improve radio footprint and interference profile' },
+    redistribute: { name: 'Load Rebalancing', timeline: 'court_terme', recoveryRate: 40, capex: false, effect: 'Move load to lower-PRB neighbors' },
+    add_carrier: { name: 'Carrier Extension', timeline: 'moyen_terme', recoveryRate: 50, capex: true, effect: 'Extend capacity with additional band resources' },
+    add_sector: { name: 'Add Sector', timeline: 'long_terme', recoveryRate: 85, capex: true, effect: 'Increase site sector capacity' },
+    add_site: { name: 'Add Site', timeline: 'long_terme', recoveryRate: 90, capex: true, effect: 'Deploy capacitary site for structural relief' },
 });
 
 const TIER_TO_UI = Object.freeze({
@@ -1157,6 +1134,10 @@ const TIER_TO_UI = Object.freeze({
 
 let recommendationRequestSeq = 0;
 const recommendationCache = new Map();
+let hasLoggedExportActionShape = false;
+const RECOMMEND_CONTEXT_MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
+const RECOMMEND_CONTEXT_MAX_SLICES = 250;
+const RECOMMEND_CONTEXT_MAX_BASELINE_CELLS = 1000;
 
 function toRecoveryPercent(rawValue, fallbackValue = 0) {
     const parsed = Number(rawValue);
@@ -1172,6 +1153,71 @@ function confidenceToPercent(confidence) {
     if (normalized === 'medium') return 65;
     if (normalized === 'low') return 45;
     return 50;
+}
+
+function toFiniteNumberOrNull(value) {
+    if (value === null || value === undefined) return null;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+}
+
+function getCustomSessionObservation(cellName) {
+    if (!state.customDataset.active) return null;
+
+    const currentIndex = Number.isInteger(state.currentTimeIndex) ? state.currentTimeIndex : 0;
+    const currentSlice = state.customDataset?.slices?.[currentIndex] || null;
+    const sliceObservation = currentSlice?.observations?.[cellName];
+    if (sliceObservation && typeof sliceObservation === 'object' && !Array.isArray(sliceObservation)) {
+        return sliceObservation;
+    }
+
+    const fallbackObservation = state.currentObservations?.[cellName];
+    if (fallbackObservation && typeof fallbackObservation === 'object' && !Array.isArray(fallbackObservation)) {
+        return fallbackObservation;
+    }
+
+    return null;
+}
+
+function buildRecommendRequestBody(cellName) {
+    const requestBody = { cell_name: cellName };
+    const currentObservation = getCustomSessionObservation(cellName);
+    const currentTimeEntry = state.timeIndex[state.currentTimeIndex] || null;
+
+    if (currentTimeEntry?.timestamp) {
+        requestBody.timestamp = String(currentTimeEntry.timestamp);
+    }
+
+    if (!currentObservation) {
+        return requestBody;
+    }
+
+    const prbLoad = toFiniteNumberOrNull(currentObservation?.load);
+    const throughput = toFiniteNumberOrNull(currentObservation?.throughput);
+    const activeUsers = toFiniteNumberOrNull(
+        currentObservation?.active_users
+        ?? currentObservation?.l_traffic_activeuser_dl_avg
+        ?? currentObservation?.traffic
+    );
+    const rrcUsers = toFiniteNumberOrNull(
+        currentObservation?.rrc_users
+        ?? currentObservation?.ft_average_nb_of_users__ues_rrc_connected
+    );
+    const cqi = toFiniteNumberOrNull(currentObservation?.cqi);
+
+    if (prbLoad !== null) requestBody.prb_load = prbLoad;
+    if (throughput !== null) requestBody.throughput = throughput;
+    if (activeUsers !== null) requestBody.active_users = activeUsers;
+    if (rrcUsers !== null) requestBody.rrc_users = rrcUsers;
+    if (cqi !== null) requestBody.cqi = cqi;
+
+    return requestBody;
+}
+
+function getRecommendationCacheKey(cellName) {
+    const currentIndex = Number.isInteger(state.currentTimeIndex) ? state.currentTimeIndex : 0;
+    const mode = state.customDataset.active ? 'custom' : 'runtime';
+    return `${cellName}::${mode}::${currentIndex}`;
 }
 
 function getSuggestedCarrierBand(cellName) {
@@ -1196,20 +1242,10 @@ function getRecommendationDefaultParams(simAction, cellName) {
             return { ratio: 0.2 };
         case 'add_carrier':
             return { band: getSuggestedCarrierBand(cellName) };
-        case 'power':
-            return { reduction: 3 };
-        case 'parameter_tuning':
-            return { cio: -3, hysteresis: 2 };
-        case 'mimo_upgrade':
-            return { targetMimo: '4T4R' };
-        case 'small_cell':
-            return { type: 'micro' };
         case 'add_sector':
             return { targetSectors: 4 };
         case 'add_site':
             return { siteType: 'macro' };
-        case 'split_cell':
-            return { newCellCount: 2 };
         default:
             return {};
     }
@@ -1219,10 +1255,22 @@ function mapBackendRecommendation(payload, recommendation, cellName, idx) {
     const actionLabel = String(recommendation?.action || '').trim();
     const simAction = BACKEND_ACTION_TO_SIM_ACTION[actionLabel] ?? null;
     const actionMeta = simAction ? ACTION_UI_METADATA[simAction] : null;
+    const currentLossUeRaw = Number(payload?.current_loss?.ue ?? payload?.current_kpis?.traffic_loss_ue ?? 0);
+    const currentLossGbRaw = Number(payload?.current_loss?.gb ?? payload?.current_kpis?.traffic_loss_gb ?? 0);
+    const currentLossUe = Number.isFinite(currentLossUeRaw) ? Math.max(0, Math.round(currentLossUeRaw)) : 0;
+    const currentLossGb = Number.isFinite(currentLossGbRaw) ? Number(Math.max(0, currentLossGbRaw).toFixed(1)) : 0;
     const recoveryPct = toRecoveryPercent(
-        recommendation?.estimated_recovery_pct,
+        recommendation?.recovery_rate ?? recommendation?.estimated_recovery_pct,
         actionMeta?.recoveryRate || 0
     );
+    const gainUeRaw = Number(recommendation?.gain_ue);
+    const gainGbRaw = Number(recommendation?.gain_gb);
+    const gainUe = Number.isFinite(gainUeRaw)
+        ? Math.max(0, Math.round(gainUeRaw))
+        : Math.round(currentLossUe * (recoveryPct / 100));
+    const gainGb = Number.isFinite(gainGbRaw)
+        ? Number(Math.max(0, gainGbRaw).toFixed(1))
+        : Number((currentLossGb * (recoveryPct / 100)).toFixed(1));
 
     return {
         id: `${cellName}-${idx}-${simAction || 'none'}`,
@@ -1236,6 +1284,10 @@ function mapBackendRecommendation(payload, recommendation, cellName, idx) {
         timeline: String(recommendation?.tier || actionMeta?.timeline || 'none'),
         recoveryRate: recoveryPct,
         estimatedRecoveryPct: recoveryPct,
+        currentLossUe,
+        currentLossGb,
+        gainUe,
+        gainGb,
         priorityRank: Number.parseInt(recommendation?.priority_rank, 10) || idx + 1,
         currentMetrics: payload?.current_kpis || {},
         predictedMetrics: payload?.predicted_next_hour || {},
@@ -1247,7 +1299,7 @@ async function fetchBackendDecision(cellName) {
     const response = await fetchWithAuth('/api/recommend', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cell_name: cellName }),
+        body: JSON.stringify(buildRecommendRequestBody(cellName)),
     });
 
     let payload = null;
@@ -1269,6 +1321,100 @@ async function fetchBackendDecision(cellName) {
     return payload;
 }
 
+function buildRecommendationContextPayload() {
+    const baseline = state.baseline || {};
+    const slices = Array.isArray(state.customDataset?.slices) ? state.customDataset.slices : [];
+
+    const compactSlices = slices.map((slice) => {
+        const observations = slice?.observations && typeof slice.observations === 'object'
+            ? slice.observations
+            : {};
+        const compactObservations = {};
+
+        Object.entries(observations).forEach(([cellName, obs]) => {
+            if (!obs || typeof obs !== 'object') return;
+            compactObservations[cellName] = {
+                load: obs.load ?? null,
+                throughput: obs.throughput ?? null,
+                active_users: obs.active_users ?? obs.l_traffic_activeuser_dl_avg ?? obs.traffic ?? null,
+                rrc_users: obs.rrc_users ?? obs.ft_average_nb_of_users__ues_rrc_connected ?? null,
+                cqi: obs.cqi ?? null,
+            };
+        });
+
+        return {
+            timestamp: slice?.timestamp || '',
+            observations: compactObservations,
+        };
+    });
+
+    return {
+        source: state.customDataset?.active ? 'uploaded-session' : 'runtime',
+        baseline,
+        slices: compactSlices,
+    };
+}
+
+async function syncRecommendationContextToBackend() {
+    if (!state.customDataset.active) return;
+
+    const sliceCount = Array.isArray(state.customDataset?.slices) ? state.customDataset.slices.length : 0;
+    const baselineCellCount = Object.keys(state.baseline || {}).length;
+    if (sliceCount > RECOMMEND_CONTEXT_MAX_SLICES || baselineCellCount > RECOMMEND_CONTEXT_MAX_BASELINE_CELLS) {
+        console.warn('Skipping recommendation context sync for large imported session.', {
+            sliceCount,
+            baselineCellCount,
+            maxSlices: RECOMMEND_CONTEXT_MAX_SLICES,
+            maxBaselineCells: RECOMMEND_CONTEXT_MAX_BASELINE_CELLS,
+        });
+        showNotification('Imported session loaded. Recommendation backend sync skipped for large dataset.', 'info');
+        return;
+    }
+
+    try {
+        const payload = buildRecommendationContextPayload();
+        const encodedPayload = JSON.stringify(payload);
+        const payloadBytes = new TextEncoder().encode(encodedPayload).length;
+
+        if (payloadBytes > RECOMMEND_CONTEXT_MAX_UPLOAD_BYTES) {
+            console.warn('Skipping recommendation context sync because payload is too large.', {
+                payloadBytes,
+                maxBytes: RECOMMEND_CONTEXT_MAX_UPLOAD_BYTES,
+            });
+            showNotification(
+                'Imported session loaded. Recommendation backend sync skipped for large dataset.',
+                'info'
+            );
+            return;
+        }
+
+        const response = await fetchWithAuth('/api/recommend-context', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: encodedPayload,
+        });
+
+        if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
+            throw new Error(data?.detail || data?.error || `recommend-context upload failed (${response.status})`);
+        }
+    } catch (err) {
+        console.warn('Could not sync recommendation context:', err);
+        showNotification('Recommendation context sync failed; using fallback backend dataset.', 'warning');
+    }
+}
+
+async function resetRecommendationContextToRuntime() {
+    try {
+        await fetchWithAuth('/api/recommend-context', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+        });
+    } catch (err) {
+        console.warn('Could not reset recommendation context:', err);
+    }
+}
+
 async function renderRecommendationsPanel(cellName) {
     const container = document.getElementById('reco-list');
     const badge = document.getElementById('reco-count');
@@ -1285,8 +1431,9 @@ async function renderRecommendationsPanel(cellName) {
     container.innerHTML = '<div class="reco-placeholder">Chargement des recommandations backend…</div>';
 
     try {
-        const payload = recommendationCache.get(cellName) || await fetchBackendDecision(cellName);
-        recommendationCache.set(cellName, payload);
+        const cacheKey = getRecommendationCacheKey(cellName);
+        const payload = recommendationCache.get(cacheKey) || await fetchBackendDecision(cellName);
+        recommendationCache.set(cacheKey, payload);
 
         if (requestSeq !== recommendationRequestSeq) {
             return;
@@ -1311,6 +1458,18 @@ async function renderRecommendationsPanel(cellName) {
             const currentLoad = Number(recommendation.currentMetrics?.prb_load);
             const predictedLoad = Number(recommendation.predictedMetrics?.prb_load);
             const hasLoadDelta = Number.isFinite(currentLoad) && Number.isFinite(predictedLoad);
+            const currentLossUe = Number.isFinite(Number(recommendation.currentLossUe))
+                ? Math.max(0, Math.round(Number(recommendation.currentLossUe)))
+                : 0;
+            const currentLossGb = Number.isFinite(Number(recommendation.currentLossGb))
+                ? Number(Math.max(0, Number(recommendation.currentLossGb)).toFixed(1))
+                : 0;
+            const gainUe = Number.isFinite(Number(recommendation.gainUe))
+                ? Math.max(0, Math.round(Number(recommendation.gainUe)))
+                : 0;
+            const gainGb = Number.isFinite(Number(recommendation.gainGb))
+                ? Number(Math.max(0, Number(recommendation.gainGb)).toFixed(1))
+                : 0;
 
             const kpiSummary = hasLoadDelta
                 ? `<div class="reco-metric"><span class="reco-metric-label">PRB:</span><span class="reco-metric-value">${escapeHtml(currentLoad.toFixed(1))}% → ${escapeHtml(predictedLoad.toFixed(1))}%</span></div>`
@@ -1338,6 +1497,9 @@ async function renderRecommendationsPanel(cellName) {
                     <div class="reco-body">${escapeHtml(recommendation.reason)}</div>
                     <div class="reco-metrics">
                         ${kpiSummary}
+                        <div class="reco-metric"><span class="reco-metric-label">Perte actuelle:</span><span class="reco-metric-value">${escapeHtml(String(currentLossUe))} UE / ${escapeHtml(currentLossGb.toFixed(1))} GB</span></div>
+                        <div class="reco-metric"><span class="reco-metric-label">Taux récupération:</span><span class="reco-metric-value">${escapeHtml(String(recommendation.recoveryRate))}%</span></div>
+                        <div class="reco-metric"><span class="reco-metric-label">Gain estimé:</span><span class="reco-metric-value">${escapeHtml(String(gainUe))} UE / ${escapeHtml(gainGb.toFixed(1))} GB</span></div>
                         <div class="reco-metric"><span class="reco-metric-label">Confiance:</span><span class="reco-metric-value">${escapeHtml(recommendation.confidencePct)}%</span></div>
                     </div>
                     ${buttonHtml}
@@ -1421,8 +1583,155 @@ window.applyRecommendation = function(idx) {
     }, 100);
 };
 
+function getActiveUsersMetric(metrics = {}) {
+    const candidate = metrics.active_users ?? metrics.traffic;
+    const parsed = Number(candidate);
+    return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function renderSitePlanningPanel(cellName) {
+    const panel = document.getElementById('site-planning-panel');
+    const selectedCellEl = document.getElementById('site-planning-selected-cell');
+    const runBtn = document.getElementById('site-planning-run');
+    const resultEl = document.getElementById('site-planning-result');
+    if (!panel || !selectedCellEl || !runBtn || !resultEl) return;
+
+    if (!cellName) {
+        panel.classList.add('disabled');
+        runBtn.disabled = true;
+        selectedCellEl.textContent = 'Select a cell on the map to run site planning.';
+        resultEl.innerHTML = '<div class="action-hint">Choose a cell first, then run new site simulation.</div>';
+        return;
+    }
+
+    const obs = state.currentObservations[cellName] || {};
+    const load = Number(obs.load);
+    const throughput = Number(obs.throughput);
+    const activeUsers = getActiveUsersMetric(obs);
+
+    panel.classList.remove('disabled');
+    runBtn.disabled = false;
+    selectedCellEl.innerHTML = sanitizeRichHtml(`<strong>${escapeHtml(cellName)}</strong>`);
+
+    const loadText = Number.isFinite(load) ? `${formatNumber(load)}%` : 'N/A';
+    const throughputText = Number.isFinite(throughput) ? formatThroughput(throughput) : 'N/A';
+    const usersText = formatNumber(activeUsers, 2);
+    resultEl.innerHTML = sanitizeRichHtml(
+        `<div class="action-hint">Current snapshot → Load: ${loadText} | Throughput: ${throughputText} | Active users: ${usersText}</div>`
+    );
+}
+
+function displaySitePlanningResults(result) {
+    const container = document.getElementById('site-planning-result');
+    if (!container) return;
+
+    if (result.error) {
+        container.innerHTML = '<div class="action-error"></div>';
+        const errorEl = container.querySelector('.action-error');
+        if (errorEl) errorEl.textContent = result.error;
+        return;
+    }
+
+    const before = result.before || {};
+    const after = result.after || {};
+    const impact = result.impact || {};
+    const confidence = result.confidence ?? 0.75;
+    const confidencePct = Math.round(confidence * 100);
+    const beforeUsers = getActiveUsersMetric(before);
+    const afterUsers = getActiveUsersMetric(after);
+    const usersDelta = Number.isFinite(Number(impact.active_users_change))
+        ? Number(impact.active_users_change)
+        : afterUsers - beforeUsers;
+
+    const neighbors = (impact.affected_cells || []).map((n) => {
+        const delta = n.load_change ?? n.change ?? 0;
+        return { name: n.name || n.cell_name, delta };
+    }).sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta)).slice(0, 8);
+
+    const neighborsText = neighbors.length
+        ? `Affected: ${neighbors.map((c) => `${escapeHtml(c.name)} (${escapeHtml(formatNumber(c.delta))}%)`).join(', ')}`
+        : '';
+
+    container.innerHTML = sanitizeRichHtml(`
+        <div class="action-mode-badge">⚡ Fast (${confidencePct}% confidence)</div>
+        <div class="action-comparison">
+            <div>
+                <div class="action-label">Before</div>
+                <div>Load: ${formatNumber(before.load)}%</div>
+                <div>Throughput: ${formatThroughput(before.throughput || 0)}</div>
+                <div>Active users: ${formatNumber(beforeUsers, 2)}</div>
+            </div>
+            <div class="action-arrow">→</div>
+            <div>
+                <div class="action-label">After</div>
+                <div>Load: ${formatNumber(after.load)}%</div>
+                <div>Throughput: ${formatThroughput(after.throughput || 0)}</div>
+                <div>Active users: ${formatNumber(afterUsers, 2)}</div>
+            </div>
+        </div>
+        <div class="action-impact">
+            Load: ${impact.load_change >= 0 ? '+' : ''}${formatNumber(impact.load_change ?? 0, 2)}% |
+            Throughput: ${impact.throughput_change >= 0 ? '+' : ''}${formatNumber(impact.throughput_change ?? 0, 2)} kbps |
+            Active users: ${usersDelta >= 0 ? '+' : ''}${formatNumber(usersDelta, 2)}
+        </div>
+        <div class="action-reco">${escapeHtml(result.recommendation || '')}</div>
+        ${neighborsText ? `<div class="action-affected">${neighborsText}</div>` : ''}
+    `);
+}
+
+async function runSitePlanningSimulation(cellName) {
+    const resultEl = document.getElementById('site-planning-result');
+    const runBtn = document.getElementById('site-planning-run');
+    const siteTypeSelect = document.getElementById('site-planning-site-type');
+
+    if (!resultEl || !runBtn || !siteTypeSelect) return;
+    if (!cellName) {
+        resultEl.innerHTML = '<div class="action-error">Select a cell first.</div>';
+        return;
+    }
+
+    const siteType = String(siteTypeSelect.value || 'macro').trim();
+    const timeEntry = state.timeIndex[state.currentTimeIndex] || {};
+    const requestBody = {
+        cell_name: cellName,
+        action: 'new_site',
+        params: { siteType },
+        time_entry: timeEntry,
+        mode: 'fast',
+    };
+
+    try {
+        resultEl.innerHTML = '<div class="action-hint">⚡ Simulating new site...</div>';
+        runBtn.disabled = true;
+        runBtn.innerHTML = '<span class="material-symbols-outlined">hourglass_top</span> Running...';
+
+        const response = await fetch('/api/simulate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody),
+        });
+
+        const payload = await response.json().catch(() => null);
+        if (!response.ok || !payload || typeof payload !== 'object') {
+            throw new Error(payload?.error || 'Site planning simulation failed');
+        }
+        if (payload.error) {
+            throw new Error(payload.error);
+        }
+
+        displaySitePlanningResults(payload);
+    } catch (err) {
+        resultEl.innerHTML = `<div class="action-error">Simulation failed: ${escapeHtml(err.message)}</div>`;
+    } finally {
+        runBtn.disabled = false;
+        runBtn.innerHTML = '<span class="material-symbols-outlined">play_arrow</span> Run Simulation';
+    }
+}
+
 // --- Action Simulator ---
 function renderActionPanel(cellName) {
+    renderSitePlanningPanel(cellName);
+
     const panel = document.getElementById('action-panel');
     const select = document.getElementById('action-select');
     const runBtn = document.getElementById('action-run');
@@ -1960,29 +2269,327 @@ function exportJSON(filteredOnly = false) {
     downloadBlob('netvision-data.json', JSON.stringify(data, null, 2));
 }
 
-function exportCSV(filteredOnly = false) {
-    const rows = filteredOnly ? state.filteredPointFeatures : state.pointFeatures;
-    const header = ['cell_name','site_name','band','load','cqi','throughput','issue_type','severity','congested','peak_hour','peak_avg_prb','drift_abs_delta','drift_pct_delta'];
-    const lines = [header.join(',')];
-    rows.forEach(f => {
-        const p = f.properties;
-        lines.push([
-            p.cell_name,
-            p.site_name,
-            p.band,
-            p.load ?? '',
-            p.cqi ?? '',
-            p.throughput ?? '',
-            p.issue_type ?? '',
-            p.severity ?? '',
-            p.congested ? 'true' : 'false',
-            p.peak_hour ?? '',
-            p.peak_avg_prb ?? '',
-            p.drift_abs_delta ?? '',
-            p.drift_pct_delta ?? '',
-        ].join(','));
+function csvEscape(value) {
+    const text = value === null || value === undefined ? '' : String(value);
+    if (text.includes('"') || text.includes(',') || text.includes('\n') || text.includes('\r')) {
+        return `"${text.replace(/"/g, '""')}"`;
+    }
+    return text;
+}
+
+function toIsoDateStringFromDate(dateValue) {
+    if (!(dateValue instanceof Date) || Number.isNaN(dateValue.getTime())) {
+        return '';
+    }
+
+    // Build a UTC-only date from local parts to avoid timezone shifting the calendar day.
+    return new Date(Date.UTC(
+        dateValue.getFullYear(),
+        dateValue.getMonth(),
+        dateValue.getDate()
+    )).toISOString().slice(0, 10);
+}
+
+function timestampToExportDateHour(rawTimestamp) {
+    const parsed = parseTimestamp(rawTimestamp);
+    if (!(parsed instanceof Date) || Number.isNaN(parsed.getTime())) {
+        return { date: '', hour: '' };
+    }
+    const date = toIsoDateStringFromDate(parsed);
+    const hour = String(parsed.getHours()).padStart(2, '0');
+    return { date, hour };
+}
+
+function normalizeExportDateISO(value, fallback = '') {
+    const text = String(value || '').trim();
+    if (!text) return fallback;
+
+    let match = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (match) {
+        const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+        if (!Number.isNaN(date.getTime())) {
+            return date.toISOString().slice(0, 10);
+        }
+    }
+
+    match = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (match) {
+        const month = Math.max(1, Math.min(12, Number(match[1])));
+        const day = Math.max(1, Math.min(31, Number(match[2])));
+        const year = Number(match[3]);
+        const date = new Date(Date.UTC(year, month - 1, day));
+        if (!Number.isNaN(date.getTime())) {
+            return date.toISOString().slice(0, 10);
+        }
+    }
+
+    const parsed = parseTimestamp(text);
+    if (parsed instanceof Date && !Number.isNaN(parsed.getTime())) {
+        return toIsoDateStringFromDate(parsed);
+    }
+
+    const nativeParsed = new Date(text);
+    if (!Number.isNaN(nativeParsed.getTime())) {
+        return nativeParsed.toISOString().slice(0, 10);
+    }
+
+    return fallback;
+}
+
+function toFiniteNumberOrZero(value) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function extractActionNameForExport(action) {
+    if (!action || typeof action !== 'object') {
+        return '';
+    }
+    return String(action.action_name || action.action || action.name || '').trim();
+}
+
+function extractActionNameForRecoveryLookup(action) {
+    if (!action || typeof action !== 'object') {
+        return '';
+    }
+    return String(action.action_name || action.action || action.name || '').trim();
+}
+
+function normalizeRecommendationPayloadForExport(payload) {
+    if (!payload || typeof payload !== 'object') {
+        return null;
+    }
+    if (payload.recommendation && typeof payload.recommendation === 'object') {
+        return payload.recommendation;
+    }
+    if (payload.data && typeof payload.data === 'object') {
+        return payload.data;
+    }
+    return payload;
+}
+
+function normalizeRecommendedActionsForExport(payload) {
+    if (!payload || typeof payload !== 'object') {
+        return [];
+    }
+
+    const candidateCollections = [
+        payload.recommended_actions,
+        payload.recommendations,
+        payload.actions,
+    ];
+
+    const selectedCollection = candidateCollections.find(Array.isArray);
+    if (!Array.isArray(selectedCollection)) {
+        return [];
+    }
+
+    return selectedCollection
+        .map((entry) => {
+            if (!entry || typeof entry !== 'object') {
+                return null;
+            }
+
+            const actionObj =
+                entry.recommendation && typeof entry.recommendation === 'object'
+                    ? entry.recommendation
+                    : entry;
+
+            const actionName = String(
+                actionObj.action_name
+                || actionObj.action
+                || actionObj.name
+                || entry.action_name
+                || entry.action
+                || ''
+            ).trim();
+
+            const recoveryRate = actionObj.recovery_rate
+                ?? entry.recovery_rate
+                ?? actionObj.estimated_recovery_pct
+                ?? entry.estimated_recovery_pct
+                ?? null;
+
+            return {
+                ...actionObj,
+                action_name: actionName,
+                action: String(actionObj.action || actionName).trim(),
+                recovery_rate: recoveryRate,
+                estimated_recovery_pct: actionObj.estimated_recovery_pct ?? entry.estimated_recovery_pct ?? null,
+            };
+        })
+        .filter((entry) => entry && typeof entry === 'object');
+}
+
+function normalizeRecoveryRateRatioForExport(rawRate) {
+    const parsed = Number(rawRate);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+        return 0;
+    }
+    if (parsed <= 1) {
+        return Math.min(parsed, 1);
+    }
+    return Math.min(parsed / 100, 1);
+}
+
+const EXPORT_FALLBACK_RECOVERY_RATES = Object.freeze({
+    'Tilt Adjustment': 0.15,
+    'Carrier Extension': 0.50,
+    'Add Sector': 0.85,
+    'Add Site': 0.90,
+    'Load Rebalancing': 0.40,
+    // Backward compatibility with older backend labels.
+    'Ajustement Tilt': 0.15,
+    'Activation carrier (CA)': 0.50,
+    'Ajout 4ème secteur': 0.85,
+    'Nouveau site macro': 0.90,
+    'Équilibrage MLB': 0.40,
+});
+
+function getFallbackRecoveryRateRatioForExport(actionName) {
+    const normalizedName = String(actionName || '').trim();
+    const ratio = EXPORT_FALLBACK_RECOVERY_RATES[normalizedName];
+    return Number.isFinite(ratio) ? ratio : 0;
+}
+
+function deriveRecoveryRateRatioForExport(action, actionNameHint = '') {
+    let ratio = normalizeRecoveryRateRatioForExport(action?.recovery_rate);
+    if (ratio <= 0) {
+        ratio = normalizeRecoveryRateRatioForExport(action?.estimated_recovery_pct);
+    }
+    if (ratio <= 0) {
+        const lookupName = extractActionNameForRecoveryLookup(action) || actionNameHint;
+        ratio = getFallbackRecoveryRateRatioForExport(lookupName);
+    }
+    return ratio;
+}
+
+async function fetchRecommendationForExport(cellName) {
+    const cacheKey = getRecommendationCacheKey(cellName);
+    if (recommendationCache.has(cacheKey)) {
+        return recommendationCache.get(cacheKey);
+    }
+
+    try {
+        const payload = await fetchBackendDecision(cellName);
+        recommendationCache.set(cacheKey, payload);
+        return payload;
+    } catch {
+        return null;
+    }
+}
+
+async function fetchBulkRecommendationExportCsv(timestamp = '') {
+    const query = timestamp ? `?timestamp=${encodeURIComponent(timestamp)}` : '';
+    const response = await fetchWithAuth(`/api/recommendations-export${query}`, {
+        method: 'GET',
     });
-    downloadBlob('netvision-data.csv', lines.join('\n'), 'text/csv');
+
+    if (!response.ok) {
+        let detail = '';
+        try {
+            detail = await response.text();
+        } catch {
+            detail = '';
+        }
+        throw new Error(
+            `[exportCSV] Bulk recommendations export failed (${response.status})${detail ? `: ${detail.slice(0, 200)}` : ''}`
+        );
+    }
+
+    const csvText = await response.text();
+    if (!csvText || !csvText.includes('\n')) {
+        throw new Error('[exportCSV] Bulk recommendations export returned an empty/invalid CSV payload');
+    }
+
+    return csvText;
+}
+
+async function filterBulkRecommendationCsv(bulkCsv, allowedCellNames) {
+    if (!bulkCsv || !(allowedCellNames instanceof Set) || allowedCellNames.size === 0) {
+        throw new Error('[exportCSV] Invalid bulk CSV filtering inputs');
+    }
+
+    try {
+        const parsed = await callDataWorker(
+            'parseCsvPreview',
+            { csvText: bulkCsv, maxPreviewRows: 1 },
+            120000
+        );
+
+        const headers = Array.isArray(parsed?.headers) ? parsed.headers : [];
+        const allRows = Array.isArray(parsed?.allRows) ? parsed.allRows : [];
+        if (!headers.length || !allRows.length) {
+            throw new Error('[exportCSV] Bulk CSV parser returned no rows/headers');
+        }
+
+        const filteredRows = allRows.filter((row) => {
+            const cellName = String(row?.cell_name || '').trim();
+            return Boolean(cellName) && allowedCellNames.has(cellName);
+        });
+
+        if (!filteredRows.length) {
+            throw new Error('[exportCSV] Filtered export produced zero rows');
+        }
+
+        const lines = [headers.join(',')];
+        filteredRows.forEach((row) => {
+            const values = headers.map((header) => csvEscape(row?.[header] ?? ''));
+            lines.push(values.join(','));
+        });
+
+        return lines.join('\n');
+    } catch (err) {
+        throw new Error(`[exportCSV] Bulk CSV filtering failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+}
+
+async function exportCSV(filteredOnly = false) {
+    const rows = filteredOnly ? state.filteredPointFeatures : state.pointFeatures;
+    if (!rows.length) {
+        showNotification('No rows available for CSV export.', 'info');
+        return;
+    }
+
+    showNotification('Preparing CSV export...', 'info');
+
+    const activeTimestamp = state.timeIndex[state.currentTimeIndex]?.timestamp || '';
+    const rowCellNames = new Set(
+        rows
+            .map((feature) => String(feature?.properties?.cell_name || '').trim())
+            .filter(Boolean)
+    );
+
+    let bulkCsv;
+    try {
+        bulkCsv = await fetchBulkRecommendationExportCsv(activeTimestamp);
+    } catch (err) {
+        const detail = err instanceof Error ? err.message : String(err);
+        console.error('[exportCSV] Bulk export failed:', detail);
+        showNotification(
+            'CSV export failed — make sure the Python backend is running. ' + detail.slice(0, 120),
+            'error'
+        );
+        return;
+    }
+
+    try {
+        if (!filteredOnly) {
+            const bulkCsvContent = bulkCsv.startsWith('\uFEFF') ? bulkCsv : `\uFEFF${bulkCsv}`;
+            downloadBlob('netvision-analysis.csv', bulkCsvContent, 'text/csv;charset=utf-8');
+            showNotification('CSV export generated successfully.', 'success');
+            return;
+        }
+
+        const filteredCsv = await filterBulkRecommendationCsv(bulkCsv, rowCellNames);
+        const filteredCsvContent = filteredCsv.startsWith('\uFEFF') ? filteredCsv : `\uFEFF${filteredCsv}`;
+        downloadBlob('netvision-analysis.csv', filteredCsvContent, 'text/csv;charset=utf-8');
+        showNotification('CSV export generated successfully.', 'success');
+    } catch (err) {
+        const detail = err instanceof Error ? err.message : String(err);
+        console.error('[exportCSV] CSV filtering/download failed:', detail);
+        showNotification('CSV export failed: ' + detail.slice(0, 120), 'error');
+    }
 }
 
 function simpleReport() {
@@ -2240,6 +2847,7 @@ const IMPORT_FIELD_CONFIG = {
         { key: 'throughput', label: 'Throughput', required: false },
         { key: 'cqi', label: 'CQI', required: false },
         { key: 'active_users', label: 'Active Users', required: false },
+        { key: 'rrc_users', label: 'RRC Users', required: false },
         { key: 'ta', label: 'Timing Advance', required: false },
         { key: 'signal_power', label: 'Signal Power', required: false },
     ],
@@ -2253,6 +2861,7 @@ const IMPORT_FIELD_CONFIG = {
         { key: 'time', label: 'Time', required: false },
         { key: 'traffic', label: 'Traffic', required: false },
         { key: 'active_users', label: 'Active Users', required: false },
+        { key: 'rrc_users', label: 'RRC Users', required: false },
         { key: 'load', label: 'PRB Load', required: false },
         { key: 'throughput', label: 'Throughput', required: false },
         { key: 'cqi', label: 'CQI', required: false },
@@ -2313,8 +2922,6 @@ function createLiveDatasetSnapshot() {
         peakHoursByCell: deepClone(state.peakHoursByCell),
         driftByCell: deepClone(state.driftByCell),
         driftAlerts: deepClone(state.driftAlerts),
-        forecastIndex: deepClone(forecastState.forecastIndex),
-        forecastAvailable: Boolean(forecastState.available),
         capturedAt: new Date().toISOString(),
     };
 }
@@ -3501,9 +4108,6 @@ async function restoreLiveDatasetSession() {
     state.lastVisibleFilterSignature = null;
     state.lastCongestedCount = null;
 
-    forecastState.forecastIndex = deepClone(snapshot.forecastIndex || []);
-    forecastState.available = Boolean(snapshot.forecastAvailable);
-
     await buildSiteHierarchy();
 
     const frequencyBands = Array.from(new Set(
@@ -3534,8 +4138,6 @@ async function restoreLiveDatasetSession() {
     recommendationCache.clear();
 
     updateDriftAlertsUI();
-
-    await checkForecastAvailability();
     updateUnifiedTimeline();
 
     if (unifiedTimeline.totalCount > 0) {
@@ -3555,6 +4157,7 @@ async function restoreLiveDatasetSession() {
     importState.sessionMode = 'new';
     state.liveDatasetSnapshot = null;
     updateImportSessionUI();
+    await resetRecommendationContextToRuntime();
     return true;
 }
 
@@ -3665,9 +4268,6 @@ async function applyImportedDataset(datasetPayload, options = {}) {
     }
     recommendationCache.clear();
 
-    forecastState.forecastIndex = [];
-    forecastState.available = false;
-
     const frequencyBands = Array.from(new Set(
         Object.values(baseline)
             .map((cell) => Number(cell?.frequency_band))
@@ -3698,6 +4298,7 @@ async function applyImportedDataset(datasetPayload, options = {}) {
 
     updateDriftAlertsUI();
     updateUnifiedTimeline();
+    await syncRecommendationContextToBackend();
 
     const maxIndex = Math.max(0, unifiedTimeline.totalCount - 1);
     const targetIndex = Math.min(Math.max(0, state.currentTimeIndex), maxIndex);
@@ -3822,6 +4423,26 @@ function runCsvImport() {
 }
 
 async function confirmCsvImport() {
+    const stagedPayload = importState.pendingImportPayload;
+    const stagedOptions = importState.pendingImportOptions;
+    if (stagedPayload && stagedOptions) {
+        setImportBusyState(true);
+        try {
+            const applied = await applyImportedDataset(stagedPayload, stagedOptions);
+            if (!applied) {
+                return;
+            }
+            clearImportSession({ keepSelectedType: true, clearInput: true });
+            toggleModal('import-modal', false);
+        } catch (err) {
+            console.error('Failed to load staged import session:', err);
+            showNotification('Failed to load imported session.', 'error');
+        } finally {
+            setImportBusyState(false);
+        }
+        return;
+    }
+
     if (!importState.allRows.length) {
         showNotification('Upload a CSV file before importing', 'error');
         setImportSummaryVisible(false);
@@ -3856,18 +4477,6 @@ async function confirmCsvImport() {
     setImportBusyState(true);
 
     try {
-        const stagedPayload = importState.pendingImportPayload;
-        const stagedOptions = importState.pendingImportOptions;
-        if (stagedPayload && stagedOptions) {
-            const applied = await applyImportedDataset(stagedPayload, stagedOptions);
-            if (!applied) {
-                return;
-            }
-            clearImportSession({ keepSelectedType: true, clearInput: true });
-            toggleModal('import-modal', false);
-            return;
-        }
-
         const existingBaseline = getBaselineForImportSession(importState.selectedType, importState.sessionMode);
 
         const payload = await callDataWorker(
@@ -4057,71 +4666,30 @@ function setupImportModal() {
     updateImportSessionUI();
 }
 
-// --- Forecast Mode (Unified Timeline) ---
-const forecastState = {
-    forecastIndex: [],
-    isGenerating: false,
-    available: false
-};
-
-// Unified timeline state
+// --- Unified timeline state ---
 const unifiedTimeline = {
-    historicalCount: 0,
-    forecastCount: 0,
     totalCount: 0,
     currentIndex: 0,
-    dividerIndex: 0  // Where historical ends and forecast begins
 };
 let activeSliceAbortController = null;
 let activeSliceRequestId = 0;
 
-async function checkForecastAvailability() {
-    if (state.customDataset.active) {
-        forecastState.available = false;
-        forecastState.forecastIndex = [];
-        updateUnifiedTimeline();
-        return { available: false, reason: 'custom-dataset-active' };
-    }
-
-    try {
-        const res = await fetchWithAuth('/api/forecast');
-        const data = await res.json();
-        forecastState.available = data.available;
-        if (data.available && data.forecasts) {
-            forecastState.forecastIndex = data.forecasts;
-            updateUnifiedTimeline();
-        } else {
-            forecastState.forecastIndex = [];
-            updateUnifiedTimeline();
-        }
-        return data;
-    } catch (err) {
-        console.warn('Could not check forecast availability:', err);
-        forecastState.forecastIndex = [];
-        return { available: false };
-    }
-}
-
 function updateUnifiedTimeline() {
-    unifiedTimeline.historicalCount = state.timeIndex.length;
-    unifiedTimeline.forecastCount = forecastState.forecastIndex.length;
-    unifiedTimeline.totalCount = unifiedTimeline.historicalCount + unifiedTimeline.forecastCount;
-    unifiedTimeline.dividerIndex = unifiedTimeline.historicalCount;
+    unifiedTimeline.totalCount = state.timeIndex.length;
     unifiedTimeline.currentIndex = Math.min(
         unifiedTimeline.currentIndex,
         Math.max(0, unifiedTimeline.totalCount - 1)
     );
-    
-    // Update slider
+
     const slider = document.getElementById('time-slider');
-    if (slider && unifiedTimeline.totalCount > 0) {
-        slider.max = unifiedTimeline.totalCount - 1;
+    if (slider) {
+        slider.min = 0;
+        slider.max = Math.max(0, unifiedTimeline.totalCount - 1);
+        slider.value = unifiedTimeline.currentIndex;
+        slider.disabled = unifiedTimeline.totalCount === 0;
     }
-    
-    // Update track colors (historical vs forecast)
+
     updateSliderTrack();
-    
-    // Update labels
     updateTimelineLabels();
     updateUnifiedTimelineControlsState();
 }
@@ -4157,41 +4725,23 @@ function updateUnifiedTimelineControlsState() {
 
 function updateSliderTrack() {
     const trackHistorical = document.getElementById('track-historical');
-    const trackForecast = document.getElementById('track-forecast');
-    
-    if (!trackHistorical || !trackForecast) return;
-    
-    const total = unifiedTimeline.totalCount || 1;
-    const historicalPct = (unifiedTimeline.historicalCount / total) * 100;
-    const forecastPct = (unifiedTimeline.forecastCount / total) * 100;
-    
-    trackHistorical.style.width = `${historicalPct}%`;
-    trackForecast.style.width = `${forecastPct}%`;
-    
-    // Show/hide forecast track
-    if (unifiedTimeline.forecastCount > 0) {
-        trackForecast.classList.add('visible');
-    } else {
-        trackForecast.classList.remove('visible');
-    }
+
+    if (!trackHistorical) return;
+    trackHistorical.style.width = '100%';
 }
 
 function updateTimelineLabels() {
     const startLabel = document.getElementById('time-start-label');
     const endLabel = document.getElementById('time-end-label');
-    
-    // Start label from historical
+
     if (startLabel) {
         startLabel.textContent = state.timeIndex.length > 0
             ? state.timeIndex[0]?.timestamp || '--'
             : '--';
     }
-    
-    // End label from forecast (if available) or historical
+
     if (endLabel) {
-        if (forecastState.forecastIndex.length > 0) {
-            endLabel.textContent = forecastState.forecastIndex[forecastState.forecastIndex.length - 1]?.timestamp || '--';
-        } else if (state.timeIndex.length > 0) {
+        if (state.timeIndex.length > 0) {
             endLabel.textContent = state.timeIndex[state.timeIndex.length - 1]?.timestamp || '--';
         } else {
             endLabel.textContent = '--';
@@ -4199,25 +4749,11 @@ function updateTimelineLabels() {
     }
 }
 
-function isInForecastRange(index) {
-    return index >= unifiedTimeline.dividerIndex;
-}
-
 function getDataForIndex(index) {
-    if (isInForecastRange(index)) {
-        const forecastIndex = index - unifiedTimeline.dividerIndex;
-        return {
-            type: 'forecast',
-            entry: forecastState.forecastIndex[forecastIndex],
-            localIndex: forecastIndex
-        };
-    } else {
-        return {
-            type: 'historical',
-            entry: state.timeIndex[index],
-            localIndex: index
-        };
-    }
+    return {
+        entry: state.timeIndex[index],
+        localIndex: index,
+    };
 }
 
 async function loadUnifiedTimeSlice(index) {
@@ -4243,16 +4779,11 @@ async function loadUnifiedTimeSliceInternal(index, options = {}) {
     try {
         unifiedTimeline.currentIndex = index;
         const data = getDataForIndex(index);
-        
-        if (data.type === 'forecast') {
-            await loadForecastSliceInternal(data.entry, data.localIndex, { signal, requestId });
-        } else {
-            await loadHistoricalSliceInternal(data.entry, data.localIndex, { signal, requestId });
-        }
+
+        await loadHistoricalSliceInternal(data.entry, data.localIndex, { signal, requestId });
 
         if (signal.aborted || requestId !== activeSliceRequestId) return;
-        
-        // Update slider position
+
         const slider = document.getElementById('time-slider');
         if (slider) slider.value = index;
         updateUnifiedTimelineControlsState();
@@ -4274,7 +4805,7 @@ async function loadHistoricalSliceInternal(timeEntry, localIndex, requestContext
         state.currentObservations = customSlice.observations || {};
         state.currentStats = customSlice.stats || null;
 
-        await updateFeaturesForTime(state.currentObservations, { isForecast: false });
+        await updateFeaturesForTime(state.currentObservations);
         applyFilters();
         updateTimeSliderUI();
         updateStatsUI(customSlice.stats || {});
@@ -4298,129 +4829,19 @@ async function loadHistoricalSliceInternal(timeEntry, localIndex, requestContext
         state.currentObservations = sliceData.observations;
         state.currentStats = sliceData.stats;
 
-        await updateFeaturesForTime(sliceData.observations, { isForecast: false });
+        await updateFeaturesForTime(sliceData.observations);
         applyFilters();
-        
+
         updateTimeSliderUI();
         updateStatsUI(sliceData.stats);
         updateAlertsUI(state.filteredPointFeatures);
-        
+
         if (state.selectedSite) {
             refreshSiteInfoStats(state.selectedSite);
         }
     } catch (err) {
         if (err?.name === 'AbortError') return;
         console.error('Failed to load historical slice:', err);
-    }
-}
-
-async function loadForecastSliceInternal(forecastEntry, localIndex, requestContext = {}) {
-    if (!forecastEntry) return;
-    const { signal, requestId } = requestContext;
-    
-    try {
-        const res = await fetchWithAuth(buildDataUrl('forecast_data', forecastEntry.filename), { signal });
-        const sliceData = await res.json();
-        if (!res.ok) {
-            throw new Error(sliceData.error || `HTTP error ${res.status}`);
-        }
-        if (signal?.aborted || requestId !== activeSliceRequestId) return;
-        
-        warnIfObservationSchemaMismatch(sliceData.observations || {}, `forecast slice ${forecastEntry.timestamp || forecastEntry.filename}`);
-        state.currentObservations = sliceData.observations || {};
-        state.currentStats = sliceData.stats || forecastEntry.stats;
-        
-        const confidence = sliceData.confidence || forecastEntry.confidence || 0.75;
-
-        await updateFeaturesForTime(sliceData.observations || {}, { isForecast: true, confidence });
-        applyFilters();
-        
-        updateTimeSliderUI();
-        updateStatsUI(sliceData.stats || forecastEntry.stats);
-        updateAlertsUI(state.filteredPointFeatures);
-        
-        if (state.selectedSite) {
-            refreshSiteInfoStats(state.selectedSite);
-        }
-    } catch (err) {
-        if (err?.name === 'AbortError') return;
-        console.error('Failed to load forecast slice:', err);
-        showNotification('Failed to load forecast data', 'error');
-    }
-}
-
-async function generateForecast() {
-    if (forecastState.isGenerating) return;
-    if (state.customDataset.active) {
-        showNotification('Forecast generation is disabled for imported CSV snapshots.', 'info');
-        return;
-    }
-    
-    const btn = document.getElementById('btn-generate-forecast');
-    const daysInput = document.getElementById('forecast-days');
-    const parsedDays = daysInput ? parseInt(daysInput.value, 10) : 7;
-    const days = Number.isFinite(parsedDays) ? Math.max(1, Math.min(30, parsedDays)) : 7;
-    if (daysInput) daysInput.value = String(days);
-    const originalHtml = btn?.innerHTML;
-    
-    try {
-        forecastState.isGenerating = true;
-        if (btn) {
-            btn.disabled = true;
-            btn.classList.add('generating');
-            btn.innerHTML = '<span class="material-symbols-outlined">sync</span> Generating... (queued)';
-        }
-
-        let lastStatusLabel = '';
-        const queued = await enqueueJob('forecast', { days });
-        const statusPayload = await waitForJobResult(queued.jobId, {
-            pollIntervalMs: 3000,
-            timeoutMs: 180000,
-            onStatus: (statusLabel) => {
-                if (!btn || statusLabel === lastStatusLabel) return;
-                lastStatusLabel = statusLabel;
-                btn.innerHTML = `<span class="material-symbols-outlined">sync</span> Generating... (${escapeHtml(statusLabel)})`;
-            }
-        });
-        const data = statusPayload?.result || null;
-
-        if (data?.success) {
-            // Reload forecast data and update unified timeline
-            await checkForecastAvailability();
-            showNotification(`Forecast for ${days} days generated! Slide right to view.`, 'success');
-        } else {
-            showNotification('Forecast generation failed: ' + (data?.error || 'Unknown error'), 'error');
-        }
-    } catch (err) {
-        console.error('Forecast generation error:', err);
-        showNotification('Forecast generation failed', 'error');
-    } finally {
-        forecastState.isGenerating = false;
-        if (btn) {
-            btn.disabled = false;
-            btn.classList.remove('generating');
-            btn.innerHTML = originalHtml || '<span class="material-symbols-outlined">model_training</span> Generate';
-        }
-    }
-}
-
-async function clearForecastDataByUser() {
-    if (state.customDataset.active) {
-        showNotification('No generated forecast is attached to imported CSV snapshots.', 'info');
-        return;
-    }
-    try {
-        await fetchWithAuth('/api/forecast', { method: 'DELETE' });
-        forecastState.forecastIndex = [];
-        forecastState.available = false;
-        updateUnifiedTimeline();
-        const maxIndex = Math.max(0, unifiedTimeline.totalCount - 1);
-        unifiedTimeline.currentIndex = Math.min(unifiedTimeline.currentIndex, maxIndex);
-        await loadUnifiedTimeSlice(unifiedTimeline.currentIndex);
-        showNotification('Forecast cleared', 'success');
-    } catch (err) {
-        console.error('Failed to clear forecast:', err);
-        showNotification('Failed to clear forecast', 'error');
     }
 }
 
@@ -4468,31 +4889,26 @@ function setupUnifiedTimelineControls() {
     const prevBtn = document.getElementById('time-prev');
     const nextBtn = document.getElementById('time-next');
     const playBtn = document.getElementById('time-play');
-    const generateBtn = document.getElementById('btn-generate-forecast');
-    const clearBtn = document.getElementById('btn-clear-forecast');
-    
-    // Unified slider handler
+
     const debouncedLoad = debounce((val) => loadUnifiedTimeSlice(val), 100);
-    
+
     slider?.addEventListener('input', (e) => {
         const val = parseInt(e.target.value, 10);
         debouncedLoad(val);
     });
-    
-    // Prev/Next buttons
+
     prevBtn?.addEventListener('click', () => {
         if (unifiedTimeline.currentIndex > 0) {
             loadUnifiedTimeSlice(unifiedTimeline.currentIndex - 1);
         }
     });
-    
+
     nextBtn?.addEventListener('click', () => {
         if (unifiedTimeline.currentIndex < unifiedTimeline.totalCount - 1) {
             loadUnifiedTimeSlice(unifiedTimeline.currentIndex + 1);
         }
     });
-    
-    // Play button
+
     playBtn?.addEventListener('click', () => {
         if (unifiedTimeline.totalCount <= 1) {
             showNotification('Playback requires at least two timestamps.', 'info');
@@ -4512,7 +4928,7 @@ function setupUnifiedTimelineControls() {
                 if (unifiedTimeline.currentIndex < unifiedTimeline.totalCount - 1) {
                     loadUnifiedTimeSliceInternal(unifiedTimeline.currentIndex + 1, { skipIfLoading: true });
                 } else {
-                    loadUnifiedTimeSliceInternal(0, { skipIfLoading: true });  // Loop back
+                    loadUnifiedTimeSliceInternal(0, { skipIfLoading: true });
                 }
             }, interval);
         } else {
@@ -4524,11 +4940,7 @@ function setupUnifiedTimelineControls() {
             updateMapData();
         }
     });
-    
-    // Generate button
-    generateBtn?.addEventListener('click', generateForecast);
-    clearBtn?.addEventListener('click', clearForecastDataByUser);
-    
+
     updateUnifiedTimeline();
     loadUnifiedTimeSlice(Math.min(unifiedTimeline.currentIndex, Math.max(0, unifiedTimeline.totalCount - 1)));
 }
@@ -4607,22 +5019,18 @@ function updateMapData() {
 }
 
 function updateTimeSliderUI() {
-    // Update the current time label in the slider
     const data = getDataForIndex(unifiedTimeline.currentIndex);
-    const isForecast = data.type === 'forecast';
-    
+
     const currentLabel = document.getElementById('time-current-label');
     if (currentLabel) {
         if (data.entry) {
-            const label = isForecast 
-                ? `${data.entry.timestamp} (Forecast)` 
-                : data.entry.timestamp;
+            const label = data.entry.timestamp;
             currentLabel.textContent = label || '--';
         } else {
             currentLabel.textContent = '--';
         }
     }
-    
+
     const timestampEl = document.getElementById('timestamp');
     if (timestampEl) {
         timestampEl.textContent = data?.entry?.timestamp || '--';
@@ -4743,7 +5151,7 @@ function updateDriftAlertsUI() {
     if (badge) badge.textContent = String(alerts.length);
 
     if (!alerts.length) {
-        list.innerHTML = '<div class="alert-placeholder">No forecast drift above threshold</div>';
+        list.innerHTML = '<div class="alert-placeholder">No drift alerts above threshold</div>';
         return;
     }
 
@@ -5416,6 +5824,8 @@ function setupEventHandlers() {
     const actionSelect = document.getElementById('action-select');
     actionSelect?.addEventListener('change', () => buildActionParamsUI(actionSelect.value));
     document.getElementById('action-run')?.addEventListener('click', () => runSimulation(state.selectedCellName, actionSelect?.value));
+    document.getElementById('site-planning-run')?.addEventListener('click', () => runSitePlanningSimulation(state.selectedCellName));
+    document.getElementById('site-planning-site-type')?.addEventListener('change', () => renderSitePlanningPanel(state.selectedCellName));
     renderActionPanel(state.selectedCellName);
 
     // Keyboard shortcuts
@@ -5496,7 +5906,6 @@ async function init() {
 
         await Promise.all([
             loadPeakHoursIndex(),
-            loadDriftAlerts(),
         ]);
 
         await buildSiteHierarchy();
@@ -5514,10 +5923,9 @@ async function init() {
         
         console.log(`Loaded ${Object.keys(state.baseline).length} cells, ${state.timeIndex.length} time slices`);
         
-        // Initialize unified timeline with historical data first
-        unifiedTimeline.historicalCount = state.timeIndex.length;
+        // Initialize timeline from available historical data.
         unifiedTimeline.totalCount = state.timeIndex.length;
-        unifiedTimeline.dividerIndex = state.timeIndex.length;
+        unifiedTimeline.currentIndex = 0;
         
         setLoading(true, 'Loading initial time slice...');
         

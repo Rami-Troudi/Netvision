@@ -20,26 +20,6 @@ function isPlainObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
 
-function inferJobType(payload) {
-  if (payload?.job_type === JOB_TYPES.SIMULATE || payload?.type === JOB_TYPES.SIMULATE) {
-    return JOB_TYPES.SIMULATE
-  }
-  if (payload?.job_type === JOB_TYPES.FORECAST || payload?.type === JOB_TYPES.FORECAST) {
-    return JOB_TYPES.FORECAST
-  }
-
-  if (
-    typeof payload?.cell_name === 'string' ||
-    typeof payload?.action === 'string' ||
-    payload?.time_entry !== undefined ||
-    payload?.params !== undefined
-  ) {
-    return JOB_TYPES.SIMULATE
-  }
-
-  return JOB_TYPES.FORECAST
-}
-
 function normalizeSimulatePayload(rawBody) {
   const payload = isPlainObject(rawBody) ? rawBody : {}
   const cellName = typeof payload.cell_name === 'string' ? payload.cell_name.trim() : ''
@@ -63,32 +43,16 @@ function normalizeSimulatePayload(rawBody) {
   }
 }
 
-function normalizeForecastPayload(rawBody) {
-  const payload = isPlainObject(rawBody) ? rawBody : {}
-  const parsedDays = Number.parseInt(payload.days, 10)
-  const days = Number.isFinite(parsedDays) ? Math.min(30, Math.max(1, parsedDays)) : 7
-  const startDate = typeof payload.start_date === 'string' && payload.start_date.trim()
-    ? payload.start_date.trim()
-    : null
-
-  return {
-    days,
-    start_date: startDate,
-  }
-}
-
 function normalizeJobPayload(rawBody) {
   const body = isPlainObject(rawBody) ? rawBody : {}
-  const type = inferJobType(body)
-  if (type === JOB_TYPES.SIMULATE) {
-    return {
-      type,
-      payload: normalizeSimulatePayload(body),
-    }
+  const requestedType = String(body?.job_type || body?.type || JOB_TYPES.SIMULATE).trim()
+  if (requestedType && requestedType !== JOB_TYPES.SIMULATE) {
+    throw new Error('Only simulate jobs are supported')
   }
+
   return {
-    type: JOB_TYPES.FORECAST,
-    payload: normalizeForecastPayload(body),
+    type: JOB_TYPES.SIMULATE,
+    payload: normalizeSimulatePayload(body),
   }
 }
 
