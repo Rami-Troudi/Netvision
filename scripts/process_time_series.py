@@ -367,6 +367,7 @@ def process_time_series_data(
         'ft_average_nb_of_users__ues_rrc_connected': (0, None),
         'ot_average_ta': (0, None),
         'referencesignalpwr': (None, None),
+        'ft_4g_lte_dl_traffic_volume__gbytes': (0, None),
     }
     for numeric_col, (min_value, max_value) in numeric_specs.items():
         if numeric_col in df.columns:
@@ -484,6 +485,7 @@ def process_time_series_data(
             rrc_users_raw = row.get('ft_average_nb_of_users__ues_rrc_connected')
             ta = row.get('ot_average_ta')
             signal = row.get('referencesignalpwr')
+            traffic_vol_raw = row.get('ft_4g_lte_dl_traffic_volume__gbytes')
 
             load_value = parse_numeric(load, default=None, min_value=0, max_value=100)
             throughput_value = parse_numeric(throughput, default=None, min_value=0)
@@ -492,6 +494,7 @@ def process_time_series_data(
             rrc_users_value = parse_numeric(rrc_users_raw, default=None, min_value=0)
             ta_value = parse_numeric(ta, default=None, min_value=0)
             signal_value = parse_numeric(signal, default=None)
+            traffic_vol_value = parse_numeric(traffic_vol_raw, default=None, min_value=0)
             
             observation = {
                 'load': load_value,
@@ -500,6 +503,7 @@ def process_time_series_data(
                 'active_users': active_users_value,
                 'rrc_users': rrc_users_value,
                 'traffic': active_users_value,
+                'traffic_volume_gb': traffic_vol_value,
                 'ta': ta_value,
                 'signal_power': signal_value,
                 'congested': analysis['congested'],

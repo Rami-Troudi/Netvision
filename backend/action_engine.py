@@ -278,6 +278,11 @@ def _observation_to_row(
     cqi = _safe_float_or_none(
         observation.get("cqi", observation.get("ft_4g_lte_average_reported_cqi"))
     )
+    traffic_volume_gb = _safe_float_or_none(
+        observation.get("traffic_volume_gb", observation.get("ft_4g_lte_dl_traffic_volume__gbytes"))
+    )
+    ta = _safe_float_or_none(observation.get("ta", observation.get("ot_average_ta")))
+    signal_power = _safe_float_or_none(observation.get("signal_power", observation.get("referencesignalpwr")))
 
     if _is_zero_traffic_row(prb_load, throughput_kbps, active_users, rrc_users, cqi):
         return None
@@ -293,6 +298,9 @@ def _observation_to_row(
         "active_users": active_users,
         "rrc_users": rrc_users,
         "cqi": cqi,
+        "traffic_volume_gb": traffic_volume_gb,
+        "ta": ta,
+        "signal_power": signal_power,
         "enodeb_name": _to_str(observation.get("enodeb_name") or baseline_meta.get("enodeb_name")),
         "longitude": _safe_float_or_none(observation.get("longitude") or baseline_meta.get("longitude")),
         "latitude": _safe_float_or_none(observation.get("latitude") or baseline_meta.get("latitude")),
@@ -655,6 +663,9 @@ def _pick_current_row(
         if not exact_rows.empty:
             return exact_rows.sort_values("timestamp").iloc[-1]
 
+    if "prb_load" in cell_rows.columns:
+        return cell_rows.sort_values(["prb_load", "timestamp"]).iloc[-1]
+
     return cell_rows.sort_values("timestamp").iloc[-1]
 
 
@@ -980,6 +991,12 @@ def evaluate_cell(
         _to_float(current_row.get("rrc_users") if current_row is not None else None, 0.0),
     )
     cqi = _to_float(req.get("cqi"), _to_float(current_row.get("cqi") if current_row is not None else None, 0.0))
+    traffic_volume_gb = _to_float(
+        req.get("traffic_volume_gb"),
+        _to_float(current_row.get("traffic_volume_gb") if current_row is not None else None, 0.0),
+    )
+    ta = _to_float(req.get("ta"), _to_float(current_row.get("ta") if current_row is not None else None, 0.0))
+    signal_power = _to_float(req.get("signal_power"), _to_float(current_row.get("signal_power") if current_row is not None else None, 0.0))
 
     if pd.isna(ts):
         ts = _parse_timestamp(current_row.get("timestamp") if current_row is not None else None)
@@ -1063,7 +1080,11 @@ def evaluate_cell(
             LOST_UE_BASELINE // 4,
             int(round(LOST_UE_BASELINE * severity_multiplier / 2.0)),
         )
-        estimated_lost_gb = round(LOST_GB_BASELINE * severity_multiplier / 2.0, 2)
+        if traffic_volume_gb > 0:
+            loss_ratio = max(0.1, min(0.6, (severity_multiplier / 3.0) * 0.40))
+            estimated_lost_gb = round(traffic_volume_gb * loss_ratio, 2)
+        else:
+            estimated_lost_gb = round(LOST_GB_BASELINE * severity_multiplier / 2.0, 2)
     else:
         estimated_lost_ue = 0
         estimated_lost_gb = 0.0
@@ -1071,6 +1092,12 @@ def evaluate_cell(
     if is_congested:
         rebalancing_candidate = bool(neighbors) and not site_wide_saturation
         carrier_candidate = bool(low_band_peers)
+
+        # Tilt candidate based on high TA or excessive power or plain poor coverage
+        high_ta = bool(ta is not None and ta > 2.0)
+        high_power = bool(signal_power is not None and signal_power > 12.0)
+        poor_coverage = bool(cqi < ORANGE_THRESHOLDS["CQI_POOR"] or throughput_kbps < ORANGE_THRESHOLDS["THROUGHPUT_DEGRADED"])
+        tilt_candidate = high_ta or high_power or poor_coverage
 
         if site_wide_saturation:
             saturation_reason = (
@@ -1131,12 +1158,13 @@ def evaluate_cell(
             and prb_load > ORANGE_THRESHOLDS["PRB_SATURATED"]
             and not rebalancing_candidate
             and not carrier_candidate
-            and (cqi < ORANGE_THRESHOLDS["CQI_POOR"] or throughput_kbps < ORANGE_THRESHOLDS["THROUGHPUT_DEGRADED"])
+            and tilt_candidate
         ):
+            tilt_reason = "high Timing Advance (TA) or excessive power" if (high_ta or high_power) else "busy-hour overload with poor coverage"
             recommended_actions = [
                 _build_action(
                     action_name="Tilt Adjustment",
-                    reason=f"{threshold_reason}; busy-hour overload with no rebalancing/carrier candidate",
+                    reason=f"{threshold_reason}; {tilt_reason}",
                     recovery_rate=RECOVERY_RATES["tilt_adjustment"],
                     tier="court_terme",
                     lost_ue=estimated_lost_ue,
@@ -1170,11 +1198,12 @@ def evaluate_cell(
                         lost_gb=estimated_lost_gb,
                     )
                 ]
-        elif cqi < ORANGE_THRESHOLDS["CQI_POOR"] or throughput_kbps < ORANGE_THRESHOLDS["THROUGHPUT_DEGRADED"]:
+        elif tilt_candidate:
+            tilt_reason = "high Timing Advance (TA) or excessive power" if (high_ta or high_power) else "poor CQI or degraded throughput"
             recommended_actions = [
                 _build_action(
                     action_name="Tilt Adjustment",
-                    reason=f"{threshold_reason}; poor CQI or degraded throughput with no higher-priority candidate",
+                    reason=f"{threshold_reason}; {tilt_reason} with no higher-priority candidate",
                     recovery_rate=RECOVERY_RATES["tilt_adjustment"],
                     tier="court_terme",
                     lost_ue=estimated_lost_ue,

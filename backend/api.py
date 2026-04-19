@@ -373,6 +373,7 @@ def recommendations_export(timestamp: str = "") -> Response:
         [
             "cell_name",
             "enodeb_name",
+            "frequency_band",
             "date",
             "hour",
             "prb_load",
@@ -410,6 +411,7 @@ def recommendations_export(timestamp: str = "") -> Response:
             [
                 row.get("cellname", ""),
                 row.get("enodeb_name", ""),
+                row.get("frequency_band", ""),
                 row.get("date", ""),
                 row.get("hour", ""),
                 kpis.get("prb_load", ""),
