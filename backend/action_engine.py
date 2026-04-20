@@ -26,7 +26,9 @@ from backend.core_rules import (
     RECOVERY_RATES,
     STRUCTURAL_BUSY_HOUR_PRB,
     THROUGHPUT_DEGRADED,
-    is_congested as _is_congested,
+    is_congested as _is_congested_rule,
+    SITE_SATURATION_CELL_RATIO,
+    SITE_SATURATION_MIN_DAYS,
 )
 
 
@@ -47,9 +49,12 @@ NEIGHBOR_RADIUS_KM = 3.0
 ACTION_ORDER = {
     "Load Rebalancing": 1,
     "Carrier Extension": 2,
-    "Tilt Adjustment": 3,
-    "Add Sector": 4,
-    "Add Site": 5,
+    "Actions on Neighbors": 3,
+    "Add Band": 4,
+    "Tilt Adjustment": 5,
+    "Add Sector": 6,
+    "Add Site": 7,
+    "Check Coverage/Interference": 90,
     "No Action Required": 99,
 }
 
@@ -402,7 +407,7 @@ def detect_busy_hours(cell_df: pd.DataFrame) -> set[int]:
     busy_hours = {
         int(hour)
         for hour, mean_prb in hourly_mean.items()
-        if float(mean_prb) > 75.0 or float(mean_prb) > percentile80
+        if float(mean_prb) > 75.0 or (float(mean_prb) > percentile80 and float(mean_prb) >= 50.0)
     }
 
     # Fallback for single-day uploads: treat any observed hour with PRB > 75 as potential busy hour.
@@ -569,7 +574,11 @@ def _threshold_flags(kpis: dict[str, Any]) -> dict[str, bool]:
     rrc_queue_signal = rrc_users > ORANGE_THRESHOLDS["RRC_USERS_CRITICAL"]
     cqi_poor = cqi < ORANGE_THRESHOLDS["CQI_POOR"]
 
-    congestion_confirmed = prb_saturated and (throughput_degraded or active_queue_critical or cqi_poor)
+    congestion_confirmed = _is_congested_rule(
+        prb_load=prb,
+        throughput=throughput,
+        active_users=active_users,
+    )
 
     return {
         "prb_saturated": prb_saturated,
@@ -591,8 +600,6 @@ def _format_threshold_reason(flags: dict[str, bool]) -> str:
         reasons.append("active users above 4")
     if flags.get("rrc_queue_signal"):
         reasons.append("RRC users above 4")
-    if flags.get("cqi_poor"):
-        reasons.append("CQI below 8")
     return "; ".join(reasons)
 
 
@@ -836,6 +843,15 @@ def _site_wide_saturation_status(
     if site_rows.empty:
         return False, 0, 0
 
+    # Use the true permanent cell count for the site — never the snapshot count.
+    true_total_site_cells = site_rows["cell_name"].nunique()
+    if true_total_site_cells <= 0:
+        return False, 0, 0
+
+    # --- Snapshot congestion count (for the ratio check) ---
+    # Use strict PRB >= PRB_SATURATED only. Multi-condition rules (throughput/users)
+    # reflect quality degradation, not capacity saturation. A new site is a capital
+    # expenditure decision — only full PRB exhaustion qualifies.
     if not pd.isna(request_timestamp):
         scoped = site_rows[site_rows["timestamp"].eq(request_timestamp)].copy()
     else:
@@ -848,66 +864,56 @@ def _site_wide_saturation_status(
             .tail(1)
             .reset_index(drop=True)
         )
-    else:
-        scoped = (
-            scoped.sort_values("timestamp")
-            .groupby("cell_name", as_index=False)
-            .tail(1)
-            .reset_index(drop=True)
-        )
 
-    total_site_cells = int(len(scoped))
-    if total_site_cells <= 0:
-        return False, 0, 0
+    congested_site_cells = int(
+        scoped["prb_load"]
+        .apply(lambda v: 1 if (
+            _safe_float_or_none(v) is not None
+            and float(v) >= ORANGE_THRESHOLDS["PRB_SATURATED"]
+        ) else 0)
+        .sum()
+    )
 
-    congested_site_cells = 0
-    for row in scoped.itertuples(index=False):
-        row_flags = _threshold_flags(
-            {
-                "prb_load": getattr(row, "prb_load", None),
-                "throughput_kbps": getattr(row, "throughput_kbps", None),
-                "active_users": getattr(row, "active_users", None),
-                "rrc_users": getattr(row, "rrc_users", None),
-                "cqi": getattr(row, "cqi", None),
-            }
-        )
-        if row_flags.get("congestion_confirmed"):
-            congested_site_cells += 1
+    site_wide_saturation = (
+        congested_site_cells / true_total_site_cells
+    ) > SITE_SATURATION_CELL_RATIO
 
-    site_wide_saturation = (congested_site_cells / total_site_cells) > 0.5
-
-    # New logic: Time-aware check. Only return True if site is saturated on at least 3 separate days.
+    # --- Multi-day structural check ---
+    # Only confirm Add Site if strict PRB saturation persists across >= MIN_DAYS
+    # separate calendar days. A single peak-hour snapshot is not sufficient evidence
+    # for a capital infrastructure project.
     if site_wide_saturation and "timestamp" in site_rows.columns:
-        congested_days = set()
-        for ts, group in site_rows.groupby("timestamp"):
-            if len(congested_days) >= 3:
+        congested_days: set = set()
+
+        site_rows_copy = site_rows.copy()
+        site_rows_copy["date_only"] = pd.to_datetime(
+            site_rows_copy["timestamp"], errors="coerce"
+        ).dt.date
+
+        for date_val, group in site_rows_copy.groupby("date_only"):
+            # Take the maximum PRB per cell for this day — strict capacity peak.
+            day_max_prb = (
+                group.groupby("cell_name")["prb_load"]
+                .max()
+                .reset_index()
+            )
+            day_max_prb["prb_load"] = pd.to_numeric(
+                day_max_prb["prb_load"], errors="coerce"
+            )
+            cells_saturated = int(
+                (day_max_prb["prb_load"] >= ORANGE_THRESHOLDS["PRB_SATURATED"]).sum()
+            )
+            if (cells_saturated / true_total_site_cells) > SITE_SATURATION_CELL_RATIO:
+                congested_days.add(date_val)
+
+            # Early exit once we have enough days confirmed.
+            if len(congested_days) >= SITE_SATURATION_MIN_DAYS:
                 break
 
-            ts_cells = len(group["cell_name"].unique())
-            if ts_cells <= 0:
-                continue
-
-            ts_congested = 0
-            for r in group.itertuples(index=False):
-                r_flags = _threshold_flags({
-                    "prb_load": getattr(r, "prb_load", None),
-                    "throughput_kbps": getattr(r, "throughput_kbps", None),
-                    "active_users": getattr(r, "active_users", None),
-                    "rrc_users": getattr(r, "rrc_users", None),
-                    "cqi": getattr(r, "cqi", None),
-                })
-                if r_flags.get("congestion_confirmed"):
-                    ts_congested += 1
-            
-            if (ts_congested / ts_cells) > 0.5:
-                ts_date = pd.to_datetime(ts).date()
-                if pd.notna(ts_date):
-                    congested_days.add(ts_date)
-        
-        if len(congested_days) < 3:
+        if len(congested_days) < SITE_SATURATION_MIN_DAYS:
             site_wide_saturation = False
 
-    return site_wide_saturation, congested_site_cells, total_site_cells
+    return site_wide_saturation, congested_site_cells, true_total_site_cells
 
 
 def _find_underloaded_capacity_peers(
@@ -1132,18 +1138,17 @@ def evaluate_cell(
 
     # --- Bug 1 fix: dynamic estimated_lost_ue/gb based on cell severity ---
     if is_congested:
-        user_scale = max(1.0, active_users / ORANGE_THRESHOLDS["ACTIVE_USERS_CRITICAL"])
-        prb_scale = max(1.0, prb_load / ORANGE_THRESHOLDS["PRB_SATURATED"])
-        severity_multiplier = min(3.0, (user_scale + prb_scale) / 2.0)
-        estimated_lost_ue = max(
-            LOST_UE_BASELINE // 4,
-            int(round(LOST_UE_BASELINE * severity_multiplier / 2.0)),
-        )
-        if traffic_volume_gb > 0:
-            loss_ratio = max(0.1, min(0.6, (severity_multiplier / 3.0) * 0.40))
-            estimated_lost_gb = round(traffic_volume_gb * loss_ratio, 2)
-        else:
-            estimated_lost_gb = round(LOST_GB_BASELINE * severity_multiplier / 2.0, 2)
+        user_scale = max(0.0, (prb_load - 70.0) / 100.0)
+        estimated_lost_ue = int(active_users * user_scale * 0.5)
+
+        if 0 < throughput_kbps < ORANGE_THRESHOLDS["THROUGHPUT_DEGRADED"]:
+            throughput_gap = (ORANGE_THRESHOLDS["THROUGHPUT_DEGRADED"] - throughput_kbps) / ORANGE_THRESHOLDS["THROUGHPUT_DEGRADED"]
+            estimated_lost_ue += int(active_users * throughput_gap * 0.5)
+
+        if estimated_lost_ue == 0 and active_users > 0:
+            estimated_lost_ue = 1
+
+        estimated_lost_gb = round(float(estimated_lost_ue) * 2.4, 2)
     else:
         estimated_lost_ue = 0
         estimated_lost_gb = 0.0
@@ -1195,18 +1200,26 @@ def evaluate_cell(
                     tier="court_terme",
                     lost_ue=estimated_lost_ue,
                     lost_gb=estimated_lost_gb,
+                ),
+                _build_action(
+                    action_name="Actions on Neighbors",
+                    reason=f"{threshold_reason}; optimize interference/PRB on underloaded neighbors ({neighbor_label})",
+                    recovery_rate=RECOVERY_RATES["actions_on_neighbors"],
+                    tier="court_terme",
+                    lost_ue=estimated_lost_ue,
+                    lost_gb=estimated_lost_gb,
                 )
             ]
         elif carrier_candidate:
             peer_label = ", ".join(capacity_peers)
             recommended_actions = [
                 _build_action(
-                    action_name="Carrier Extension",
+                    action_name="Add Band",
                     reason=(
                         f"{threshold_reason}; target capacity peers available on same site below 60% PRB "
                         f"({peer_label})"
                     ),
-                    recovery_rate=RECOVERY_RATES["carrier_extension"],
+                    recovery_rate=RECOVERY_RATES["add_band"],
                     tier="moyen_terme",
                     lost_ue=estimated_lost_ue,
                     lost_gb=estimated_lost_gb,
@@ -1271,19 +1284,31 @@ def evaluate_cell(
             ]
 
     if not is_congested:
-        recommended_actions.append(
-            {
-                "action_name": "No Action Required",
-                "action": "No Action Required",
-                "reason": "Congestion thresholds are not jointly met",
-                "tier": "none",
-                "confidence": "high",
-                "recovery_rate": 0.0,
-                "estimated_recovery_pct": 0,
-                "gain_ue": 0,
-                "gain_gb": 0.0,
-            }
-        )
+        if 0 < throughput_kbps < ORANGE_THRESHOLDS["THROUGHPUT_DEGRADED"] and cqi < ORANGE_THRESHOLDS["CQI_POOR"]:
+            recommended_actions.append(
+                _build_action(
+                    action_name="Check Coverage/Interference",
+                    reason="coverage/interference issue (CQI and throughput poor with PRB < 70%)",
+                    recovery_rate=RECOVERY_RATES["check_coverage"],
+                    tier="court_terme",
+                    lost_ue=0,
+                    lost_gb=0.0,
+                )
+            )
+        else:
+            recommended_actions.append(
+                {
+                    "action_name": "No Action Required",
+                    "action": "No Action Required",
+                    "reason": "Congestion thresholds are not jointly met",
+                    "tier": "none",
+                    "confidence": "high",
+                    "recovery_rate": 0.0,
+                    "estimated_recovery_pct": 0,
+                    "gain_ue": 0,
+                    "gain_gb": 0.0,
+                }
+            )
 
     recommended_actions.sort(key=lambda item: ACTION_ORDER.get(str(item.get("action_name")), 999))
     for index, action in enumerate(recommended_actions, start=1):
@@ -1352,9 +1377,10 @@ def evaluate_cell(
         "structural_congestion": bool(structural_ratio > 0.60),
         "top_neighbors": neighbors,
         "top_neighbor_for_rebalancing": top_neighbor,
+        "congestion_trigger": threshold_reason if is_congested else "",
         "estimated_lost_ue": estimated_lost_ue,
         "estimated_lost_gb": estimated_lost_gb,
-        "estimated_gain_ue": estimated_gain_ue,
+        "estimated_gain_ue": int(round(estimated_gain_ue)),
         "estimated_gain_gb": round(estimated_gain_gb, 2),
         "recommended_actions": recommended_actions,
     }
@@ -1382,30 +1408,33 @@ def evaluate_all_cells_for_export(
         if not _to_str(cell_name):
             continue
 
-        cell_timestamp = request_timestamp
-        if not cell_timestamp:
-            profile = busy_hour_profile.get(cell_name, {})
-            hour_stats = profile.get("hour_stats", {})
-            busy_hours = set(profile.get("busy_hours", []))
+        # Force per-cell evaluation globally unless request_timestamp was explicitly passed via API lookup, 
+        # but for evaluate_all_cells_for_export, we want to IGNORE the request parameter 
+        # so it forces the natural peak hour.
+        cell_timestamp = None
+        
+        profile = busy_hour_profile.get(cell_name, {})
+        hour_stats = profile.get("hour_stats", {})
+        busy_hours = set(profile.get("busy_hours", []))
 
-            peak_hour = None
-            max_prb = -1.0
+        peak_hour = None
+        max_prb = -1.0
 
-            for hour_str, stats in hour_stats.items():
-                hour_int = int(hour_str)
-                if hour_int in busy_hours:
-                    mean_prb = stats.get("mean_prb", 0.0)
-                    if mean_prb > max_prb:
-                        max_prb = mean_prb
-                        peak_hour = hour_int
+        for hour_str, stats in hour_stats.items():
+            hour_int = int(hour_str)
+            if hour_int in busy_hours:
+                mean_prb = stats.get("mean_prb", 0.0)
+                if mean_prb > max_prb:
+                    max_prb = mean_prb
+                    peak_hour = hour_int
 
-            if peak_hour is not None:
-                cell_rows = observations_df[observations_df["cell_name"].astype(str).str.strip().eq(cell_name)]
-                if "hour" in cell_rows.columns:
-                    hour_rows = cell_rows[pd.to_numeric(cell_rows["hour"], errors="coerce").fillna(-1).astype(int) == peak_hour]
-                    if not hour_rows.empty:
-                        best_row = hour_rows.sort_values(["prb_load", "timestamp"]).iloc[-1]
-                        cell_timestamp = best_row.get("timestamp")
+        if peak_hour is not None:
+            cell_rows = observations_df[observations_df["cell_name"].astype(str).str.strip().eq(cell_name)]
+            if "hour" in cell_rows.columns:
+                hour_rows = cell_rows[pd.to_numeric(cell_rows["hour"], errors="coerce").fillna(-1).astype(int) == peak_hour]
+                if not hour_rows.empty:
+                    best_row = hour_rows.sort_values(["prb_load", "timestamp"]).iloc[-1]
+                    cell_timestamp = best_row.get("timestamp")
 
         try:
             evaluated = evaluate_cell(

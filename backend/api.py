@@ -375,6 +375,8 @@ def _build_export_csv_bytes(context: dict[str, Any], request_timestamp: str | No
             "estimated_lost_gb",
             "estimated_gain_ue",
             "estimated_gain_gb",
+            "congestion_trigger",
+            "secondary_action",
         ]
     )
 
@@ -407,12 +409,14 @@ def _build_export_csv_bytes(context: dict[str, Any], request_timestamp: str | No
                 kpis.get("cqi", ""),
                 str(is_congested).lower(),
                 str(bool(row.get("busy_hour_flag", False))).lower(),
-                ";".join(action_names),
+                action_names[0] if action_names else "No Action Required",
                 row.get("top_neighbor_for_rebalancing") or "",
                 row.get("estimated_lost_ue", 0),
                 row.get("estimated_lost_gb", 0),
                 row.get("estimated_gain_ue", 0),
                 row.get("estimated_gain_gb", 0),
+                row.get("congestion_trigger", ""),
+                action_names[1] if len(action_names) > 1 else "",
             ]
         )
 
