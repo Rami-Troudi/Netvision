@@ -14,7 +14,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.responses import JSONResponse, Response
 import pandas as pd
 from pydantic import BaseModel
@@ -248,7 +248,7 @@ def cells() -> list[dict[str, Any]]:
 
 
 @app.post("/context/upload")
-def upload_context(payload: dict[str, Any]) -> dict[str, Any]:
+def upload_context(payload: dict[str, Any], background_tasks: BackgroundTasks) -> dict[str, Any]:
     action_engine = app.state.action_engine
 
     try:
@@ -262,6 +262,8 @@ def upload_context(payload: dict[str, Any]) -> dict[str, Any]:
     baseline_df = context.get("baseline_df")
     observations_df = context.get("observations_df")
     busy_hour_profile = context.get("busy_hour_profile") or {}
+
+    background_tasks.add_task(_precompute_export_csv, context)
 
     return {
         "success": True,
@@ -345,26 +347,10 @@ def recommendations_summary() -> dict[str, Any]:
     }
 
 
-@app.get("/recommendations/export")
-def recommendations_export(timestamp: str = "") -> Response:
-    context = _get_active_context(app)
-    request_timestamp = timestamp.strip() if timestamp else None
-
-    cache_key = _build_export_cache_key(context, request_timestamp or "")
-    cached_csv = _get_cached_export_csv(cache_key)
-    if cached_csv is not None:
-        return Response(
-            content=cached_csv,
-            media_type="text/csv; charset=utf-8",
-            headers={
-                "Content-Disposition": "attachment; filename=recommendations_export.csv",
-                "X-Export-Cache": "hit",
-            },
-        )
-
+def _build_export_csv_bytes(context: dict[str, Any], request_timestamp: str | None) -> bytes:
     rows = evaluate_all_cells_for_export(
         context=context,
-        request_timestamp=request_timestamp or None,
+        request_timestamp=request_timestamp,
     )
 
     output = io.StringIO()
@@ -373,6 +359,7 @@ def recommendations_export(timestamp: str = "") -> Response:
         [
             "cell_name",
             "enodeb_name",
+            "frequency_band",
             "date",
             "hour",
             "prb_load",
@@ -388,6 +375,8 @@ def recommendations_export(timestamp: str = "") -> Response:
             "estimated_lost_gb",
             "estimated_gain_ue",
             "estimated_gain_gb",
+            "congestion_trigger",
+            "secondary_action",
         ]
     )
 
@@ -410,6 +399,7 @@ def recommendations_export(timestamp: str = "") -> Response:
             [
                 row.get("cellname", ""),
                 row.get("enodeb_name", ""),
+                row.get("frequency_band", ""),
                 row.get("date", ""),
                 row.get("hour", ""),
                 kpis.get("prb_load", ""),
@@ -419,16 +409,49 @@ def recommendations_export(timestamp: str = "") -> Response:
                 kpis.get("cqi", ""),
                 str(is_congested).lower(),
                 str(bool(row.get("busy_hour_flag", False))).lower(),
-                ";".join(action_names),
+                action_names[0] if action_names else "No Action Required",
                 row.get("top_neighbor_for_rebalancing") or "",
                 row.get("estimated_lost_ue", 0),
                 row.get("estimated_lost_gb", 0),
                 row.get("estimated_gain_ue", 0),
                 row.get("estimated_gain_gb", 0),
+                row.get("congestion_trigger", ""),
+                action_names[1] if len(action_names) > 1 else "",
             ]
         )
 
-    csv_bytes = output.getvalue().encode("utf-8-sig")
+    return output.getvalue().encode("utf-8-sig")
+
+
+def _precompute_export_csv(context: dict[str, Any]) -> None:
+    cache_key = _build_export_cache_key(context, "")
+    if _get_cached_export_csv(cache_key) is not None:
+        return
+    try:
+        csv_bytes = _build_export_csv_bytes(context, None)
+        _set_cached_export_csv(cache_key, csv_bytes)
+    except Exception as exc:
+        logger.error(f"Failed to precompute export CSV: {exc}")
+
+
+@app.get("/recommendations/export")
+def recommendations_export(timestamp: str = "") -> Response:
+    context = _get_active_context(app)
+    request_timestamp = timestamp.strip() if timestamp else None
+
+    cache_key = _build_export_cache_key(context, request_timestamp or "")
+    cached_csv = _get_cached_export_csv(cache_key)
+    if cached_csv is not None:
+        return Response(
+            content=cached_csv,
+            media_type="text/csv; charset=utf-8",
+            headers={
+                "Content-Disposition": "attachment; filename=recommendations_export.csv",
+                "X-Export-Cache": "hit",
+            },
+        )
+
+    csv_bytes = _build_export_csv_bytes(context, request_timestamp or None)
     _set_cached_export_csv(cache_key, csv_bytes)
 
     return Response(

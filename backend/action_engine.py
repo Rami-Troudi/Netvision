@@ -26,7 +26,9 @@ from backend.core_rules import (
     RECOVERY_RATES,
     STRUCTURAL_BUSY_HOUR_PRB,
     THROUGHPUT_DEGRADED,
-    is_congested as _is_congested,
+    is_congested as _is_congested_rule,
+    SITE_SATURATION_CELL_RATIO,
+    SITE_SATURATION_MIN_DAYS,
 )
 
 
@@ -47,9 +49,12 @@ NEIGHBOR_RADIUS_KM = 3.0
 ACTION_ORDER = {
     "Load Rebalancing": 1,
     "Carrier Extension": 2,
-    "Tilt Adjustment": 3,
-    "Add Sector": 4,
-    "Add Site": 5,
+    "Actions on Neighbors": 3,
+    "Add Band": 4,
+    "Tilt Adjustment": 5,
+    "Add Sector": 6,
+    "Add Site": 7,
+    "Check Coverage/Interference": 90,
     "No Action Required": 99,
 }
 
@@ -278,6 +283,11 @@ def _observation_to_row(
     cqi = _safe_float_or_none(
         observation.get("cqi", observation.get("ft_4g_lte_average_reported_cqi"))
     )
+    traffic_volume_gb = _safe_float_or_none(
+        observation.get("traffic_volume_gb", observation.get("ft_4g_lte_dl_traffic_volume__gbytes"))
+    )
+    ta = _safe_float_or_none(observation.get("ta", observation.get("ot_average_ta")))
+    signal_power = _safe_float_or_none(observation.get("signal_power", observation.get("referencesignalpwr")))
 
     if _is_zero_traffic_row(prb_load, throughput_kbps, active_users, rrc_users, cqi):
         return None
@@ -293,6 +303,9 @@ def _observation_to_row(
         "active_users": active_users,
         "rrc_users": rrc_users,
         "cqi": cqi,
+        "traffic_volume_gb": traffic_volume_gb,
+        "ta": ta,
+        "signal_power": signal_power,
         "enodeb_name": _to_str(observation.get("enodeb_name") or baseline_meta.get("enodeb_name")),
         "longitude": _safe_float_or_none(observation.get("longitude") or baseline_meta.get("longitude")),
         "latitude": _safe_float_or_none(observation.get("latitude") or baseline_meta.get("latitude")),
@@ -394,7 +407,7 @@ def detect_busy_hours(cell_df: pd.DataFrame) -> set[int]:
     busy_hours = {
         int(hour)
         for hour, mean_prb in hourly_mean.items()
-        if float(mean_prb) > 75.0 or float(mean_prb) > percentile80
+        if float(mean_prb) > 75.0 or (float(mean_prb) > percentile80 and float(mean_prb) >= 50.0)
     }
 
     # Fallback for single-day uploads: treat any observed hour with PRB > 75 as potential busy hour.
@@ -561,7 +574,11 @@ def _threshold_flags(kpis: dict[str, Any]) -> dict[str, bool]:
     rrc_queue_signal = rrc_users > ORANGE_THRESHOLDS["RRC_USERS_CRITICAL"]
     cqi_poor = cqi < ORANGE_THRESHOLDS["CQI_POOR"]
 
-    congestion_confirmed = prb_saturated and (throughput_degraded or active_queue_critical or cqi_poor)
+    congestion_confirmed = _is_congested_rule(
+        prb_load=prb,
+        throughput=throughput,
+        active_users=active_users,
+    )
 
     return {
         "prb_saturated": prb_saturated,
@@ -583,20 +600,30 @@ def _format_threshold_reason(flags: dict[str, bool]) -> str:
         reasons.append("active users above 4")
     if flags.get("rrc_queue_signal"):
         reasons.append("RRC users above 4")
-    if flags.get("cqi_poor"):
-        reasons.append("CQI below 8")
     return "; ".join(reasons)
 
 
-def _loss_gain_for_recovery(recovery_rate: float) -> tuple[int, float]:
+def _loss_gain_for_recovery(
+    recovery_rate: float,
+    lost_ue: int = LOST_UE_BASELINE,
+    lost_gb: float = LOST_GB_BASELINE,
+) -> tuple[int, float]:
     ratio = max(0.0, min(1.0, recovery_rate / 100.0))
-    gain_ue = int(round(LOST_UE_BASELINE * ratio))
-    gain_gb = round(LOST_GB_BASELINE * ratio, 2)
+    gain_ue = int(round(lost_ue * ratio))
+    gain_gb = round(lost_gb * ratio, 2)
     return gain_ue, gain_gb
 
 
-def _build_action(action_name: str, reason: str, recovery_rate: float, tier: str) -> dict[str, Any]:
-    gain_ue, gain_gb = _loss_gain_for_recovery(recovery_rate)
+def _build_action(
+    action_name: str,
+    reason: str,
+    recovery_rate: float,
+    tier: str,
+    *,
+    lost_ue: int = LOST_UE_BASELINE,
+    lost_gb: float = LOST_GB_BASELINE,
+) -> dict[str, Any]:
+    gain_ue, gain_gb = _loss_gain_for_recovery(recovery_rate, lost_ue=lost_ue, lost_gb=lost_gb)
     return {
         "action_name": action_name,
         "action": action_name,
@@ -642,6 +669,9 @@ def _pick_current_row(
         exact_rows = cell_rows[cell_rows["timestamp"].eq(request_timestamp)]
         if not exact_rows.empty:
             return exact_rows.sort_values("timestamp").iloc[-1]
+
+    if "prb_load" in cell_rows.columns:
+        return cell_rows.sort_values(["prb_load", "timestamp"]).iloc[-1]
 
     return cell_rows.sort_values("timestamp").iloc[-1]
 
@@ -813,6 +843,15 @@ def _site_wide_saturation_status(
     if site_rows.empty:
         return False, 0, 0
 
+    # Use the true permanent cell count for the site — never the snapshot count.
+    true_total_site_cells = site_rows["cell_name"].nunique()
+    if true_total_site_cells <= 0:
+        return False, 0, 0
+
+    # --- Snapshot congestion count (for the ratio check) ---
+    # Use strict PRB >= PRB_SATURATED only. Multi-condition rules (throughput/users)
+    # reflect quality degradation, not capacity saturation. A new site is a capital
+    # expenditure decision — only full PRB exhaustion qualifies.
     if not pd.isna(request_timestamp):
         scoped = site_rows[site_rows["timestamp"].eq(request_timestamp)].copy()
     else:
@@ -825,45 +864,80 @@ def _site_wide_saturation_status(
             .tail(1)
             .reset_index(drop=True)
         )
-    else:
-        scoped = (
-            scoped.sort_values("timestamp")
-            .groupby("cell_name", as_index=False)
-            .tail(1)
-            .reset_index(drop=True)
-        )
 
-    total_site_cells = int(len(scoped))
-    if total_site_cells <= 0:
-        return False, 0, 0
+    congested_site_cells = int(
+        scoped["prb_load"]
+        .apply(lambda v: 1 if (
+            _safe_float_or_none(v) is not None
+            and float(v) >= ORANGE_THRESHOLDS["PRB_SATURATED"]
+        ) else 0)
+        .sum()
+    )
 
-    congested_site_cells = 0
-    for row in scoped.itertuples(index=False):
-        row_flags = _threshold_flags(
-            {
-                "prb_load": getattr(row, "prb_load", None),
-                "throughput_kbps": getattr(row, "throughput_kbps", None),
-                "active_users": getattr(row, "active_users", None),
-                "rrc_users": getattr(row, "rrc_users", None),
-                "cqi": getattr(row, "cqi", None),
-            }
-        )
-        if row_flags.get("congestion_confirmed"):
-            congested_site_cells += 1
+    site_wide_saturation = (
+        congested_site_cells / true_total_site_cells
+    ) > SITE_SATURATION_CELL_RATIO
 
-    site_wide_saturation = (congested_site_cells / total_site_cells) > 0.5
-    return site_wide_saturation, congested_site_cells, total_site_cells
+    # --- Multi-day structural check ---
+    # Only confirm Add Site if strict PRB saturation persists across >= MIN_DAYS
+    # separate calendar days. A single peak-hour snapshot is not sufficient evidence
+    # for a capital infrastructure project.
+    if site_wide_saturation and "timestamp" in site_rows.columns:
+        congested_days: set = set()
+
+        site_rows_copy = site_rows.copy()
+        site_rows_copy["date_only"] = pd.to_datetime(
+            site_rows_copy["timestamp"], errors="coerce"
+        ).dt.date
+
+        for date_val, group in site_rows_copy.groupby("date_only"):
+            # Take the maximum PRB per cell for this day — strict capacity peak.
+            day_max_prb = (
+                group.groupby("cell_name")["prb_load"]
+                .max()
+                .reset_index()
+            )
+            day_max_prb["prb_load"] = pd.to_numeric(
+                day_max_prb["prb_load"], errors="coerce"
+            )
+            cells_saturated = int(
+                (day_max_prb["prb_load"] >= ORANGE_THRESHOLDS["PRB_SATURATED"]).sum()
+            )
+            if (cells_saturated / true_total_site_cells) > SITE_SATURATION_CELL_RATIO:
+                congested_days.add(date_val)
+
+            # Early exit once we have enough days confirmed.
+            if len(congested_days) >= SITE_SATURATION_MIN_DAYS:
+                break
+
+        if len(congested_days) < SITE_SATURATION_MIN_DAYS:
+            site_wide_saturation = False
+
+    return site_wide_saturation, congested_site_cells, true_total_site_cells
 
 
-def _find_underloaded_low_band_peers(
+def _find_underloaded_capacity_peers(
     *,
     cell_name: str,
     all_cells_df: pd.DataFrame,
 ) -> list[str]:
     key = _to_str(cell_name)
-    if _band_suffix_from_cell_name(key) != "h":
-        return []
     if not isinstance(all_cells_df, pd.DataFrame) or all_cells_df.empty:
+        return []
+
+    target_rows = all_cells_df[all_cells_df["cell_name"].astype(str).str.strip().eq(key)]
+    if target_rows.empty:
+        return []
+
+    target_band = _to_str(target_rows.iloc[0].get("frequency_band", "")).lower()
+    look_for = []
+    
+    # Restrict extensions to B3 (1800) <-> B1 (2100) only. B20 (800) is excluded entirely.
+    if "1800" in target_band or "b3" in target_band or key.endswith("h"):
+        look_for = ["2100", "b1", "m"]  # B3 -> B1
+    elif "2100" in target_band or "b1" in target_band or key.endswith("m"):
+        look_for = ["1800", "b3", "h"]  # B1 -> B3
+    else:
         return []
 
     prefix = _site_prefix_from_cell_name(key)
@@ -874,7 +948,21 @@ def _find_underloaded_low_band_peers(
             continue
         if _site_prefix_from_cell_name(peer_name) != prefix:
             continue
-        if _band_suffix_from_cell_name(peer_name) not in {"l", "f"}:
+
+        peer_band = _to_str(getattr(row, "frequency_band", "")).lower()
+        peer_suffix = _band_suffix_from_cell_name(peer_name)
+
+        # Explicitly skip coverage bands (B20 / 800MHz)
+        if "800" in peer_band or "b20" in peer_band or peer_suffix in {"l", "f"}:
+            continue
+
+        is_match = False
+        for term in look_for:
+            if term in peer_band or term == peer_suffix:
+                is_match = True
+                break
+
+        if not is_match:
             continue
 
         peer_prb = _safe_float_or_none(getattr(row, "ft_physical_resource_blocks_load_dl", None))
@@ -968,6 +1056,12 @@ def evaluate_cell(
         _to_float(current_row.get("rrc_users") if current_row is not None else None, 0.0),
     )
     cqi = _to_float(req.get("cqi"), _to_float(current_row.get("cqi") if current_row is not None else None, 0.0))
+    traffic_volume_gb = _to_float(
+        req.get("traffic_volume_gb"),
+        _to_float(current_row.get("traffic_volume_gb") if current_row is not None else None, 0.0),
+    )
+    ta = _to_float(req.get("ta"), _to_float(current_row.get("ta") if current_row is not None else None, 0.0))
+    signal_power = _to_float(req.get("signal_power"), _to_float(current_row.get("signal_power") if current_row is not None else None, 0.0))
 
     if pd.isna(ts):
         ts = _parse_timestamp(current_row.get("timestamp") if current_row is not None else None)
@@ -1022,7 +1116,7 @@ def evaluate_cell(
     )
     top_neighbor = neighbors[0]["cell_name"] if neighbors else None
 
-    low_band_peers = _find_underloaded_low_band_peers(
+    capacity_peers = _find_underloaded_capacity_peers(
         cell_name=key,
         all_cells_df=all_cells_df,
     )
@@ -1042,9 +1136,32 @@ def evaluate_cell(
     recommended_actions: list[dict[str, Any]] = []
     structural_ratio = (len(congested_busy_hours) / len(busy_hours)) if busy_hours else 0.0
 
+    # --- Bug 1 fix: dynamic estimated_lost_ue/gb based on cell severity ---
+    if is_congested:
+        user_scale = max(0.0, (prb_load - 70.0) / 100.0)
+        estimated_lost_ue = int(active_users * user_scale * 0.5)
+
+        if 0 < throughput_kbps < ORANGE_THRESHOLDS["THROUGHPUT_DEGRADED"]:
+            throughput_gap = (ORANGE_THRESHOLDS["THROUGHPUT_DEGRADED"] - throughput_kbps) / ORANGE_THRESHOLDS["THROUGHPUT_DEGRADED"]
+            estimated_lost_ue += int(active_users * throughput_gap * 0.5)
+
+        if estimated_lost_ue == 0 and active_users > 0:
+            estimated_lost_ue = 1
+
+        estimated_lost_gb = round(float(estimated_lost_ue) * 2.4, 2)
+    else:
+        estimated_lost_ue = 0
+        estimated_lost_gb = 0.0
+
     if is_congested:
         rebalancing_candidate = bool(neighbors) and not site_wide_saturation
-        carrier_candidate = bool(low_band_peers)
+        carrier_candidate = bool(capacity_peers)
+
+        # Tilt candidate based on high TA or excessive power or plain poor coverage
+        high_ta = bool(ta is not None and ta > 2.0)
+        high_power = bool(signal_power is not None and signal_power > 12.0)
+        poor_coverage = bool(cqi < ORANGE_THRESHOLDS["CQI_POOR"] or throughput_kbps < ORANGE_THRESHOLDS["THROUGHPUT_DEGRADED"])
+        tilt_candidate = high_ta or high_power or poor_coverage
 
         if site_wide_saturation:
             saturation_reason = (
@@ -1058,6 +1175,8 @@ def evaluate_cell(
                         reason=saturation_reason,
                         recovery_rate=RECOVERY_RATES["new_site"],
                         tier="long_terme",
+                        lost_ue=estimated_lost_ue,
+                        lost_gb=estimated_lost_gb,
                     )
                 ]
             else:
@@ -1067,6 +1186,8 @@ def evaluate_cell(
                         reason=saturation_reason,
                         recovery_rate=RECOVERY_RATES["new_sector"],
                         tier="long_terme",
+                        lost_ue=estimated_lost_ue,
+                        lost_gb=estimated_lost_gb,
                     )
                 ]
         elif rebalancing_candidate:
@@ -1077,28 +1198,49 @@ def evaluate_cell(
                     reason=f"{threshold_reason}; eligible neighbors with headroom ({neighbor_label})",
                     recovery_rate=RECOVERY_RATES["load_rebalancing"],
                     tier="court_terme",
+                    lost_ue=estimated_lost_ue,
+                    lost_gb=estimated_lost_gb,
+                ),
+                _build_action(
+                    action_name="Actions on Neighbors",
+                    reason=f"{threshold_reason}; optimize interference/PRB on underloaded neighbors ({neighbor_label})",
+                    recovery_rate=RECOVERY_RATES["actions_on_neighbors"],
+                    tier="court_terme",
+                    lost_ue=estimated_lost_ue,
+                    lost_gb=estimated_lost_gb,
                 )
             ]
         elif carrier_candidate:
-            peer_label = ", ".join(low_band_peers)
+            peer_label = ", ".join(capacity_peers)
             recommended_actions = [
                 _build_action(
-                    action_name="Carrier Extension",
+                    action_name="Add Band",
                     reason=(
-                        f"{threshold_reason}; high-band cell has low/fallback same-site peers below 60% PRB "
+                        f"{threshold_reason}; target capacity peers available on same site below 60% PRB "
                         f"({peer_label})"
                     ),
-                    recovery_rate=RECOVERY_RATES["carrier_extension"],
+                    recovery_rate=RECOVERY_RATES["add_band"],
                     tier="moyen_terme",
+                    lost_ue=estimated_lost_ue,
+                    lost_gb=estimated_lost_gb,
                 )
             ]
-        elif busy_hour_flag and prb_load > ORANGE_THRESHOLDS["PRB_SATURATED"] and not rebalancing_candidate and not carrier_candidate:
+        elif (
+            busy_hour_flag
+            and prb_load > ORANGE_THRESHOLDS["PRB_SATURATED"]
+            and not rebalancing_candidate
+            and not carrier_candidate
+            and tilt_candidate
+        ):
+            tilt_reason = "high Timing Advance (TA) or excessive power" if (high_ta or high_power) else "busy-hour overload with poor coverage"
             recommended_actions = [
                 _build_action(
                     action_name="Tilt Adjustment",
-                    reason=f"{threshold_reason}; busy-hour overload with no rebalancing/carrier candidate",
+                    reason=f"{threshold_reason}; {tilt_reason}",
                     recovery_rate=RECOVERY_RATES["tilt_adjustment"],
                     tier="court_terme",
+                    lost_ue=estimated_lost_ue,
+                    lost_gb=estimated_lost_gb,
                 )
             ]
         elif structural_ratio > 0.60 and not rebalancing_candidate and not carrier_candidate:
@@ -1106,48 +1248,67 @@ def evaluate_cell(
                 f"{threshold_reason}; structural congestion ratio {round(structural_ratio * 100, 1)}% "
                 f"with no rebalancing/carrier candidate"
             )
-            if structural_ratio > 0.80:
-                recommended_actions = [
-                    _build_action(
-                        action_name="Add Site",
-                        reason=structural_reason,
-                        recovery_rate=RECOVERY_RATES["new_site"],
-                        tier="long_terme",
-                    )
-                ]
-            else:
-                recommended_actions = [
-                    _build_action(
-                        action_name="Add Sector",
-                        reason=structural_reason,
-                        recovery_rate=RECOVERY_RATES["new_sector"],
-                        tier="long_terme",
-                    )
-                ]
-        else:
+            recommended_actions = [
+                _build_action(
+                    action_name="Add Sector",
+                    reason=structural_reason,
+                    recovery_rate=RECOVERY_RATES["new_sector"],
+                    tier="long_terme",
+                    lost_ue=estimated_lost_ue,
+                    lost_gb=estimated_lost_gb,
+                )
+            ]
+        elif tilt_candidate:
+            tilt_reason = "high Timing Advance (TA) or excessive power" if (high_ta or high_power) else "poor CQI or degraded throughput"
             recommended_actions = [
                 _build_action(
                     action_name="Tilt Adjustment",
-                    reason=f"{threshold_reason}; safe fallback when no higher-priority candidate applies",
+                    reason=f"{threshold_reason}; {tilt_reason} with no higher-priority candidate",
                     recovery_rate=RECOVERY_RATES["tilt_adjustment"],
                     tier="court_terme",
+                    lost_ue=estimated_lost_ue,
+                    lost_gb=estimated_lost_gb,
+                )
+            ]
+        else:
+            # Cell is congested by PRB but signal quality is acceptable — capacity-driven
+            recommended_actions = [
+                _build_action(
+                    action_name="Add Sector",
+                    reason=f"{threshold_reason}; PRB-saturated but CQI/throughput acceptable — capacity-driven, manual review recommended",
+                    recovery_rate=RECOVERY_RATES["new_sector"],
+                    tier="long_terme",
+                    lost_ue=estimated_lost_ue,
+                    lost_gb=estimated_lost_gb,
                 )
             ]
 
     if not is_congested:
-        recommended_actions.append(
-            {
-                "action_name": "No Action Required",
-                "action": "No Action Required",
-                "reason": "Congestion thresholds are not jointly met",
-                "tier": "none",
-                "confidence": "high",
-                "recovery_rate": 0.0,
-                "estimated_recovery_pct": 0,
-                "gain_ue": 0,
-                "gain_gb": 0.0,
-            }
-        )
+        if 0 < throughput_kbps < ORANGE_THRESHOLDS["THROUGHPUT_DEGRADED"] and cqi < ORANGE_THRESHOLDS["CQI_POOR"]:
+            recommended_actions.append(
+                _build_action(
+                    action_name="Check Coverage/Interference",
+                    reason="coverage/interference issue (CQI and throughput poor with PRB < 70%)",
+                    recovery_rate=RECOVERY_RATES["check_coverage"],
+                    tier="court_terme",
+                    lost_ue=0,
+                    lost_gb=0.0,
+                )
+            )
+        else:
+            recommended_actions.append(
+                {
+                    "action_name": "No Action Required",
+                    "action": "No Action Required",
+                    "reason": "Congestion thresholds are not jointly met",
+                    "tier": "none",
+                    "confidence": "high",
+                    "recovery_rate": 0.0,
+                    "estimated_recovery_pct": 0,
+                    "gain_ue": 0,
+                    "gain_gb": 0.0,
+                }
+            )
 
     recommended_actions.sort(key=lambda item: ACTION_ORDER.get(str(item.get("action_name")), 999))
     for index, action in enumerate(recommended_actions, start=1):
@@ -1160,13 +1321,18 @@ def evaluate_cell(
         if _safe_float_or_none(top_action.get("recovery_rate")) is None:
             top_action["recovery_rate"] = normalized_recovery_pct
             top_action["estimated_recovery_pct"] = int(round(normalized_recovery_pct))
-            top_action["gain_ue"] = round(LOST_UE_BASELINE * top_action_recovery_ratio, 2)
-            top_action["gain_gb"] = round(LOST_GB_BASELINE * top_action_recovery_ratio, 2)
+            top_action["gain_ue"] = round(estimated_lost_ue * top_action_recovery_ratio, 2)
+            top_action["gain_gb"] = round(estimated_lost_gb * top_action_recovery_ratio, 2)
 
-    estimated_gain_ue = round(LOST_UE_BASELINE * top_action_recovery_ratio, 2) if is_congested else 0
-    estimated_gain_gb = round(LOST_GB_BASELINE * top_action_recovery_ratio, 2) if is_congested else 0.0
-    estimated_lost_ue = LOST_UE_BASELINE if is_congested else 0
-    estimated_lost_gb = LOST_GB_BASELINE if is_congested else 0.0
+    estimated_gain_ue = round(estimated_lost_ue * top_action_recovery_ratio, 2) if is_congested else 0
+    estimated_gain_gb = round(estimated_lost_gb * top_action_recovery_ratio, 2) if is_congested else 0.0
+
+    # --- Bug 4 fix: null out top_neighbor when action is not Load Rebalancing ---
+    top_action_name = str(
+        (recommended_actions[0].get("action_name") or "") if recommended_actions else ""
+    )
+    if top_action_name != "Load Rebalancing":
+        top_neighbor = None
 
     enodeb_name = _to_str(
         (baseline_meta.get("enodeb_name") if not baseline_meta.empty else "")
@@ -1211,9 +1377,10 @@ def evaluate_cell(
         "structural_congestion": bool(structural_ratio > 0.60),
         "top_neighbors": neighbors,
         "top_neighbor_for_rebalancing": top_neighbor,
+        "congestion_trigger": threshold_reason if is_congested else "",
         "estimated_lost_ue": estimated_lost_ue,
         "estimated_lost_gb": estimated_lost_gb,
-        "estimated_gain_ue": estimated_gain_ue,
+        "estimated_gain_ue": int(round(estimated_gain_ue)),
         "estimated_gain_gb": round(estimated_gain_gb, 2),
         "recommended_actions": recommended_actions,
     }
@@ -1234,16 +1401,47 @@ def evaluate_all_cells_for_export(
 
     cell_names = sorted(set(baseline_df["cell_name"].astype(str).tolist()) | set(observations_df["cell_name"].astype(str).tolist()))
 
+    busy_hour_profile = context.get("busy_hour_profile") or {}
+
     rows: list[dict[str, Any]] = []
     for cell_name in cell_names:
         if not _to_str(cell_name):
             continue
+
+        # Force per-cell evaluation globally unless request_timestamp was explicitly passed via API lookup, 
+        # but for evaluate_all_cells_for_export, we want to IGNORE the request parameter 
+        # so it forces the natural peak hour.
+        cell_timestamp = None
+        
+        profile = busy_hour_profile.get(cell_name, {})
+        hour_stats = profile.get("hour_stats", {})
+        busy_hours = set(profile.get("busy_hours", []))
+
+        peak_hour = None
+        max_prb = -1.0
+
+        for hour_str, stats in hour_stats.items():
+            hour_int = int(hour_str)
+            if hour_int in busy_hours:
+                mean_prb = stats.get("mean_prb", 0.0)
+                if mean_prb > max_prb:
+                    max_prb = mean_prb
+                    peak_hour = hour_int
+
+        if peak_hour is not None:
+            cell_rows = observations_df[observations_df["cell_name"].astype(str).str.strip().eq(cell_name)]
+            if "hour" in cell_rows.columns:
+                hour_rows = cell_rows[pd.to_numeric(cell_rows["hour"], errors="coerce").fillna(-1).astype(int) == peak_hour]
+                if not hour_rows.empty:
+                    best_row = hour_rows.sort_values(["prb_load", "timestamp"]).iloc[-1]
+                    cell_timestamp = best_row.get("timestamp")
+
         try:
             evaluated = evaluate_cell(
                 cell_name=cell_name,
                 context=context,
                 request_kpis=None,
-                request_timestamp=request_timestamp,
+                request_timestamp=cell_timestamp,
             )
 
             current_kpis = evaluated.get("current_kpis") or {}

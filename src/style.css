@@ -595,6 +595,42 @@ html, body {
 .stat-card.stat-success { background: var(--success-soft); }
 .stat-card.stat-success .stat-value { color: var(--success); }
 
+/* ===== Network Impact Summary ===== */
+.summary-stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.summary-stat {
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-md);
+    padding: 10px;
+    text-align: center;
+    border: 1px solid transparent;
+    transition: all var(--transition-normal);
+}
+
+.summary-stat:hover {
+    border-color: var(--orange-primary);
+}
+
+.summary-stat-value {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text-primary);
+    line-height: 1.3;
+}
+
+.summary-stat-label {
+    font-size: 10px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    margin-top: 2px;
+}
+
 /* ===== Metrics ===== */
 .metric-row {
     display: flex;
