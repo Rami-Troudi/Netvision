@@ -43,6 +43,12 @@ STRUCTURAL_BUSY_HOUR_PRB: float = 75.0
 # Severity threshold for congestion fallback
 SEVERITY_CONGESTED: int = 50
 
+# Site-wide saturation guardrails for CAPEX recommendations.
+# Add Site should only be considered when most cells on a site are saturated
+# across multiple calendar days, not from a single hot snapshot.
+SITE_SATURATION_CELL_RATIO: float = 0.60
+SITE_SATURATION_MIN_DAYS: int = 3
+
 
 # ---------------------------------------------------------------------------
 # Recovery Rates (%) — per-action type
@@ -52,17 +58,23 @@ RECOVERY_RATES: dict[str, float] = {
     "tilt_adjustment": 15.0,
     "load_rebalancing": 40.0,
     "carrier_extension": 50.0,
+    "actions_on_neighbors": 35.0,
+    "add_band": 50.0,
     "new_sector": 85.0,
     "new_site": 90.0,
+    "check_coverage": 10.0,
 }
 
 # Display-name → internal key mapping (used by action engine)
 ACTION_NAME_TO_RATE_KEY: dict[str, str] = {
     "Load Rebalancing": "load_rebalancing",
+    "Actions on Neighbors": "actions_on_neighbors",
     "Tilt Adjustment": "tilt_adjustment",
     "Carrier Extension": "carrier_extension",
+    "Add Band": "add_band",
     "Add Sector": "new_sector",
     "Add Site": "new_site",
+    "Check Coverage/Interference": "check_coverage",
 }
 
 # Estimated baseline loss for a congested cell

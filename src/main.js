@@ -74,6 +74,79 @@ const IMPORT_REALISM_POLICY = Object.freeze({
     hideSectorsWithoutTa: true,
 });
 
+const MATERIAL_ICON_FALLBACKS = Object.freeze({
+    cell_tower: '◉',
+    dark_mode: '◐',
+    analytics: '◒',
+    query_stats: '▤',
+    upload_file: '⇧',
+    download: '⇩',
+    refresh: '↻',
+    fullscreen: '⛶',
+    chevron_left: '‹',
+    chevron_right: '›',
+    play_arrow: '▶',
+    warning: '!',
+    error: '!',
+    info: 'i',
+    trending_up: '↑',
+    check_circle: '✓',
+    speed: '◌',
+    assessment: 'Σ',
+    open_in_full: '⛶',
+    expand_less: '⌃',
+    expand_more: '⌄',
+    close: '×',
+    lightbulb: '◇',
+    engineering: '⚙',
+    add_location_alt: '+',
+    filter_alt: '⧉',
+    restart_alt: '↺',
+    search: '⌕',
+    layers: '▣',
+    keyboard: '⌨',
+    data_object: '{}',
+    table_chart: '▦',
+    description: '¶',
+    attach_file: '⌁',
+    exit_to_app: '⇥',
+    bolt: 'ϟ',
+    edit: '✎',
+    arrow_back: '←',
+    save: '◆',
+    rule: '✓',
+    map: '⌖',
+    hourglass_top: '⋯',
+    dns: '▦',
+});
+
+function installMaterialIconFallback() {
+    let observer = null;
+
+    const applyFallbacks = () => {
+        document.querySelectorAll('.material-symbols-outlined').forEach((element) => {
+            const originalName = element.dataset.iconName || element.textContent.trim();
+            const fallback = MATERIAL_ICON_FALLBACKS[originalName];
+            if (!fallback) return;
+            if (element.textContent === fallback && element.classList.contains('icon-fallback-active')) return;
+            element.dataset.iconName = originalName;
+            element.textContent = fallback;
+            element.classList.add('icon-fallback-active');
+            element.setAttribute('aria-hidden', 'true');
+        });
+    };
+
+    const activate = () => {
+        applyFallbacks();
+        if (!observer) {
+            observer = new MutationObserver(applyFallbacks);
+            observer.observe(document.body, { childList: true, subtree: true });
+        }
+    };
+
+    activate();
+}
+
 // --- State Management ---
 const state = {
     baseline: {},
@@ -85,6 +158,10 @@ const state = {
     peakHoursByCell: {},
     driftByCell: {},
     driftAlerts: [],
+    driftStatus: {
+        available: null,
+        reason: '',
+    },
     driftThresholds: {
         absPrbDelta: 15,
         pctPrbDelta: 30,
@@ -500,6 +577,10 @@ async function loadDriftAlerts() {
         const alerts = Array.isArray(payload?.alerts) ? payload.alerts : [];
         state.driftAlerts = alerts;
         state.driftByCell = buildDriftAlertCellMap(alerts);
+        state.driftStatus = {
+            available: payload?.available !== false,
+            reason: String(payload?.reason || ''),
+        };
         applyPeakAndDriftMetadataToFeatures();
         updateDriftAlertsUI();
         return alerts;
@@ -507,6 +588,10 @@ async function loadDriftAlerts() {
         console.warn('Drift alerts unavailable:', err?.message || err);
         state.driftAlerts = [];
         state.driftByCell = {};
+        state.driftStatus = {
+            available: false,
+            reason: err?.message || 'Drift alerts unavailable.',
+        };
         applyPeakAndDriftMetadataToFeatures();
         updateDriftAlertsUI();
         return [];
@@ -1119,8 +1204,10 @@ function hideSiteInfoPanel() {
 
 const BACKEND_ACTION_TO_SIM_ACTION = Object.freeze({
     'Load Rebalancing': 'redistribute',
+    'Actions on Neighbors': 'redistribute',
     'Tilt Adjustment': 'tilt',
     'Carrier Extension': 'add_carrier',
+    'Add Band': 'add_carrier',
     'Add Sector': 'add_sector',
     'Add Site': 'add_site',
     'No Action Required': null,
@@ -1567,6 +1654,7 @@ window.applyRecommendation = function(idx) {
 
     actionSelect.value = recommendation.simAction;
     buildActionParamsUI(recommendation.simAction);
+    syncActionRunButtonState(recommendation.cellName);
 
     setTimeout(() => {
         const defaults = recommendation.computedParams || {};
@@ -1829,7 +1917,7 @@ function renderActionPanel(cellName) {
     const isCritical = obs && (obs.congested || (obs.cqi !== null && obs.cqi < CONFIG.CQI_THRESHOLD));
 
     panel.classList.remove('disabled');
-    runBtn.disabled = false; // Always allow simulation on any selected cell
+    syncActionRunButtonState(cellName);
     
     if (isCritical) {
         result.innerHTML = '<div class="action-hint action-hint-warning">⚠️ Cell is congested or has low CQI - action recommended.</div>';
@@ -1837,6 +1925,16 @@ function renderActionPanel(cellName) {
         result.innerHTML = `<div class="action-hint">Cell: ${escapeHtml(cellName)} (healthy - simulation for testing)</div>`;
     }
     buildActionParamsUI(select.value || '');
+}
+
+function syncActionRunButtonState(cellName) {
+    const runBtn = document.getElementById('action-run');
+    const select = document.getElementById('action-select');
+    if (!runBtn || !select) return;
+
+    const hasCell = Boolean(cellName);
+    const hasAction = Boolean((select.value || '').trim());
+    runBtn.disabled = !(hasCell && hasAction);
 }
 
 function buildActionParamsUI(action) {
@@ -2999,8 +3097,9 @@ function createLiveDatasetSnapshot() {
         currentStats: deepClone(state.currentStats),
         globalStats: deepClone(state.globalStats),
         peakHoursByCell: deepClone(state.peakHoursByCell),
-        driftByCell: deepClone(state.driftByCell),
-        driftAlerts: deepClone(state.driftAlerts),
+    driftByCell: deepClone(state.driftByCell),
+    driftAlerts: deepClone(state.driftAlerts),
+    driftStatus: deepClone(state.driftStatus),
         capturedAt: new Date().toISOString(),
     };
 }
@@ -4184,6 +4283,7 @@ async function restoreLiveDatasetSession() {
     state.peakHoursByCell = deepClone(snapshot.peakHoursByCell || {});
     state.driftByCell = deepClone(snapshot.driftByCell || {});
     state.driftAlerts = Array.isArray(snapshot.driftAlerts) ? deepClone(snapshot.driftAlerts) : [];
+    state.driftStatus = deepClone(snapshot.driftStatus || { available: null, reason: '' });
     state.lastVisibleFilterSignature = null;
     state.lastCongestedCount = null;
 
@@ -5334,6 +5434,12 @@ function updateDriftAlertsUI() {
     const alerts = Array.isArray(state.driftAlerts) ? state.driftAlerts : [];
     if (badge) badge.textContent = String(alerts.length);
 
+    if (state.driftStatus?.available === false) {
+        const reason = state.driftStatus.reason || 'Drift artifacts are unavailable for this runtime dataset.';
+        list.innerHTML = `<div class="alert-placeholder">${escapeHtml(reason)}</div>`;
+        return;
+    }
+
     if (!alerts.length) {
         list.innerHTML = '<div class="alert-placeholder">No drift alerts above threshold</div>';
         return;
@@ -5658,7 +5764,7 @@ function addMapLayers(map, sites) {
                 'case',
                 ['==', ['get', 'status'], 'no-data'],
                 0.03,
-                ['interpolate', ['linear'], ['zoom'], 12, 0.09, 15, 0.2]
+                0.16
             ]
         }
     });
@@ -6006,7 +6112,10 @@ function setupEventHandlers() {
     document.getElementById('btn-refresh')?.addEventListener('click', () => window.location.reload());
 
     const actionSelect = document.getElementById('action-select');
-    actionSelect?.addEventListener('change', () => buildActionParamsUI(actionSelect.value));
+    actionSelect?.addEventListener('change', () => {
+        buildActionParamsUI(actionSelect.value);
+        syncActionRunButtonState(state.selectedCellName);
+    });
     document.getElementById('action-run')?.addEventListener('click', () => runSimulation(state.selectedCellName, actionSelect?.value));
     document.getElementById('site-planning-run')?.addEventListener('click', () => runSitePlanningSimulation(state.selectedCellName));
     document.getElementById('site-planning-site-type')?.addEventListener('change', () => renderSitePlanningPanel(state.selectedCellName));
@@ -6050,6 +6159,7 @@ function setLoading(isLoading, progress = '') {
 async function init() {
     if (hasInitialized) return;
     hasInitialized = true;
+    installMaterialIconFallback();
     try {
         setLoading(true, 'Loading baseline...');
         

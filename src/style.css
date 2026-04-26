@@ -80,6 +80,34 @@ body.theme-light {
     --surface-glass-strong: rgba(255, 255, 255, 0.98);
 }
 
+.material-symbols-outlined {
+    font-family: 'Material Symbols Outlined';
+    font-weight: normal;
+    font-style: normal;
+    font-size: 24px;
+    line-height: 1;
+    letter-spacing: normal;
+    text-transform: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1em;
+    min-width: 1em;
+    overflow: hidden;
+    white-space: nowrap;
+    word-wrap: normal;
+    direction: ltr;
+    font-feature-settings: 'liga';
+    -webkit-font-feature-settings: 'liga';
+    -webkit-font-smoothing: antialiased;
+}
+
+.material-symbols-outlined.icon-fallback-active {
+    font-family: 'IBM Plex Sans', 'Segoe UI Symbol', sans-serif;
+    font-feature-settings: normal;
+    -webkit-font-feature-settings: normal;
+}
+
 /* Reset & Base */
 *, *::before, *::after {
     box-sizing: border-box;

@@ -166,7 +166,16 @@ async function computeDriftRows() {
 }
 
 async function loadDriftRows() {
-  const info = await stat(VAL_PREDICTIONS_PATH)
+  let info
+  try {
+    info = await stat(VAL_PREDICTIONS_PATH)
+  } catch (err) {
+    if (err?.code === 'ENOENT') {
+      return null
+    }
+    throw err
+  }
+
   if (driftCache.rows.length && driftCache.mtimeMs === info.mtimeMs) {
     return driftCache.rows
   }
@@ -193,6 +202,22 @@ export default async function handler(req, res) {
 
   try {
     const rows = await loadDriftRows()
+    if (rows === null) {
+      return res.status(200).json({
+        generated_at: new Date().toISOString(),
+        source: 'runtime_data/model_assets/val_predictions.parquet',
+        available: false,
+        reason: 'Drift model artifacts are not available for this runtime dataset.',
+        thresholds: {
+          abs_prb_delta: absThreshold,
+          pct_prb_delta: pctThreshold,
+        },
+        total_cells: 0,
+        alert_cells: 0,
+        alerts: [],
+      })
+    }
+
     const enrichedRows = rows.map((row) => {
       const absDelta = Number(row.last_abs_delta || 0)
       const pctDelta = Number(row.last_pct_delta || 0)
@@ -216,6 +241,7 @@ export default async function handler(req, res) {
     return res.status(200).json({
       generated_at: new Date().toISOString(),
       source: 'runtime_data/model_assets/val_predictions.parquet',
+      available: true,
       thresholds: {
         abs_prb_delta: absThreshold,
         pct_prb_delta: pctThreshold,

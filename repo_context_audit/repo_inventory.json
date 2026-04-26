@@ -1,0 +1,741 @@
+{
+  "repo": {
+    "path": "/home/rami/Desktop/Projects/odc",
+    "invocation_path": "/home/rami/Desktop/Github/Projects/odc",
+    "current_branch": "main",
+    "current_commit": "7c9ee67e417c51a0c36fee4acab7d5e68e2acb7e",
+    "remotes": [
+      {
+        "name": "origin",
+        "fetch": "https://github.com/yassinekolsi/odc.git",
+        "push": "https://github.com/yassinekolsi/odc.git"
+      },
+      {
+        "name": "target",
+        "fetch": "https://github.com/Rami-Troudi/tunisia-network-command.git",
+        "push": "https://github.com/Rami-Troudi/tunisia-network-command.git"
+      }
+    ],
+    "local_branches": [
+      {
+        "name": "main",
+        "commit": "7c9ee67",
+        "message": "Merge pull request #8 from yassinekolsi/prototype-v1"
+      }
+    ],
+    "remote_branches": [
+      {
+        "name": "origin/main",
+        "commit": "7c9ee67",
+        "message": "Merge pull request #8 from yassinekolsi/prototype-v1",
+        "relation_to_main": "0 ahead, 0 behind"
+      },
+      {
+        "name": "target/main",
+        "commit": "6ac6fbc",
+        "message": "Snapshot mirror of odc into tunisia-network-command",
+        "relation_to_main": "unrelated snapshot style; rev-list main...target/main reports 58 and 1"
+      }
+    ],
+    "working_tree": {
+      "clean": false,
+      "summary": [
+        "Source tree was clean before audit output creation.",
+        "Audit files were added under repo_context_audit/.",
+        "Ignored local generated folders present: .runtime/, .venv/, backend/__pycache__/, simulation/__pycache__/, runtime_data/."
+      ]
+    }
+  },
+  "build": {
+    "node_required": ">=22.5.0",
+    "observed_node": "v25.8.0",
+    "observed_npm": "11.11.0",
+    "npm_scripts": {
+      "dev": "next dev",
+      "worker": "node job-workers/jobWorker.js",
+      "build": "next build",
+      "start": "next start",
+      "lint": "next lint"
+    },
+    "python_requirements": [
+      "fastapi==0.124.0",
+      "uvicorn==0.37.0",
+      "pydantic==2.11.7",
+      "pandas==2.3.3",
+      "numpy==2.3.4",
+      "duckdb==1.5.1",
+      "pyarrow==20.0.0",
+      "joblib==1.4.2",
+      "scikit-learn==1.7.2",
+      "matplotlib==3.10.0",
+      "requests==2.32.3",
+      "redis>=5.0.0"
+    ],
+    "runtime_services": [
+      "Next.js dev/server process",
+      "FastAPI backend on http://127.0.0.1:8000",
+      "Redis on redis://127.0.0.1:6379",
+      "BullMQ worker via npm run worker",
+      "Generated runtime_data directory"
+    ]
+  },
+  "structure": {
+    "top_level": [
+      ".gitignore",
+      "README.md",
+      "assets/",
+      "backend/",
+      "docker-compose.yml",
+      "job-workers/",
+      "next.config.js",
+      "package-lock.json",
+      "package.json",
+      "pages/",
+      "public/",
+      "requirements.txt",
+      "run_backend.py",
+      "scripts/",
+      "simulation/",
+      "src/",
+      "start.ps1"
+    ],
+    "frontend": [
+      "pages/index.js",
+      "pages/_app.js",
+      "pages/_document.js",
+      "src/main.js",
+      "src/style.css",
+      "src/utils/featureUpdateContract.js",
+      "src/utils/timestampParsing.js",
+      "public/workers/dataWorker.js"
+    ],
+    "api_routes": [
+      "pages/api/data/[...slug].js",
+      "pages/api/drift.js",
+      "pages/api/jobs/[id].js",
+      "pages/api/jobs/index.js",
+      "pages/api/peak-hours.js",
+      "pages/api/recommend-context.js",
+      "pages/api/recommend.js",
+      "pages/api/recommendations-export.js",
+      "pages/api/simulate.js",
+      "pages/api/_lib/jobs.js",
+      "pages/api/_lib/security.js"
+    ],
+    "backend": [
+      "backend/__init__.py",
+      "backend/action_engine.py",
+      "backend/api.py",
+      "backend/common.py",
+      "backend/core_rules.py",
+      "backend/validate_pipeline.py",
+      "run_backend.py"
+    ],
+    "scripts": [
+      "scripts/__init__.py",
+      "scripts/process_time_series.py"
+    ],
+    "simulation": [
+      "simulation/simulator.py"
+    ],
+    "workers": [
+      "job-workers/jobWorker.js",
+      "public/workers/dataWorker.js"
+    ],
+    "runtime_data": [
+      "runtime_data/baseline.json",
+      "runtime_data/time_index.json",
+      "runtime_data/stats.json",
+      "runtime_data/time_data/01-12-2025_00-00.parquet",
+      "runtime_data/peak_hours.json",
+      "runtime_data/peak_hours.csv",
+      ".runtime/jobs.sqlite"
+    ]
+  },
+  "environment_variables": [
+    {
+      "name": "API_AUTH_TOKEN",
+      "files": [
+        "pages/api/_lib/security.js"
+      ],
+      "default": "",
+      "purpose": "Configured API token for Next API route authentication.",
+      "required": true,
+      "sensitive": true
+    },
+    {
+      "name": "API_TOKEN",
+      "files": [
+        "pages/api/_lib/security.js"
+      ],
+      "default": "",
+      "purpose": "Alternate configured API token.",
+      "required": false,
+      "sensitive": true
+    },
+    {
+      "name": "AUTH_TOKEN",
+      "files": [
+        "pages/api/_lib/security.js"
+      ],
+      "default": "",
+      "purpose": "Alternate configured API token.",
+      "required": false,
+      "sensitive": true
+    },
+    {
+      "name": "SESSION_TOKEN",
+      "files": [
+        "pages/api/_lib/security.js"
+      ],
+      "default": "",
+      "purpose": "Alternate configured API token.",
+      "required": false,
+      "sensitive": true
+    },
+    {
+      "name": "AUTH_BYPASS",
+      "files": [
+        "pages/api/_lib/security.js",
+        "start.ps1"
+      ],
+      "default": "",
+      "purpose": "Explicit bypass for token authentication, used by local Windows startup.",
+      "required": false,
+      "sensitive": false
+    },
+    {
+      "name": "NODE_ENV",
+      "files": [
+        "pages/api/_lib/security.js"
+      ],
+      "default": "",
+      "purpose": "Controls development auth bypass behavior.",
+      "required": false,
+      "sensitive": false
+    },
+    {
+      "name": "BACKEND_API_URL",
+      "files": [
+        "pages/api/recommend.js",
+        "pages/api/recommend-context.js",
+        "pages/api/recommendations-export.js"
+      ],
+      "default": "http://127.0.0.1:8000",
+      "purpose": "Base URL for FastAPI recommendation backend.",
+      "required": false,
+      "sensitive": false
+    },
+    {
+      "name": "BACKEND_API_TIMEOUT_MS",
+      "files": [
+        "pages/api/recommend.js",
+        "pages/api/recommend-context.js",
+        "pages/api/recommendations-export.js"
+      ],
+      "default": "15000/30000/420000 depending on route",
+      "purpose": "Timeout for backend proxy requests.",
+      "required": false,
+      "sensitive": false
+    },
+    {
+      "name": "BACKEND_API_RETRY_ATTEMPTS",
+      "files": [
+        "pages/api/recommendations-export.js"
+      ],
+      "default": "3",
+      "purpose": "Retry attempts for recommendation CSV export proxy.",
+      "required": false,
+      "sensitive": false
+    },
+    {
+      "name": "BACKEND_API_RETRY_DELAY_MS",
+      "files": [
+        "pages/api/recommendations-export.js"
+      ],
+      "default": "1500",
+      "purpose": "Retry backoff delay for recommendation CSV export proxy.",
+      "required": false,
+      "sensitive": false
+    },
+    {
+      "name": "REDIS_URL",
+      "files": [
+        "pages/api/_lib/jobs.js",
+        "job-workers/jobWorker.js",
+        "backend/api.py"
+      ],
+      "default": "redis://127.0.0.1:6379",
+      "purpose": "Redis connection for BullMQ jobs and backend export cache.",
+      "required": false,
+      "sensitive": false
+    },
+    {
+      "name": "JOB_QUEUE_NAME",
+      "files": [
+        "pages/api/_lib/jobs.js",
+        "job-workers/jobWorker.js"
+      ],
+      "default": "netvision-jobs",
+      "purpose": "BullMQ queue name shared by producer and worker.",
+      "required": false,
+      "sensitive": false
+    },
+    {
+      "name": "JOB_WORKER_CONCURRENCY",
+      "files": [
+        "job-workers/jobWorker.js"
+      ],
+      "default": "2",
+      "purpose": "BullMQ worker concurrency.",
+      "required": false,
+      "sensitive": false
+    },
+    {
+      "name": "DRIFT_ABS_PRB_THRESHOLD",
+      "files": [
+        "pages/api/drift.js"
+      ],
+      "default": "15",
+      "purpose": "Default absolute PRB drift alert threshold.",
+      "required": false,
+      "sensitive": false
+    },
+    {
+      "name": "DRIFT_PCT_PRB_THRESHOLD",
+      "files": [
+        "pages/api/drift.js"
+      ],
+      "default": "30",
+      "purpose": "Default percent PRB drift alert threshold.",
+      "required": false,
+      "sensitive": false
+    }
+  ],
+  "api_routes": [
+    {
+      "route": "/api/data/[...slug]",
+      "methods": [
+        "GET"
+      ],
+      "file": "pages/api/data/[...slug].js",
+      "purpose": "Serve allow-listed runtime JSON files and convert time_data Parquet slices into observations JSON.",
+      "input": "URL slug for baseline.json, time_index.json, stats.json, or time_data/*.json|*.parquet.",
+      "output": "JSON file stream or {timestamp, stats, observations, confidence?}.",
+      "dependencies": [
+        "runtime_data",
+        "parquetjs-lite"
+      ],
+      "auth": "requireAuthenticatedRequest; dev bypass possible if no token configured.",
+      "failure_modes": [
+        "400 invalid path",
+        "404 missing file",
+        "500 parquet read failure"
+      ]
+    },
+    {
+      "route": "/api/simulate",
+      "methods": [
+        "POST"
+      ],
+      "file": "pages/api/simulate.js",
+      "purpose": "Run direct Python simulation.",
+      "input": "{cell_name, action, params?, time_entry?, mode?}.",
+      "output": "simulation/simulator.py JSON result.",
+      "dependencies": [
+        "simulation/simulator.py",
+        "runtime_data/time_index.json",
+        "runtime_data/time_data"
+      ],
+      "auth": "Auth plus 10 requests/minute/IP.",
+      "failure_modes": [
+        "400 invalid action or time file",
+        "503 whitelist unavailable",
+        "500 Python spawn/simulation/JSON failure"
+      ]
+    },
+    {
+      "route": "/api/recommend",
+      "methods": [
+        "POST"
+      ],
+      "file": "pages/api/recommend.js",
+      "purpose": "Proxy recommendation request to FastAPI /predict.",
+      "input": "{cell_name, prb_load?, throughput?, active_users?, rrc_users?, cqi?, timestamp?}.",
+      "output": "FastAPI recommendation payload.",
+      "dependencies": [
+        "FastAPI backend",
+        "BACKEND_API_URL"
+      ],
+      "auth": "Auth plus 30 requests/minute/IP.",
+      "failure_modes": [
+        "400 missing cell_name",
+        "502 backend unavailable",
+        "backend status passthrough"
+      ]
+    },
+    {
+      "route": "/api/recommend-context",
+      "methods": [
+        "POST",
+        "DELETE"
+      ],
+      "file": "pages/api/recommend-context.js",
+      "purpose": "Upload/reset active imported recommendation context in FastAPI.",
+      "input": "POST {baseline, slices, source?}; DELETE empty.",
+      "output": "{success, context_source, cells?, observations?, busy_hour_profiles?, updated_at?}.",
+      "dependencies": [
+        "FastAPI backend"
+      ],
+      "auth": "Auth plus 10 requests/minute/IP.",
+      "failure_modes": [
+        "400 invalid payload",
+        "502 backend unavailable or rejected context"
+      ]
+    },
+    {
+      "route": "/api/recommendations-export",
+      "methods": [
+        "GET"
+      ],
+      "file": "pages/api/recommendations-export.js",
+      "purpose": "Proxy backend recommendation CSV export.",
+      "input": "Optional timestamp query.",
+      "output": "CSV text with backend content type/disposition.",
+      "dependencies": [
+        "FastAPI /recommendations/export"
+      ],
+      "auth": "Auth plus 30 requests/minute/IP.",
+      "failure_modes": [
+        "405 non-GET",
+        "502 backend unreachable",
+        "backend status passthrough"
+      ]
+    },
+    {
+      "route": "/api/drift",
+      "methods": [
+        "GET"
+      ],
+      "file": "pages/api/drift.js",
+      "purpose": "Compute drift alerts from validation predictions.",
+      "input": "abs_threshold?, pct_threshold?, limit?.",
+      "output": "{generated_at, source, thresholds, total_cells, alert_cells, alerts}.",
+      "dependencies": [
+        "runtime_data/model_assets/val_predictions.parquet"
+      ],
+      "auth": "Auth plus 20 requests/minute/IP.",
+      "failure_modes": [
+        "500 when model asset is missing",
+        "partial empty alerts on BigInt parquet decode issue"
+      ]
+    },
+    {
+      "route": "/api/peak-hours",
+      "methods": [
+        "GET"
+      ],
+      "file": "pages/api/peak-hours.js",
+      "purpose": "Load or compute per-cell peak PRB hours.",
+      "input": "refresh?, cell?, limit?.",
+      "output": "{generated_at, source, total_cells, total_returned, rows}.",
+      "dependencies": [
+        "runtime_data/time_index.json",
+        "runtime_data/time_data/*.parquet"
+      ],
+      "auth": "Auth plus 20 requests/minute/IP.",
+      "failure_modes": [
+        "500 missing/invalid runtime data",
+        "writes peak_hours.json/csv as generated cache"
+      ]
+    },
+    {
+      "route": "/api/jobs",
+      "methods": [
+        "POST"
+      ],
+      "file": "pages/api/jobs/index.js",
+      "purpose": "Create async simulation job.",
+      "input": "{job_type?, cell_name, action, params?, time_entry?}.",
+      "output": "202 {jobId, type, status}.",
+      "dependencies": [
+        ".runtime/jobs.sqlite",
+        "Redis",
+        "BullMQ"
+      ],
+      "auth": "Auth plus 20 requests/minute/IP.",
+      "failure_modes": [
+        "400 invalid payload",
+        "500 SQLite create failure",
+        "503 queue unavailable"
+      ]
+    },
+    {
+      "route": "/api/jobs/[id]",
+      "methods": [
+        "GET"
+      ],
+      "file": "pages/api/jobs/[id].js",
+      "purpose": "Return async job status and result/error.",
+      "input": "Job id path parameter.",
+      "output": "{jobId,type,status,created_at,updated_at,result?} or {error}.",
+      "dependencies": [
+        ".runtime/jobs.sqlite",
+        ".runtime/job-results"
+      ],
+      "auth": "Auth plus 120 requests/minute/IP.",
+      "failure_modes": [
+        "400 missing id",
+        "404 job not found"
+      ]
+    }
+  ],
+  "data_contracts": [
+    {
+      "name": "runtime baseline",
+      "path": "runtime_data/baseline.json",
+      "format": "JSON object keyed by cell name",
+      "required_by": [
+        "frontend",
+        "FastAPI action engine",
+        "simulation"
+      ],
+      "schema_summary": [
+        "enodeb_name",
+        "longitude",
+        "latitude",
+        "azimuth",
+        "frequency_band",
+        "localcell_id",
+        "cell_fdd_tdd_indication optional"
+      ]
+    },
+    {
+      "name": "time index",
+      "path": "runtime_data/time_index.json",
+      "format": "JSON object",
+      "required_by": [
+        "frontend timeline",
+        "data API",
+        "simulation whitelist",
+        "worker time-file validation"
+      ],
+      "schema_summary": [
+        "total_timestamps",
+        "start_time",
+        "end_time",
+        "storage_format",
+        "timestamps[] with timestamp, filename, stats"
+      ]
+    },
+    {
+      "name": "time slice parquet",
+      "path": "runtime_data/time_data/*.parquet",
+      "format": "Parquet",
+      "required_by": [
+        "frontend",
+        "FastAPI action engine",
+        "simulation",
+        "peak-hours API"
+      ],
+      "schema_summary": [
+        "cell_name VARCHAR",
+        "load DOUBLE",
+        "throughput DOUBLE",
+        "cqi DOUBLE",
+        "traffic DOUBLE",
+        "ta DOUBLE",
+        "signal_power DOUBLE",
+        "congested BOOLEAN",
+        "severity BIGINT",
+        "issue_type VARCHAR",
+        "root_cause VARCHAR",
+        "health_score BIGINT"
+      ]
+    },
+    {
+      "name": "stats",
+      "path": "runtime_data/stats.json",
+      "format": "JSON object",
+      "required_by": [
+        "frontend global stats"
+      ],
+      "schema_summary": [
+        "total_timestamps",
+        "total_cells",
+        "total_sites",
+        "frequency_bands"
+      ]
+    },
+    {
+      "name": "drift validation predictions",
+      "path": "runtime_data/model_assets/val_predictions.parquet",
+      "format": "Parquet",
+      "required_by": [
+        "drift API"
+      ],
+      "schema_summary": [
+        "CELLNAME",
+        "DATE_ID",
+        "y_true_prb",
+        "y_pred_prb",
+        "ENODEB_NAME optional"
+      ]
+    },
+    {
+      "name": "jobs database",
+      "path": ".runtime/jobs.sqlite",
+      "format": "SQLite",
+      "required_by": [
+        "jobs API",
+        "job worker"
+      ],
+      "schema_summary": [
+        "id",
+        "type",
+        "status",
+        "request_json",
+        "result_json",
+        "result_path",
+        "error_text",
+        "queue_job_id",
+        "created_at",
+        "updated_at",
+        "started_at",
+        "completed_at"
+      ]
+    }
+  ],
+  "supported_actions": [
+    {
+      "action": "tilt",
+      "implemented_in": [
+        "simulation/simulator.py",
+        "src/main.js",
+        "backend/action_engine.py via Tilt Adjustment"
+      ],
+      "current_effect": "Adjusts downtilt/uptilt, load, CQI, throughput, and generic affected neighbors.",
+      "status": "implemented"
+    },
+    {
+      "action": "redistribute",
+      "implemented_in": [
+        "simulation/simulator.py",
+        "src/main.js",
+        "backend/action_engine.py via Load Rebalancing"
+      ],
+      "current_effect": "Moves load to target/generic neighbors with confidence based on target headroom.",
+      "status": "implemented"
+    },
+    {
+      "action": "add_carrier",
+      "implemented_in": [
+        "simulation/simulator.py",
+        "src/main.js",
+        "backend/action_engine.py via Add Band or Carrier Extension mapping"
+      ],
+      "current_effect": "Adds band/carrier capacity, reduces load, improves CQI and throughput.",
+      "status": "implemented with naming mismatch risk"
+    },
+    {
+      "action": "add_sector",
+      "implemented_in": [
+        "simulation/simulator.py",
+        "src/main.js",
+        "backend/action_engine.py"
+      ],
+      "current_effect": "Adds structural capacity with shared-backhaul adjustment and before/after KPI changes.",
+      "status": "implemented"
+    },
+    {
+      "action": "add_site",
+      "implemented_in": [
+        "simulation/simulator.py",
+        "src/main.js",
+        "backend/action_engine.py"
+      ],
+      "current_effect": "Deploys capacitary site and heavily offloads load/users.",
+      "status": "implemented"
+    },
+    {
+      "action": "new_site",
+      "implemented_in": [
+        "simulation/simulator.py",
+        "src/main.js site planning"
+      ],
+      "current_effect": "Alias-like direct site planning action for new site deployment.",
+      "status": "implemented"
+    },
+    {
+      "action": "Actions on Neighbors",
+      "implemented_in": [
+        "backend/action_engine.py"
+      ],
+      "current_effect": "Recommended action only; no simulator mapping in current frontend.",
+      "status": "partial and blocked by missing recovery rate key"
+    },
+    {
+      "action": "Check Coverage/Interference",
+      "implemented_in": [
+        "backend/action_engine.py"
+      ],
+      "current_effect": "Non-congested poor-quality recommendation.",
+      "status": "partial and blocked by missing recovery rate key"
+    }
+  ],
+  "features": {
+    "implemented": [
+      "MapLibre dashboard with sectors/cells/sites",
+      "Runtime data loading via /api/data",
+      "Timeline slider and playback",
+      "Browser-worker CSV parsing/import mapping",
+      "Custom imported dataset sessions",
+      "Peak-hour metadata API",
+      "Async simulation jobs with Redis/BullMQ/SQLite",
+      "Fast simulator for tilt, carrier, rebalancing, add sector, add site",
+      "CSV recommendation export proxy",
+      "Token auth and in-memory rate limits"
+    ],
+    "partial": [
+      "FastAPI recommendations exist but backend import is currently broken",
+      "Drift API exists but local model asset is missing",
+      "Validation script exists but targets stale/missing model artifacts",
+      "Recommendation context upload exists but uses global process state"
+    ],
+    "ui_only_or_unclear": [
+      "Legacy action parameter branches for power/parameter_tuning/mimo/small_cell/split_cell",
+      "Drift alert panel without local model artifact",
+      "Network summary action distribution based on frontend heuristics"
+    ],
+    "mentioned_but_not_found": [
+      "Forecast endpoint/scripts on current main",
+      "LICENSE file",
+      "workers/ directory on current main",
+      "Raw CSV files referenced by README"
+    ]
+  },
+  "risks": [
+    "FastAPI backend cannot start because action_engine imports SITE_SATURATION_CELL_RATIO and SITE_SATURATION_MIN_DAYS missing from core_rules.",
+    "RECOVERY_RATES lacks actions_on_neighbors, add_band, and check_coverage keys used by action_engine.",
+    "Drift and validation reference missing runtime_data/model_assets artifacts.",
+    "target/main diverges significantly and contains forecast files not present on current main.",
+    "Development auth bypass can expose APIs if deployed with NODE_ENV not production and no token configured.",
+    "Rate limiting is process-local and not suitable for multi-instance production.",
+    "README references workers/ and LICENSE that are absent on current main.",
+    "No tests were found for backend startup, data contracts, import worker, or API behavior.",
+    "Site planning uses direct simulation while normal action simulation uses async jobs.",
+    "Validation script hardcodes 1554 cells and stale French labels while local runtime data has 50 cells."
+  ],
+  "open_questions": [
+    "Is current main or target/main the intended product baseline?",
+    "What should the missing site saturation constants be?",
+    "Should forecast be restored or kept removed?",
+    "Should drift/model_assets remain in the solution?",
+    "What is the canonical sample dataset location and size?",
+    "Should FastAPI have its own auth layer?",
+    "Should imported recommendation context be per user/session instead of global process state?",
+    "Should all simulations go through the async queue?",
+    "Which action labels are canonical?",
+    "What is the expected production deployment target?"
+  ]
+}

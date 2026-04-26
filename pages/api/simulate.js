@@ -13,6 +13,7 @@ const ALLOWED_ACTIONS = new Set([
   'add_site'
 ])
 const ALLOWED_MODES = new Set(['fast']) // fast is the only supported mode
+const PYTHON_BIN = (process.env.PYTHON_BIN || 'python').trim() || 'python'
 
 let allowedTimeFiles = null
 
@@ -160,7 +161,7 @@ export default async function handler(req, res) {
 
   try {
     await new Promise((resolve, reject) => {
-      const python = spawn('python', args, { 
+      const python = spawn(PYTHON_BIN, args, { 
         cwd: projectRoot,
         timeout: timeout,
         shell: false  // let spawn handle quoting; avoids PowerShell eating JSON braces

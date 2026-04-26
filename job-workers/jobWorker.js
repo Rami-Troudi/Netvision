@@ -8,6 +8,7 @@ const { Worker } = require('bullmq')
 
 const JOB_QUEUE_NAME = (process.env.JOB_QUEUE_NAME || 'netvision-jobs').trim()
 const REDIS_URL = (process.env.REDIS_URL || 'redis://127.0.0.1:6379').trim()
+const PYTHON_BIN = (process.env.PYTHON_BIN || 'python').trim() || 'python'
 
 const JOB_STATUSES = {
   PENDING: 'pending',
@@ -147,7 +148,7 @@ async function loadAllowedTimeFiles() {
 
 function runPython({ args, timeout }) {
   return new Promise((resolve, reject) => {
-    const child = spawn('python', args, {
+    const child = spawn(PYTHON_BIN, args, {
       cwd: PROJECT_ROOT,
       timeout,
       shell: false,
