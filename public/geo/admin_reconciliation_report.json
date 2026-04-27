@@ -1,0 +1,36 @@
+{
+  "generated_at": "2026-04-27T00:12:45.300109+00:00",
+  "sources": {
+    "geometry": "HDX / COD-AB cod-ab-tun",
+    "ins_rgph_2024_csv_present": false,
+    "ministry_interior_csv_present": false
+  },
+  "counts": {
+    "cod_governorates": 24,
+    "target_governorates": 24,
+    "cod_delegations": 264,
+    "target_delegations_ins_rgph_2024": 279
+  },
+  "warnings": [
+    "COD-AB delegation polygon count differs from INS/RGPH 2024 target 279; no polygons were invented.",
+    "INS/RGPH 2024 delegation registry CSV not provided; name reconciliation is incomplete.",
+    "Ministry of Interior validation CSV not provided; name reconciliation is incomplete."
+  ],
+  "name_reconciliation": {
+    "ins_missing_from_cod": [],
+    "cod_missing_from_ins": [],
+    "ministry_missing_from_cod": [],
+    "cod_missing_from_ministry": []
+  },
+  "cell_spatial_join": {
+    "generated_at": "2026-04-27T00:12:45.576980+00:00",
+    "total_cells": 50,
+    "matched_cells": 50,
+    "unmatched_cells": 0,
+    "unmatched": [],
+    "match_methods": {
+      "point_in_polygon": 50,
+      "nearest_delegation_centroid": 0
+    }
+  }
+}
