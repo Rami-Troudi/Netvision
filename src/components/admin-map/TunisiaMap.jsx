@@ -182,7 +182,7 @@ export default function TunisiaMap({ governoratesGeo, delegationsGeo, governorat
         <span>MapLibre could not start WebGL in this browser session. Use the regional rankings and search to navigate operational scopes.</span>
         <code>{mapError}</code>
       </div> : null}
-      <div className="map-toolbar"><strong>{metric.label}</strong><span>Scoped polygons + colored site dots</span></div>
+      <div className="map-toolbar"><strong>{metric.label}</strong><span>{scope.level === 'delegation' || scope.level === 'cell' ? 'Delegation radio sites visible' : 'Administrative polygons only'}</span></div>
       <div className="site-state-legend">
         {['critical','watch','degraded','healthy','no_data','unmatched'].map((state) => <span key={state}><i style={{ background: stateColor(state) }} />{state.replace('_', ' ')}</span>)}
       </div>

@@ -185,6 +185,11 @@ export function classifyRanIssue(cellOrScope) {
     severity = 'unknown'
     confidence = 0.8
     evidence.push('Missing PRB, throughput, CQI or user samples')
+  } else if (prb >= 85 && (!throughput || !cqi)) {
+    issue = 'Telemetry/Data Gap'
+    severity = 'unknown'
+    confidence = 0.75
+    evidence.push('PRB is high but throughput or CQI evidence is missing')
   } else if (prb >= 85 && throughput < 15 && cqi < 8 && ta >= 2.5) {
     issue = 'Edge/Interference Pressure'
     severity = 'critical'
@@ -200,21 +205,26 @@ export function classifyRanIssue(cellOrScope) {
     severity = 'high'
     confidence = 0.85
     evidence.push('High PRB', 'Low throughput', 'CQI acceptable')
-  } else if (prb >= 85 && throughput >= 15 && cqi >= 9) {
+  } else if (prb >= 85 && throughput >= 15 && cqi >= 8) {
     issue = 'Loaded but Acceptable'
     severity = 'medium'
     confidence = 0.7
-    evidence.push('High PRB', 'Good throughput', 'Good CQI')
+    evidence.push('High PRB', 'Throughput acceptable', 'CQI acceptable')
   } else if (recurrence < 0.2 && prb >= 85) {
     issue = 'Temporary Spike / Anomaly'
     severity = 'medium'
     confidence = 0.65
     evidence.push(`Low recurrence ${Math.round(recurrence * 100)}%`, 'High load is not persistent')
-  } else if (prb > 60) {
-    issue = 'Congestion Trend'
+  } else if (prb > 60 && throughput < 15 && cqi < 8) {
+    issue = 'QoS Degradation Trend'
     severity = 'medium'
-    confidence = 0.6
-    evidence.push('Moderate PRB elevation')
+    confidence = 0.68
+    evidence.push('Moderate PRB elevation', 'Low throughput', 'Low CQI')
+  } else if (prb > 60 && throughput >= 15 && cqi >= 8) {
+    issue = 'Loaded but Acceptable'
+    severity = 'low'
+    confidence = 0.62
+    evidence.push('Moderate PRB elevation', 'Throughput acceptable', 'CQI acceptable')
   }
   
   return { issue, severity, confidence, evidence }
@@ -317,6 +327,7 @@ export function computeSliceDelta(currentCells = [], previousCells = []) {
   const worsened = comparable.filter(({ current, previous }) => num(current.prb_load) - num(previous.prb_load) >= 10 || num(previous.throughput) - num(current.throughput) >= 5)
   const improved = comparable.filter(({ current, previous }) => num(previous.prb_load) - num(current.prb_load) >= 10 || num(current.throughput) - num(previous.throughput) >= 5)
   const maxBy = (fn) => comparable.reduce((best, pair) => !best || fn(pair) > fn(best) ? pair : best, null)
+  const positiveDelta = (pair, fn) => pair && fn(pair) > 0 ? { cell: pair.current.cell_name, value: fn(pair) } : null
   const prbInc = maxBy(({ current, previous }) => num(current.prb_load) - num(previous.prb_load))
   const throughputDrop = maxBy(({ current, previous }) => num(previous.throughput) - num(current.throughput))
   const cqiDrop = maxBy(({ current, previous }) => num(previous.cqi) - num(current.cqi))
@@ -327,9 +338,9 @@ export function computeSliceDelta(currentCells = [], previousCells = []) {
     recovered: recovered.length,
     worsened: worsened.length,
     improved: improved.length,
-    biggestPrbIncrease: prbInc ? { cell: prbInc.current.cell_name, value: num(prbInc.current.prb_load) - num(prbInc.previous.prb_load) } : null,
-    biggestThroughputDrop: throughputDrop ? { cell: throughputDrop.current.cell_name, value: num(throughputDrop.previous.throughput) - num(throughputDrop.current.throughput) } : null,
-    biggestCqiDrop: cqiDrop ? { cell: cqiDrop.current.cell_name, value: num(cqiDrop.previous.cqi) - num(cqiDrop.current.cqi) } : null,
+    biggestPrbIncrease: positiveDelta(prbInc, ({ current, previous }) => num(current.prb_load) - num(previous.prb_load)),
+    biggestThroughputDrop: positiveDelta(throughputDrop, ({ current, previous }) => num(previous.throughput) - num(current.throughput)),
+    biggestCqiDrop: positiveDelta(cqiDrop, ({ current, previous }) => num(previous.cqi) - num(current.cqi)),
   }
 }
 

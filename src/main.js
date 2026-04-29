@@ -32,7 +32,6 @@ export default function NetVisionDashboard() {
   const [workerState, setWorkerState] = useState('ready')
   const [theme, setTheme] = useState('light')
   const [importState, setImportState] = useState({ status: 'idle', fileName: '', importType: 'reference', preview: null, result: null, error: '' })
-  const [exportRecommendationsState, setExportRecommendationsState] = useState({ status: 'idle', error: '', filename: '' })
   const [endpointStatus, setEndpointStatus] = useState({})
   const [driftUi, setDriftUi] = useState({ acknowledgedUnavailable: false, collapsed: false })
   const [dataMode, setDataMode] = useState('real')
@@ -83,7 +82,6 @@ export default function NetVisionDashboard() {
       ]
       const optionalChecks = activeTab === 'system' ? [
         check('jobsHealth', '/api/jobs-health'),
-        check('export', '/api/recommendations-export'),
       ] : []
       const pairs = await Promise.all([...coreChecks, ...optionalChecks])
       if (!cancelled) {
@@ -168,7 +166,7 @@ export default function NetVisionDashboard() {
   }
 
   const cells = useMemo(() => data ? buildCells(data.baseline, data.observations, data.adminCellIndex) : [], [data])
-  const previousCells = useMemo(() => data ? buildCells(data.baseline, previousObservations, data.adminCellIndex) : [], [data, previousObservations])
+  const previousCells = useMemo(() => data && Object.keys(previousObservations || {}).length ? buildCells(data.baseline, previousObservations, data.adminCellIndex) : [], [data, previousObservations])
   const bands = useMemo(() => Array.from(new Set(cells.map((cell) => String(cell.frequency_band)).filter(Boolean))).sort(), [cells])
   const scopedCellsRaw = useMemo(() => {
     if (scope.level === 'governorate') return cells.filter((cell) => cell.admin?.gov_id === scope.governorateId)
@@ -419,31 +417,6 @@ export default function NetVisionDashboard() {
     window.setTimeout(() => setDemoStep(null), 6500)
   }
 
-  async function exportRecommendationsCsv() {
-    try {
-      setExportRecommendationsState({ status: 'downloading', error: '', filename: '' })
-      const ts = typeof data?.currentTimeEntry?.timestamp === 'string' ? data.currentTimeEntry.timestamp.trim() : ''
-      const query = ts ? `?timestamp=${encodeURIComponent(ts)}` : ''
-      const res = await fetch(`/api/recommendations-export${query}`)
-      if (!res.ok) {
-        const payload = await res.json().catch(() => ({}))
-        throw new Error(payload?.error || payload?.detail || `recommendations-export returned ${res.status}`)
-      }
-      const blob = await res.blob()
-      const contentDisposition = res.headers.get('content-disposition') || ''
-      const match = contentDisposition.match(/filename="?([^"]+)"?/)
-      const filename = match?.[1] || 'recommendations_export.csv'
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = filename
-      a.click()
-      URL.revokeObjectURL(url)
-      setExportRecommendationsState({ status: 'done', error: '', filename })
-    } catch (err) {
-      setExportRecommendationsState({ status: 'error', error: err.message || String(err), filename: '' })
-    }
-  }
 
   const endpointCoverage = useMemo(() => ([
     { endpoint: '/api/data/*', ...(endpointStatus.data || { wired: true, reachable: false, degraded: false, detail: '' }) },
@@ -453,7 +426,6 @@ export default function NetVisionDashboard() {
     { endpoint: '/api/backend-health', ...(endpointStatus.backend || { wired: true, reachable: false, degraded: false, detail: '' }) },
     { endpoint: '/api/jobs', ...(endpointStatus.jobsHealth || { wired: true, reachable: false, degraded: false, detail: '' }) },
     { endpoint: '/api/jobs/[id]', ...(endpointStatus.jobsHealth || { wired: true, reachable: false, degraded: false, detail: '' }) },
-    { endpoint: '/api/recommendations-export', ...(endpointStatus.export || { wired: true, reachable: false, degraded: false, detail: '' }) },
     { endpoint: '/api/recommend-context', wired: true, reachable: true, degraded: false, detail: 'invoked during import/restore' },
     { endpoint: '/api/recommend', wired: true, reachable: true, degraded: false, detail: 'invoked at cell scope' },
     { endpoint: '/api/simulate', wired: true, reachable: true, degraded: false, detail: 'compat route preserved' },
@@ -462,7 +434,7 @@ export default function NetVisionDashboard() {
   let panel = null
   if (!data && !loadError) panel = <div className="panel-shell"><div className="loading-block">Loading NetVision runtime data and administrative geography...</div></div>
   else if (loadError) panel = <div className="panel-shell"><div className="empty-state warning">{loadError}. If admin boundary files are missing, run scripts/prepare_admin_boundaries.py.</div></div>
-  else panel = <CockpitPanel activeTab={activeTab} scope={scope} data={data} dataMode={dataMode} onDataModeChange={changeDataMode} nationalSummary={nationalSummary} governorateSummary={governorateSummary} delegationSummary={delegationSummary} summary={currentSummary} governorateRows={governorateRows} delegationRows={delegationRows} selectedGovernorate={selectedGovernorate} selectedDelegation={selectedDelegation} selectedCell={selectedCell} siteRows={siteRows} scopedCells={scopedCells} alerts={alerts} metric={metric} currentTime={data.currentTimeEntry} filters={filters} onFilterChange={updateFilters} bands={bands} onSelectGovernorate={selectGovernorate} onSelectDelegation={selectDelegation} onSelectCell={selectCell} reconciliation={data.reconciliation} driftStatus={drift.status} driftAlerts={drift.alerts} driftUi={driftUi} onExpandDrift={() => setDriftUi((prev) => ({ ...prev, collapsed: false }))} peakRows={peakRows} peakPayload={peakPayload} busyMetric={busyMetric} onBusyMetricChange={setBusyMetric} onPeakRowSelect={selectPeakRow} backendHealth={backendHealth} workerState={workerState} importState={importState} exportRecommendationsState={exportRecommendationsState} endpointCoverage={endpointCoverage} onImportFile={handleImportFile} onImportTypeChange={(importType) => setImportState((prev) => ({ ...prev, importType }))} onRestoreRuntime={restoreRuntimeData} onExportJson={exportScopedJson} onExportReport={exportReport} onExportRecommendationsCsv={exportRecommendationsCsv} whyCritical={whyCritical} confidence={confidence} dataQuality={dataQuality} sliceDelta={sliceDelta} watchlist={watchlist} savedViews={savedViews} onPinScope={pinCurrentScope} onRestoreWatch={restoreScopeItem} onRemoveWatch={removeWatchItem} onSaveView={saveCurrentView} onRestoreSavedView={restoreSavedView} onRemoveSavedView={removeSavedView} onRunDemo={runGuidedDemo} />
+  else panel = <CockpitPanel activeTab={activeTab} scope={scope} data={data} dataMode={dataMode} onDataModeChange={changeDataMode} nationalSummary={nationalSummary} governorateSummary={governorateSummary} delegationSummary={delegationSummary} summary={currentSummary} governorateRows={governorateRows} delegationRows={delegationRows} selectedGovernorate={selectedGovernorate} selectedDelegation={selectedDelegation} selectedCell={selectedCell} siteRows={siteRows} scopedCells={scopedCells} alerts={alerts} metric={metric} currentTime={data.currentTimeEntry} filters={filters} onFilterChange={updateFilters} bands={bands} onSelectGovernorate={selectGovernorate} onSelectDelegation={selectDelegation} onSelectCell={selectCell} reconciliation={data.reconciliation} driftStatus={drift.status} driftAlerts={drift.alerts} driftUi={driftUi} onExpandDrift={() => setDriftUi((prev) => ({ ...prev, collapsed: false }))} peakRows={peakRows} peakPayload={peakPayload} busyMetric={busyMetric} onBusyMetricChange={setBusyMetric} onPeakRowSelect={selectPeakRow} backendHealth={backendHealth} workerState={workerState} importState={importState} endpointCoverage={endpointCoverage} onImportFile={handleImportFile} onImportTypeChange={(importType) => setImportState((prev) => ({ ...prev, importType }))} onRestoreRuntime={restoreRuntimeData} onExportJson={exportScopedJson} onExportReport={exportReport} whyCritical={whyCritical} confidence={confidence} dataQuality={dataQuality} sliceDelta={sliceDelta} watchlist={watchlist} savedViews={savedViews} onPinScope={pinCurrentScope} onRestoreWatch={restoreScopeItem} onRemoveWatch={removeWatchItem} onSaveView={saveCurrentView} onRestoreSavedView={restoreSavedView} onRemoveSavedView={removeSavedView} onRunDemo={runGuidedDemo} />
 
   return (
     <div className={`app-shell ${focusMode ? 'focus-mode' : ''} ${theme === 'dark' ? 'theme-dark' : ''}`}>
