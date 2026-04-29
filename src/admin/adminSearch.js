@@ -1,4 +1,4 @@
-export function buildSearchIndex(registry, cells) {
+export function buildSearchIndex(registry, cells, watchlist = [], savedViews = []) {
   const items = []
   for (const gov of registry?.governorates || []) {
     const name = gov.display_name || gov.gov_name || gov.gov_id || 'Unknown governorate'
@@ -13,6 +13,12 @@ export function buildSearchIndex(registry, cells) {
     if (cell.site_name) items.push({ type: 'site', label: `${cell.site_name} — Site, ${cell.admin?.deleg_name || 'Unmatched'}`, searchName: cell.site_name, id: cell.site_name, cell })
     items.push({ type: 'cell', label: `${cell.cell_name} — Cell`, searchName: cell.cell_name, id: cell.cell_name, cell })
   }
+  for (const item of watchlist || []) {
+    items.push({ type: 'watch', label: `${item.label} — Watchlist ${item.type}`, searchName: item.label, id: item.id, item })
+  }
+  for (const view of savedViews || []) {
+    items.push({ type: 'saved_view', label: `${view.name} — Saved view`, searchName: view.name, id: view.id, view })
+  }
   return items
 }
 
@@ -24,7 +30,7 @@ export function searchAdmin(query, index, limit = 8) {
     const label = item.label.toLowerCase()
     const searchName = String(item.searchName || '').toLowerCase()
     if (!label.includes(q)) continue
-    const typeRank = { governorate: 0, delegation: 1, site: 2, cell: 3 }[item.type] ?? 4
+    const typeRank = { governorate: 0, delegation: 1, site: 2, cell: 3, watch: 4, saved_view: 5 }[item.type] ?? 6
     const score = searchName === q ? 0 : label.startsWith(q) ? 1 : label.indexOf(q) + 10
     scored.push({ ...item, score, typeRank })
   }

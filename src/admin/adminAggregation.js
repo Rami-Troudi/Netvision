@@ -229,3 +229,133 @@ export function computeRecurrenceMetrics(rows = []) {
     structural_flag: withRecurrence.length / rows.length > 0.4,
   }
 }
+
+export function buildWhyCritical({ summary = {}, peakPayload = {}, peakRows = [], issue = null, warnings = [] } = {}) {
+  const rows = []
+  const congestionRate = num(summary.congestion_rate)
+  const prb = num(summary.avg_prb)
+  const throughput = num(summary.avg_throughput)
+  const cqi = num(summary.avg_cqi)
+  const peak = peakPayload?.summary || peakRows?.[0] || null
+  const recurrence = peakRows?.length ? computeRecurrenceMetrics(peakRows).recurrence_ratio : num(peak?.recurrence_ratio)
+
+  if (congestionRate > 0) rows.push(`${formatMetric(congestionRate)}% congested cells`)
+  if (prb >= 70) rows.push(`PRB pressure at ${formatMetric(prb)}%`)
+  if (throughput > 0 && throughput < 15) rows.push(`Low throughput at ${formatMetric(throughput)} Mbps`)
+  if (cqi > 0 && cqi < 8) rows.push(`CQI degradation at ${formatMetric(cqi)}`)
+  if (peak?.peak_hour) rows.push(`Peak at ${peak.peak_hour}`)
+  if (recurrence > 0) rows.push(`${formatMetric(recurrence * 100, 0)}% busy-hour recurrence`)
+  if (summary.congested_cells || summary.delegations) rows.push(`${summary.congested_cells || 0} affected cells across ${summary.delegations || 0} zones`)
+  if (issue?.issue && issue.issue !== 'Normal') rows.push(`Likely cause: ${issue.issue}`)
+  for (const warning of warnings.slice(0, 2)) rows.push(`Data warning: ${warning}`)
+
+  return rows.length ? rows : ['No critical pattern detected for the current scope.']
+}
+
+export function computeConfidence({ cells = [], summary = {}, peakRows = [], dataMode = 'real', timeIndex = [], reconciliation = {} } = {}) {
+  const total = Math.max(1, cells.length || summary.observed_cells || 0)
+  const missingKpi = cells.filter((cell) => !num(cell.prb_load) || !num(cell.throughput) || !num(cell.cqi)).length
+  const unmatched = cells.filter((cell) => !cell.admin || cell.admin.match_confidence === 'low' || cell.admin.match_method === 'unmatched').length
+  const lowSpatial = cells.filter((cell) => cell.admin?.match_confidence === 'low' || cell.admin?.match_confidence === 'medium').length
+  const recurrence = peakRows.length ? computeRecurrenceMetrics(peakRows).recurrence_ratio : 0
+  const timeCoverage = Array.isArray(timeIndex) ? Math.min(1, timeIndex.length / 24) : 0
+  let score = 100
+  score -= Math.min(35, (missingKpi / total) * 100)
+  score -= Math.min(25, (unmatched / total) * 100)
+  score -= Math.min(10, (lowSpatial / total) * 50)
+  if (timeCoverage < 1) score -= 15
+  if (dataMode === 'mock') score -= 15
+  if (peakRows.length && recurrence < 0.15) score -= 5
+  if (reconciliation?.warnings?.length) score -= Math.min(10, reconciliation.warnings.length * 2)
+  score = Math.max(0, Math.min(100, score))
+
+  const reasons = []
+  reasons.push(`${formatMetric(total, 0)} scoped cells`)
+  if (missingKpi) reasons.push(`${formatMetric((missingKpi / total) * 100, 0)}% missing KPI fields`)
+  if (unmatched) reasons.push(`${unmatched} cells need spatial review`)
+  if (dataMode === 'mock') reasons.push('Mock demo mode reduces operational confidence')
+  if (Array.isArray(timeIndex)) reasons.push(`${timeIndex.length} time slices available`)
+  if (peakRows.length) reasons.push(`${formatMetric(recurrence * 100, 0)}% recurrence consistency`)
+
+  return { score, label: score >= 75 ? 'High' : score >= 50 ? 'Medium' : 'Low', reasons }
+}
+
+export function computeDataQuality({ data = {}, cells = [], timeIndex = [], peakPayload = {}, dataMode = 'real' } = {}) {
+  const reconciliation = data?.reconciliation || {}
+  const baselineCount = Object.keys(data?.baseline || {}).length
+  const matched = cells.filter((cell) => cell.admin).length
+  const unmatched = Math.max(0, baselineCount - matched)
+  const lowSpatial = cells.filter((cell) => cell.admin?.match_confidence === 'low' || cell.admin?.match_confidence === 'medium').length
+  const missingKpi = cells.filter((cell) => !num(cell.prb_load) || !num(cell.throughput) || !num(cell.cqi)).length
+  const withoutObs = cells.filter((cell) => !num(cell.prb_load) && !num(cell.active_users) && !num(cell.traffic)).length
+  const missingNames = (reconciliation?.missing_names || reconciliation?.registry_gaps || []).length
+  return {
+    dataMode,
+    baselineCount,
+    matched,
+    unmatched,
+    lowSpatial,
+    missingNames,
+    missingKpi,
+    missingKpiRatio: baselineCount ? missingKpi / baselineCount : 0,
+    withoutObs,
+    timeSlices: Array.isArray(timeIndex) ? timeIndex.length : 0,
+    lastPeakComputation: peakPayload?.generated_at || peakPayload?.summary?.peak_hour || (peakPayload?.available ? 'available' : 'unavailable'),
+    warnings: reconciliation?.warnings || [],
+  }
+}
+
+export function computeSliceDelta(currentCells = [], previousCells = []) {
+  if (!previousCells.length) {
+    return { available: false, reason: 'No previous time slice available for comparison.' }
+  }
+  const prevByName = new Map(previousCells.map((cell) => [cell.cell_name, cell]))
+  const comparable = currentCells.map((cell) => ({ current: cell, previous: prevByName.get(cell.cell_name) })).filter((pair) => pair.previous)
+  if (!comparable.length) return { available: false, reason: 'Previous slice has no comparable cells for this scope.' }
+  const becameCongested = comparable.filter(({ current, previous }) => current.congested && !previous.congested)
+  const recovered = comparable.filter(({ current, previous }) => !current.congested && previous.congested)
+  const worsened = comparable.filter(({ current, previous }) => num(current.prb_load) - num(previous.prb_load) >= 10 || num(previous.throughput) - num(current.throughput) >= 5)
+  const improved = comparable.filter(({ current, previous }) => num(previous.prb_load) - num(current.prb_load) >= 10 || num(current.throughput) - num(previous.throughput) >= 5)
+  const maxBy = (fn) => comparable.reduce((best, pair) => !best || fn(pair) > fn(best) ? pair : best, null)
+  const prbInc = maxBy(({ current, previous }) => num(current.prb_load) - num(previous.prb_load))
+  const throughputDrop = maxBy(({ current, previous }) => num(previous.throughput) - num(current.throughput))
+  const cqiDrop = maxBy(({ current, previous }) => num(previous.cqi) - num(current.cqi))
+  return {
+    available: true,
+    comparable: comparable.length,
+    newCongested: becameCongested.length,
+    recovered: recovered.length,
+    worsened: worsened.length,
+    improved: improved.length,
+    biggestPrbIncrease: prbInc ? { cell: prbInc.current.cell_name, value: num(prbInc.current.prb_load) - num(prbInc.previous.prb_load) } : null,
+    biggestThroughputDrop: throughputDrop ? { cell: throughputDrop.current.cell_name, value: num(throughputDrop.previous.throughput) - num(throughputDrop.current.throughput) } : null,
+    biggestCqiDrop: cqiDrop ? { cell: cqiDrop.current.cell_name, value: num(cqiDrop.previous.cqi) - num(cqiDrop.current.cqi) } : null,
+  }
+}
+
+export function buildAnalyticalReport({ scope = {}, timestamp = '', summary = {}, peakPayload = {}, peakRows = [], issue = {}, whyCritical = [], confidence = {}, dataQuality = {}, topRows = [] } = {}) {
+  return {
+    title: 'NetVision analytical scope report',
+    generated_at: new Date().toISOString(),
+    scope: {
+      level: scope.level,
+      label: scope.selectedCellName || scope.delegationName || scope.governorateName || 'Tunisia',
+      governorateId: scope.governorateId,
+      delegationId: scope.delegationId,
+      selectedSite: scope.selectedSite,
+      selectedCellName: scope.selectedCellName,
+    },
+    timestamp,
+    kpis: summary,
+    peak_hours: {
+      available: peakPayload?.available !== false,
+      summary: peakPayload?.summary || null,
+      top: (peakRows || []).slice(0, 8),
+    },
+    qos_diagnosis: issue,
+    why_critical: whyCritical,
+    confidence,
+    data_quality_warnings: dataQuality?.warnings || [],
+    top_affected: topRows.slice(0, 8),
+  }
+}
