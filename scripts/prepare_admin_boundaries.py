@@ -31,9 +31,12 @@ def compact_geometry(feature_collection: dict[str, Any], level: str) -> dict[str
     for feature in feature_collection.get("features", []):
         props = feature.get("properties") or {}
         if level == "governorate":
+            gov_name = (props.get("adm2_name") or "").strip()
             out_props = {
                 "gov_id": props.get("adm2_pcode"),
                 "gov_name": props.get("adm2_name"),
+                "display_name": gov_name or None,
+                "display_label": f"{gov_name} — Governorate" if gov_name else None,
                 "gov_name_ar": props.get("adm2_name1"),
                 "region_id": props.get("adm1_pcode"),
                 "region_name": props.get("adm1_name"),
@@ -43,9 +46,13 @@ def compact_geometry(feature_collection: dict[str, Any], level: str) -> dict[str
                 "center_lat": props.get("center_lat"),
             }
         else:
+            deleg_name = (props.get("adm3_name") or "").strip()
+            gov_name = (props.get("adm2_name") or "").strip()
             out_props = {
                 "deleg_id": props.get("adm3_pcode"),
                 "deleg_name": props.get("adm3_name"),
+                "display_name": deleg_name or None,
+                "display_label": f"{deleg_name} — Delegation, {gov_name}" if deleg_name else None,
                 "deleg_name_ar": props.get("adm3_name1"),
                 "gov_id": props.get("adm2_pcode"),
                 "gov_name": props.get("adm2_name"),
@@ -154,6 +161,8 @@ def build_registry(governorates: dict[str, Any], delegations: dict[str, Any]) ->
             {
                 "gov_id": props["gov_id"],
                 "gov_name": props["gov_name"],
+                "display_name": props.get("display_name"),
+                "display_label": props.get("display_label"),
                 "gov_name_ar": props.get("gov_name_ar"),
                 "region_id": props.get("region_id"),
                 "region_name": props.get("region_name"),
@@ -168,6 +177,8 @@ def build_registry(governorates: dict[str, Any], delegations: dict[str, Any]) ->
             {
                 "deleg_id": props["deleg_id"],
                 "deleg_name": props["deleg_name"],
+                "display_name": props.get("display_name"),
+                "display_label": props.get("display_label"),
                 "deleg_name_ar": props.get("deleg_name_ar"),
                 "gov_id": props["gov_id"],
                 "gov_name": props["gov_name"],
@@ -241,6 +252,20 @@ def main() -> int:
             "ministry_missing_from_cod": sorted([f"{g}/{d}" for g, d in (ministry_pairs - cod_pairs)]),
             "cod_missing_from_ministry": sorted([f"{g}/{d}" for g, d in (cod_pairs - ministry_pairs)]) if ministry_pairs else [],
         },
+        "missing_display_names": {
+            "governorates": [
+                item["gov_id"] for item in registry["governorates"] if not item.get("display_name")
+            ],
+            "delegations": [
+                {
+                    "deleg_id": item["deleg_id"],
+                    "gov_id": item.get("gov_id"),
+                    "gov_name": item.get("gov_name"),
+                }
+                for item in registry["delegations"]
+                if not item.get("display_name")
+            ],
+        },
     }
     if len(registry["governorates"]) != TARGET_GOVERNORATES:
         report["warnings"].append("COD-AB governorate count differs from target 24.")
@@ -252,6 +277,8 @@ def main() -> int:
         report["warnings"].append("INS/RGPH 2024 delegation registry CSV not provided; name reconciliation is incomplete.")
     if not Path(args.ministry_csv).exists():
         report["warnings"].append("Ministry of Interior validation CSV not provided; name reconciliation is incomplete.")
+    if report["missing_display_names"]["governorates"] or report["missing_display_names"]["delegations"]:
+        report["warnings"].append("Some admin boundaries are missing display names; no names were invented.")
     write_json(runtime_dir / "admin_reconciliation_report.json", report)
     write_json(public_dir / "admin_reconciliation_report.json", report)
 

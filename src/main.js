@@ -20,7 +20,7 @@ export default function NetVisionDashboard() {
   const [metricMode, setMetricMode] = useState('congestion_rate')
   const [focusMode, setFocusMode] = useState(false)
   const [query, setQuery] = useState('')
-  const [activeTab, setActiveTab] = useState('triage')
+  const [activeTab, setActiveTab] = useState('overview')
   const [filters, setFilters] = useState(DEFAULT_FILTERS)
   const [layerVisibility, setLayerVisibility] = useState({ delegations: true, sites: true })
   const [timeIndex, setTimeIndex] = useState(0)
@@ -59,14 +59,17 @@ export default function NetVisionDashboard() {
           return [name, { wired: true, reachable: false, degraded: true, detail: err.message || String(err) }]
         }
       }
-      const pairs = await Promise.all([
+      const coreChecks = [
         check('data', '/api/data/stats.json'),
         check('drift', '/api/drift'),
         check('peakHours', '/api/peak-hours'),
         check('backend', '/api/backend-health'),
+      ]
+      const optionalChecks = activeTab === 'system' ? [
         check('jobsHealth', '/api/jobs-health'),
         check('export', '/api/recommendations-export'),
-      ])
+      ] : []
+      const pairs = await Promise.all([...coreChecks, ...optionalChecks])
       if (!cancelled) {
         const next = Object.fromEntries(pairs)
         setEndpointStatus(next)
@@ -79,7 +82,7 @@ export default function NetVisionDashboard() {
       cancelled = true
       window.clearInterval(timer)
     }
-  }, [])
+  }, [activeTab])
 
   useEffect(() => {
     if (drift.status.available === false && !driftUi.acknowledgedUnavailable) {
@@ -92,7 +95,7 @@ export default function NetVisionDashboard() {
     setData(payload)
     setTimeIndex(0)
     setScope(initialAdminScope)
-    setActiveTab('triage')
+    setActiveTab('overview')
     setLoadError('')
     setImportState({ status: 'idle', fileName: '', importType: 'reference', preview: null, result: null, error: '' })
   }
@@ -159,7 +162,7 @@ export default function NetVisionDashboard() {
   function selectGovernorate(raw) {
     const gov = raw.gov_id ? raw : data?.registry?.governorates?.find((item) => item.gov_id === raw.id || item.gov_name === raw.name || item.gov_name === raw.gov_name)
     if (!gov) return
-    setActiveTab('triage')
+    setActiveTab('overview')
     setScope({ ...initialAdminScope, level: 'governorate', governorateId: gov.gov_id, governorateName: gov.gov_name, transitionState: 'focusing-governorate' })
     window.setTimeout(() => setScope((prev) => prev.governorateId === gov.gov_id ? { ...prev, transitionState: 'idle' } : prev), 900)
   }
@@ -167,7 +170,7 @@ export default function NetVisionDashboard() {
   function selectDelegation(raw) {
     const deleg = raw.deleg_id ? raw : data?.registry?.delegations?.find((item) => item.deleg_id === raw.id || item.deleg_name === raw.name || item.deleg_name === raw.deleg_name)
     if (!deleg) return
-    setActiveTab('operations')
+    setActiveTab('qos')
     setScope({ ...initialAdminScope, level: 'delegation', governorateId: deleg.gov_id, governorateName: deleg.gov_name, delegationId: deleg.deleg_id, delegationName: deleg.deleg_name, transitionState: 'focusing-delegation' })
     window.setTimeout(() => setScope((prev) => prev.delegationId === deleg.deleg_id ? { ...prev, transitionState: 'idle' } : prev), 900)
   }
@@ -175,7 +178,7 @@ export default function NetVisionDashboard() {
   function selectCell(cellName) {
     const cell = cells.find((item) => item.cell_name === cellName)
     if (!cell?.admin) return
-    setActiveTab('actions')
+    setActiveTab('qos')
     setScope({ ...initialAdminScope, level: 'cell', governorateId: cell.admin.gov_id, governorateName: cell.admin.gov_name, delegationId: cell.admin.deleg_id, delegationName: cell.admin.deleg_name, selectedSite: cell.site_name, selectedCellName: cell.cell_name, transitionState: 'idle' })
   }
 
@@ -298,15 +301,15 @@ export default function NetVisionDashboard() {
   return (
     <div className={`app-shell ${focusMode ? 'focus-mode' : ''} ${theme === 'dark' ? 'theme-dark' : ''}`}>
       <a href="#main-content" className="skip-link">Skip to main content</a>
-      <TopHeader theme={theme} onToggleTheme={() => setTheme((value) => value === 'dark' ? 'light' : 'dark')} metricMode={metricMode} metricModes={METRIC_MODES} onMetricModeChange={setMetricMode} focusMode={focusMode} onToggleFocus={() => setFocusMode((v) => !v)} query={query} onQueryChange={setQuery} searchResults={searchResults} onSearchSelect={selectSearchResult} />
+      <TopHeader theme={theme} onToggleTheme={() => setTheme((value) => value === 'dark' ? 'light' : 'dark')} metricMode={metricMode} metricModes={METRIC_MODES} onMetricModeChange={setMetricMode} focusMode={focusMode} onToggleFocus={() => setFocusMode((v) => !v)} query={query} onQueryChange={setQuery} searchResults={searchResults} onSearchSelect={selectSearchResult} dataMode={dataMode} onSecondaryPanel={setActiveTab} />
       <div className="sr-only" aria-live="polite">{`Current scope ${scope.level}${scope.governorateName ? `, ${scope.governorateName}` : ''}${scope.delegationName ? `, ${scope.delegationName}` : ''}${scope.selectedCellName ? `, ${scope.selectedCellName}` : ''}`}</div>
       <main id="main-content" className="command-layout cockpit-layout">
         <CockpitRail activeTab={activeTab} onTabChange={setActiveTab} alertCount={alerts.length} />
         <section className="map-column">
-          <Breadcrumb scope={scope} onNational={() => { setActiveTab('triage'); setScope(backToNational()) }} onGovernorate={() => { setActiveTab('triage'); setScope(backToGovernorate(scope)) }} onDelegation={() => { setActiveTab('operations'); setScope(backToDelegation(scope)) }} />
+          <Breadcrumb scope={scope} onNational={() => { setActiveTab('overview'); setScope(backToNational()) }} onGovernorate={() => { setActiveTab('overview'); setScope(backToGovernorate(scope)) }} onDelegation={() => { setActiveTab('qos'); setScope(backToDelegation(scope)) }} />
           <TimelineBar timeIndex={data?.timeIndex || []} currentIndex={timeIndex} onChange={loadTimeSlice} onPrev={() => loadTimeSlice(Math.max(0, timeIndex - 1))} onNext={() => loadTimeSlice(Math.min((data?.timeIndex?.length || 1) - 1, timeIndex + 1))} />
           {data ? <TunisiaMap governoratesGeo={data.governorates} delegationsGeo={data.delegations} governorateRows={governorateRows} delegationRows={allDelegationRows} cells={cells} filteredCells={filteredCells} scope={scope} metricMode={metricMode} metric={metric} layerVisibility={layerVisibility} onGovernorateClick={selectGovernorate} onDelegationClick={selectDelegation} onCellClick={selectCell} /> : <div className="map-card skeleton-map" />}
-          <div className="scope-footer"><span>Mode: {dataMode}</span><span>Scope: {scope.level}</span><span>{currentSummary.observed_cells || 0} scoped cells</span><span>{data?.currentTimeEntry?.timestamp || 'No time slice'}</span><button data-testid="toggle-sites" onClick={() => setLayerVisibility((v) => ({ ...v, sites: !v.sites }))}>Sites {layerVisibility.sites ? 'on' : 'off'}</button><button data-testid="toggle-delegations" onClick={() => setLayerVisibility((v) => ({ ...v, delegations: !v.delegations }))}>Delegations {layerVisibility.delegations ? 'on' : 'off'}</button></div>
+          <div className="scope-footer"><span>Mode: {dataMode}</span><span>Scope: {scope.level}</span><span>{currentSummary.observed_cells || 0} scoped cells</span><span>{data?.currentTimeEntry?.timestamp || 'No time slice'}</span>{(scope.level === 'delegation' || scope.level === 'cell') ? <button data-testid="toggle-sites" onClick={() => setLayerVisibility((v) => ({ ...v, sites: !v.sites }))}>Sites {layerVisibility.sites ? 'on' : 'off'}</button> : <span>Sites locked until delegation</span>}{scope.level !== 'national' ? <button data-testid="toggle-delegations" onClick={() => setLayerVisibility((v) => ({ ...v, delegations: !v.delegations }))}>Delegations {layerVisibility.delegations ? 'on' : 'off'}</button> : null}</div>
         </section>
         <aside className="insight-column">{panel}</aside>
       </main>

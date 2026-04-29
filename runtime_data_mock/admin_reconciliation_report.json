@@ -1,1 +1,20 @@
-{"mode": "mock", "generated_at": "2026-04-29T00:09:51.282104+00:00", "counts": {"cod_delegations": 264, "target_delegations_ins_rgph_2024": 279}, "cell_spatial_join": {"total_cells": 792, "matched_cells": 792, "unmatched_cells": 0}, "warnings": ["Mock demo mode uses delegation registry centroids and does not represent official radio measurements."]}
+{
+  "mode": "mock",
+  "generated_at": "2026-04-29T00:09:51.282104+00:00",
+  "counts": {
+    "cod_delegations": 264,
+    "target_delegations_ins_rgph_2024": 279
+  },
+  "cell_spatial_join": {
+    "total_cells": 792,
+    "matched_cells": 792,
+    "unmatched_cells": 0
+  },
+  "warnings": [
+    "Mock demo mode uses delegation registry centroids and does not represent official radio measurements."
+  ],
+  "missing_display_names": {
+    "governorates": [],
+    "delegations": []
+  }
+}

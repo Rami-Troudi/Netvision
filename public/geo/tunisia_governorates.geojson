@@ -12,7 +12,9 @@
         "source_level": "COD-AB ADM2",
         "area_sqkm": 263.62177915,
         "center_lon": 10.21320043,
-        "center_lat": 36.81869391
+        "center_lat": 36.81869391,
+        "display_name": "Tunis",
+        "display_label": "Tunis — Governorate"
       },
       "geometry": {
         "type": "Polygon",
@@ -709,7 +711,9 @@
         "source_level": "COD-AB ADM2",
         "area_sqkm": 418.70752536,
         "center_lon": 10.12217928,
-        "center_lat": 36.96831946
+        "center_lat": 36.96831946,
+        "display_name": "Ariana",
+        "display_label": "Ariana — Governorate"
       },
       "geometry": {
         "type": "Polygon",
@@ -1350,7 +1354,9 @@
         "source_level": "COD-AB ADM2",
         "area_sqkm": 662.05410378,
         "center_lon": 10.21086321,
-        "center_lat": 36.62956482
+        "center_lat": 36.62956482,
+        "display_name": "Ben Arous",
+        "display_label": "Ben Arous — Governorate"
       },
       "geometry": {
         "type": "Polygon",
@@ -2243,7 +2249,9 @@
         "source_level": "COD-AB ADM2",
         "area_sqkm": 1142.64559265,
         "center_lon": 9.83035326,
-        "center_lat": 36.76581494
+        "center_lat": 36.76581494,
+        "display_name": "Manubah",
+        "display_label": "Manubah — Governorate"
       },
       "geometry": {
         "type": "Polygon",
@@ -3158,7 +3166,7 @@
               36.9116
             ],
             [
-              10.0,
+              10,
               36.9182
             ],
             [
@@ -3240,7 +3248,9 @@
         "source_level": "COD-AB ADM2",
         "area_sqkm": 2824.23062142,
         "center_lon": 10.67560896,
-        "center_lat": 36.69743282
+        "center_lat": 36.69743282,
+        "display_name": "Nabeul",
+        "display_label": "Nabeul — Governorate"
       },
       "geometry": {
         "type": "MultiPolygon",
@@ -4555,7 +4565,9 @@
         "source_level": "COD-AB ADM2",
         "area_sqkm": 2837.57569542,
         "center_lon": 10.04690955,
-        "center_lat": 36.33172852
+        "center_lat": 36.33172852,
+        "display_name": "Zaghouan",
+        "display_label": "Zaghouan — Governorate"
       },
       "geometry": {
         "type": "Polygon",
@@ -6052,7 +6064,9 @@
         "source_level": "COD-AB ADM2",
         "area_sqkm": 3608.34197219,
         "center_lon": 9.6392857,
-        "center_lat": 37.03535965
+        "center_lat": 37.03535965,
+        "display_name": "Bizerte",
+        "display_label": "Bizerte — Governorate"
       },
       "geometry": {
         "type": "MultiPolygon",
@@ -7140,7 +7154,7 @@
                 36.9265
               ],
               [
-                10.0,
+                10,
                 36.9182
               ],
               [
@@ -8407,7 +8421,9 @@
         "source_level": "COD-AB ADM2",
         "area_sqkm": 3650.63953669,
         "center_lon": 9.20132641,
-        "center_lat": 36.74710963
+        "center_lat": 36.74710963,
+        "display_name": "Béja",
+        "display_label": "Béja — Governorate"
       },
       "geometry": {
         "type": "Polygon",
@@ -10564,7 +10580,9 @@
         "source_level": "COD-AB ADM2",
         "area_sqkm": 3101.39644304,
         "center_lon": 8.75582467,
-        "center_lat": 36.68008411
+        "center_lat": 36.68008411,
+        "display_name": "Jendouba",
+        "display_label": "Jendouba — Governorate"
       },
       "geometry": {
         "type": "Polygon",
@@ -12237,7 +12255,9 @@
         "source_level": "COD-AB ADM2",
         "area_sqkm": 5103.09526534,
         "center_lon": 8.72481141,
-        "center_lat": 36.03382089
+        "center_lat": 36.03382089,
+        "display_name": "Le Kef",
+        "display_label": "Le Kef — Governorate"
       },
       "geometry": {
         "type": "Polygon",
@@ -13920,7 +13940,7 @@
               36.2435
             ],
             [
-              9.0,
+              9,
               36.2399
             ],
             [
@@ -14246,7 +14266,9 @@
         "source_level": "COD-AB ADM2",
         "area_sqkm": 4683.48868349,
         "center_lon": 9.35412398,
-        "center_lat": 35.9687801
+        "center_lat": 35.9687801,
+        "display_name": "Siliana",
+        "display_label": "Siliana — Governorate"
       },
       "geometry": {
         "type": "Polygon",
@@ -15009,7 +15031,7 @@
               36.241
             ],
             [
-              9.0,
+              9,
               36.2399
             ],
             [
@@ -15561,7 +15583,7 @@
               35.6751
             ],
             [
-              9.0,
+              9,
               35.6663
             ],
             [
@@ -16971,7 +16993,9 @@
         "source_level": "COD-AB ADM2",
         "area_sqkm": 2281.008504,
         "center_lon": 10.3885927,
-        "center_lat": 35.97331166
+        "center_lat": 35.97331166,
+        "display_name": "Sousse",
+        "display_label": "Sousse — Governorate"
       },
       "geometry": {
         "type": "Polygon",
@@ -18228,7 +18252,9 @@
         "source_level": "COD-AB ADM2",
         "area_sqkm": 1031.09144253,
         "center_lon": 10.72206025,
-        "center_lat": 35.60498933
+        "center_lat": 35.60498933,
+        "display_name": "Monastir",
+        "display_label": "Monastir — Governorate"
       },
       "geometry": {
         "type": "MultiPolygon",
@@ -19387,7 +19413,9 @@
         "source_level": "COD-AB ADM2",
         "area_sqkm": 2894.35948967,
         "center_lon": 10.60413721,
-        "center_lat": 35.34094749
+        "center_lat": 35.34094749,
+        "display_name": "Mahdia",
+        "display_label": "Mahdia — Governorate"
       },
       "geometry": {
         "type": "MultiPolygon",
@@ -21134,7 +21162,9 @@
         "source_level": "COD-AB ADM2",
         "area_sqkm": 7013.76566413,
         "center_lon": 10.33091876,
-        "center_lat": 34.7230807
+        "center_lat": 34.7230807,
+        "display_name": "Sfax",
+        "display_label": "Sfax — Governorate"
       },
       "geometry": {
         "type": "MultiPolygon",
@@ -24237,7 +24267,9 @@
         "source_level": "COD-AB ADM2",
         "area_sqkm": 6513.1860594,
         "center_lon": 9.83432732,
-        "center_lat": 35.57932733
+        "center_lat": 35.57932733,
+        "display_name": "Kairouan",
+        "display_label": "Kairouan — Governorate"
       },
       "geometry": {
         "type": "Polygon",
@@ -26202,7 +26234,9 @@
         "source_level": "COD-AB ADM2",
         "area_sqkm": 8206.17605537,
         "center_lon": 8.85768923,
-        "center_lat": 35.20927904
+        "center_lat": 35.20927904,
+        "display_name": "Kassérine",
+        "display_label": "Kassérine — Governorate"
       },
       "geometry": {
         "type": "Polygon",
@@ -27729,7 +27763,7 @@
               35.6642
             ],
             [
-              9.0,
+              9,
               35.6663
             ],
             [
@@ -27951,7 +27985,9 @@
         "source_level": "COD-AB ADM2",
         "area_sqkm": 7433.21788563,
         "center_lon": 9.52521959,
-        "center_lat": 34.88022643
+        "center_lat": 34.88022643,
+        "display_name": "Sidi Bou Zid",
+        "display_label": "Sidi Bou Zid — Governorate"
       },
       "geometry": {
         "type": "Polygon",
@@ -29688,7 +29724,9 @@
         "source_level": "COD-AB ADM2",
         "area_sqkm": 7481.0698135,
         "center_lon": 9.79058453,
-        "center_lat": 33.77605574
+        "center_lat": 33.77605574,
+        "display_name": "Gabès",
+        "display_label": "Gabès — Governorate"
       },
       "geometry": {
         "type": "Polygon",
@@ -31017,7 +31055,9 @@
         "source_level": "COD-AB ADM2",
         "area_sqkm": 9327.75865461,
         "center_lon": 11.28725906,
-        "center_lat": 32.98645009
+        "center_lat": 32.98645009,
+        "display_name": "Médenine",
+        "display_label": "Médenine — Governorate"
       },
       "geometry": {
         "type": "MultiPolygon",
@@ -33820,7 +33860,9 @@
         "source_level": "COD-AB ADM2",
         "area_sqkm": 38269.41049235,
         "center_lon": 9.7693199,
-        "center_lat": 31.73702041
+        "center_lat": 31.73702041,
+        "display_name": "Tataouine",
+        "display_label": "Tataouine — Governorate"
       },
       "geometry": {
         "type": "Polygon",
@@ -35192,7 +35234,7 @@
             ],
             [
               10.7947,
-              32.0
+              32
             ],
             [
               10.8377,
@@ -35649,7 +35691,9 @@
         "source_level": "COD-AB ADM2",
         "area_sqkm": 7548.04183669,
         "center_lon": 8.79079796,
-        "center_lat": 34.43366772
+        "center_lat": 34.43366772,
+        "display_name": "Gafsa",
+        "display_label": "Gafsa — Governorate"
       },
       "geometry": {
         "type": "Polygon",
@@ -37078,7 +37122,9 @@
         "source_level": "COD-AB ADM2",
         "area_sqkm": 6041.65544922,
         "center_lon": 8.06356702,
-        "center_lat": 33.97918967
+        "center_lat": 33.97918967,
+        "display_name": "Tozeur",
+        "display_label": "Tozeur — Governorate"
       },
       "geometry": {
         "type": "Polygon",
@@ -37755,7 +37801,9 @@
         "source_level": "COD-AB ADM2",
         "area_sqkm": 22366.34162439,
         "center_lon": 8.70779767,
-        "center_lat": 33.34809875
+        "center_lat": 33.34809875,
+        "display_name": "Kebili",
+        "display_label": "Kebili — Governorate"
       },
       "geometry": {
         "type": "Polygon",

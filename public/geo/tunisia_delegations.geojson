@@ -14,7 +14,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 8.64070297,
         "center_lon": 10.32835837,
-        "center_lat": 36.85766012
+        "center_lat": 36.85766012,
+        "display_name": "Carthage",
+        "display_label": "Carthage — Delegation, Tunis"
       },
       "geometry": {
         "type": "Polygon",
@@ -129,7 +131,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 1.50724641,
         "center_lon": 10.16881647,
-        "center_lat": 36.79846664
+        "center_lat": 36.79846664,
+        "display_name": "Médina",
+        "display_label": "Médina — Delegation, Tunis"
       },
       "geometry": {
         "type": "Polygon",
@@ -188,7 +192,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 11.03775408,
         "center_lon": 10.19925505,
-        "center_lat": 36.80063754
+        "center_lat": 36.80063754,
+        "display_name": "Bab Bhar",
+        "display_label": "Bab Bhar — Delegation, Tunis"
       },
       "geometry": {
         "type": "Polygon",
@@ -275,7 +281,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 2.17304973,
         "center_lon": 10.16239327,
-        "center_lat": 36.80623513
+        "center_lat": 36.80623513,
+        "display_name": "Bab Souika",
+        "display_label": "Bab Souika — Delegation, Tunis"
       },
       "geometry": {
         "type": "Polygon",
@@ -346,7 +354,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 4.96174288,
         "center_lon": 10.15307291,
-        "center_lat": 36.82127456
+        "center_lat": 36.82127456,
+        "display_name": "Omrane",
+        "display_label": "Omrane — Delegation, Tunis"
       },
       "geometry": {
         "type": "Polygon",
@@ -437,7 +447,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 3.23951924,
         "center_lon": 10.12944936,
-        "center_lat": 36.83489219
+        "center_lat": 36.83489219,
+        "display_name": "Omrane Supérieur",
+        "display_label": "Omrane Supérieur — Delegation, Tunis"
       },
       "geometry": {
         "type": "Polygon",
@@ -520,7 +532,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 1.67828361,
         "center_lon": 10.12682478,
-        "center_lat": 36.82708358
+        "center_lat": 36.82708358,
+        "display_name": "El Tahrir",
+        "display_label": "El Tahrir — Delegation, Tunis"
       },
       "geometry": {
         "type": "Polygon",
@@ -583,7 +597,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 10.01727568,
         "center_lon": 10.15827642,
-        "center_lat": 36.83562303
+        "center_lat": 36.83562303,
+        "display_name": "El Menzah",
+        "display_label": "El Menzah — Delegation, Tunis"
       },
       "geometry": {
         "type": "Polygon",
@@ -698,7 +714,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 36.83867933,
         "center_lon": 10.21884965,
-        "center_lat": 36.83718686
+        "center_lat": 36.83718686,
+        "display_name": "Cité El Khadra",
+        "display_label": "Cité El Khadra — Delegation, Tunis"
       },
       "geometry": {
         "type": "Polygon",
@@ -805,7 +823,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 6.67463712,
         "center_lon": 10.13206574,
-        "center_lat": 36.8135025
+        "center_lat": 36.8135025,
+        "display_name": "Bardo",
+        "display_label": "Bardo — Delegation, Tunis"
       },
       "geometry": {
         "type": "Polygon",
@@ -892,7 +912,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 1.80131469,
         "center_lon": 10.16578422,
-        "center_lat": 36.78647361
+        "center_lat": 36.78647361,
+        "display_name": "Sijoumi",
+        "display_label": "Sijoumi — Delegation, Tunis"
       },
       "geometry": {
         "type": "Polygon",
@@ -987,7 +1009,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 2.79981569,
         "center_lon": 10.13553522,
-        "center_lat": 36.79437867
+        "center_lat": 36.79437867,
+        "display_name": "Ezzouhour",
+        "display_label": "Ezzouhour — Delegation, Tunis"
       },
       "geometry": {
         "type": "Polygon",
@@ -1058,7 +1082,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 23.98331303,
         "center_lon": 10.06159255,
-        "center_lat": 36.78190203
+        "center_lat": 36.78190203,
+        "display_name": "Hrairia",
+        "display_label": "Hrairia — Delegation, Tunis"
       },
       "geometry": {
         "type": "Polygon",
@@ -1205,7 +1231,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 64.46976627,
         "center_lon": 10.08416629,
-        "center_lat": 36.73976979
+        "center_lat": 36.73976979,
+        "display_name": "Sidi Hassine",
+        "display_label": "Sidi Hassine — Delegation, Tunis"
       },
       "geometry": {
         "type": "Polygon",
@@ -1464,7 +1492,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 4.01768343,
         "center_lon": 10.18017486,
-        "center_lat": 36.77194443
+        "center_lat": 36.77194443,
+        "display_name": "El Ouardia",
+        "display_label": "El Ouardia — Delegation, Tunis"
       },
       "geometry": {
         "type": "Polygon",
@@ -1575,7 +1605,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 10.17936945,
         "center_lon": 10.19172267,
-        "center_lat": 36.74242223
+        "center_lat": 36.74242223,
+        "display_name": "Kabaria",
+        "display_label": "Kabaria — Delegation, Tunis"
       },
       "geometry": {
         "type": "Polygon",
@@ -1670,7 +1702,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 2.70068389,
         "center_lon": 10.18001077,
-        "center_lat": 36.78469382
+        "center_lat": 36.78469382,
+        "display_name": "Sidi El Béchir",
+        "display_label": "Sidi El Béchir — Delegation, Tunis"
       },
       "geometry": {
         "type": "Polygon",
@@ -1761,7 +1795,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 5.27393908,
         "center_lon": 10.20746229,
-        "center_lat": 36.76566139
+        "center_lat": 36.76566139,
+        "display_name": "Jebel Jelloud",
+        "display_label": "Jebel Jelloud — Delegation, Tunis"
       },
       "geometry": {
         "type": "Polygon",
@@ -1872,7 +1908,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 20.39413253,
         "center_lon": 10.28373061,
-        "center_lat": 36.83346926
+        "center_lat": 36.83346926,
+        "display_name": "La Goulette",
+        "display_label": "La Goulette — Delegation, Tunis"
       },
       "geometry": {
         "type": "Polygon",
@@ -1979,7 +2017,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 9.60461136,
         "center_lon": 10.29409379,
-        "center_lat": 36.84790264
+        "center_lat": 36.84790264,
+        "display_name": "Le Kram",
+        "display_label": "Le Kram — Delegation, Tunis"
       },
       "geometry": {
         "type": "Polygon",
@@ -2102,7 +2142,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 31.62825868,
         "center_lon": 10.30231054,
-        "center_lat": 36.90074445
+        "center_lat": 36.90074445,
+        "display_name": "La Marsa",
+        "display_label": "La Marsa — Delegation, Tunis"
       },
       "geometry": {
         "type": "Polygon",
@@ -2265,7 +2307,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 18.38782425,
         "center_lon": 10.16997844,
-        "center_lat": 36.86586672
+        "center_lat": 36.86586672,
+        "display_name": "Ariana Médina",
+        "display_label": "Ariana Médina — Delegation, Ariana"
       },
       "geometry": {
         "type": "Polygon",
@@ -2360,7 +2404,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 28.30856325,
         "center_lon": 10.23093966,
-        "center_lat": 36.8808589
+        "center_lat": 36.8808589,
+        "display_name": "Soukra",
+        "display_label": "Soukra — Delegation, Ariana"
       },
       "geometry": {
         "type": "Polygon",
@@ -2543,7 +2589,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 56.14732984,
         "center_lon": 10.15014915,
-        "center_lat": 36.92915685
+        "center_lat": 36.92915685,
+        "display_name": "Raoued",
+        "display_label": "Raoued — Delegation, Ariana"
       },
       "geometry": {
         "type": "Polygon",
@@ -2750,7 +2798,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 191.85850359,
         "center_lon": 10.12477139,
-        "center_lat": 36.99725599
+        "center_lat": 36.99725599,
+        "display_name": "Kalaat El Andalous",
+        "display_label": "Kalaat El Andalous — Delegation, Ariana"
       },
       "geometry": {
         "type": "Polygon",
@@ -3105,7 +3155,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 97.14306288,
         "center_lon": 10.05613783,
-        "center_lat": 36.91152057
+        "center_lat": 36.91152057,
+        "display_name": "Sidi Thabet",
+        "display_label": "Sidi Thabet — Delegation, Ariana"
       },
       "geometry": {
         "type": "Polygon",
@@ -3420,7 +3472,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 3.29273932,
         "center_lon": 10.10609275,
-        "center_lat": 36.83337754
+        "center_lat": 36.83337754,
+        "display_name": "Ettadhamen",
+        "display_label": "Ettadhamen — Delegation, Ariana"
       },
       "geometry": {
         "type": "Polygon",
@@ -3499,7 +3553,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 23.56950222,
         "center_lon": 10.10901203,
-        "center_lat": 36.86373541
+        "center_lat": 36.86373541,
+        "display_name": "Mnihla",
+        "display_label": "Mnihla — Delegation, Ariana"
       },
       "geometry": {
         "type": "Polygon",
@@ -3670,7 +3726,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 6.47964011,
         "center_lon": 10.22458655,
-        "center_lat": 36.74884674
+        "center_lat": 36.74884674,
+        "display_name": "Ben Arous",
+        "display_label": "Ben Arous — Delegation, Ben Arous"
       },
       "geometry": {
         "type": "Polygon",
@@ -3757,7 +3815,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 8.08262215,
         "center_lon": 10.24342925,
-        "center_lat": 36.7341232
+        "center_lat": 36.7341232,
+        "display_name": "Nouvelle Médina",
+        "display_label": "Nouvelle Médina — Delegation, Ben Arous"
       },
       "geometry": {
         "type": "Polygon",
@@ -3860,7 +3920,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 16.00333257,
         "center_lon": 10.21923666,
-        "center_lat": 36.71982547
+        "center_lat": 36.71982547,
+        "display_name": "El Mourouj",
+        "display_label": "El Mourouj — Delegation, Ben Arous"
       },
       "geometry": {
         "type": "Polygon",
@@ -3943,7 +4005,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 11.69099666,
         "center_lon": 10.33778717,
-        "center_lat": 36.71880141
+        "center_lat": 36.71880141,
+        "display_name": "Hammam Lif",
+        "display_label": "Hammam Lif — Delegation, Ben Arous"
       },
       "geometry": {
         "type": "Polygon",
@@ -4030,7 +4094,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 26.84452115,
         "center_lon": 10.3805886,
-        "center_lat": 36.68374432
+        "center_lat": 36.68374432,
+        "display_name": "Hammam Chott",
+        "display_label": "Hammam Chott — Delegation, Ben Arous"
       },
       "geometry": {
         "type": "Polygon",
@@ -4277,7 +4343,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 20.17221781,
         "center_lon": 10.2963154,
-        "center_lat": 36.71551902
+        "center_lat": 36.71551902,
+        "display_name": "Boumhel",
+        "display_label": "Boumhel — Delegation, Ben Arous"
       },
       "geometry": {
         "type": "Polygon",
@@ -4372,7 +4440,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 7.19368585,
         "center_lon": 10.29920866,
-        "center_lat": 36.74744268
+        "center_lat": 36.74744268,
+        "display_name": "Ezzahra",
+        "display_label": "Ezzahra — Delegation, Ben Arous"
       },
       "geometry": {
         "type": "Polygon",
@@ -4443,7 +4513,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 20.0201429,
         "center_lon": 10.28022744,
-        "center_lat": 36.77625543
+        "center_lat": 36.77625543,
+        "display_name": "Radès",
+        "display_label": "Radès — Delegation, Ben Arous"
       },
       "geometry": {
         "type": "Polygon",
@@ -4586,7 +4658,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 10.67819522,
         "center_lon": 10.23867873,
-        "center_lat": 36.77165002
+        "center_lat": 36.77165002,
+        "display_name": "Mégrine",
+        "display_label": "Mégrine — Delegation, Ben Arous"
       },
       "geometry": {
         "type": "Polygon",
@@ -4693,7 +4767,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 98.38290589,
         "center_lon": 10.11454557,
-        "center_lat": 36.64530811
+        "center_lat": 36.64530811,
+        "display_name": "M'Hamdia",
+        "display_label": "M'Hamdia — Delegation, Ben Arous"
       },
       "geometry": {
         "type": "Polygon",
@@ -4972,7 +5048,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 38.80286809,
         "center_lon": 10.17962846,
-        "center_lat": 36.69370937
+        "center_lat": 36.69370937,
+        "display_name": "Fouchana",
+        "display_label": "Fouchana — Delegation, Ben Arous"
       },
       "geometry": {
         "type": "Polygon",
@@ -5251,7 +5329,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 397.70297537,
         "center_lon": 10.24428338,
-        "center_lat": 36.58568423
+        "center_lat": 36.58568423,
+        "display_name": "Mornag",
+        "display_label": "Mornag — Delegation, Ben Arous"
       },
       "geometry": {
         "type": "Polygon",
@@ -5806,7 +5886,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 12.16741506,
         "center_lon": 10.08612267,
-        "center_lat": 36.81171581
+        "center_lat": 36.81171581,
+        "display_name": "Manouba",
+        "display_label": "Manouba — Delegation, Manubah"
       },
       "geometry": {
         "type": "Polygon",
@@ -5933,7 +6015,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 9.08885764,
         "center_lon": 10.08003051,
-        "center_lat": 36.83626606
+        "center_lat": 36.83626606,
+        "display_name": "Douar Hicher",
+        "display_label": "Douar Hicher — Delegation, Manubah"
       },
       "geometry": {
         "type": "Polygon",
@@ -6044,7 +6128,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 57.78983676,
         "center_lon": 10.01340073,
-        "center_lat": 36.82980222
+        "center_lat": 36.82980222,
+        "display_name": "Oued Ellil",
+        "display_label": "Oued Ellil — Delegation, Manubah"
       },
       "geometry": {
         "type": "Polygon",
@@ -6335,7 +6421,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 260.51598117,
         "center_lon": 9.99855715,
-        "center_lat": 36.67651945
+        "center_lat": 36.67651945,
+        "display_name": "Mornaguia",
+        "display_label": "Mornaguia — Delegation, Manubah"
       },
       "geometry": {
         "type": "Polygon",
@@ -6750,7 +6838,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 175.84816523,
         "center_lon": 9.84484015,
-        "center_lat": 36.67676519
+        "center_lat": 36.67676519,
+        "display_name": "Borj El Amri",
+        "display_label": "Borj El Amri — Delegation, Manubah"
       },
       "geometry": {
         "type": "Polygon",
@@ -7045,7 +7135,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 182.90945316,
         "center_lon": 9.92761596,
-        "center_lat": 36.85413432
+        "center_lat": 36.85413432,
+        "display_name": "Jedaida",
+        "display_label": "Jedaida — Delegation, Manubah"
       },
       "geometry": {
         "type": "Polygon",
@@ -7376,7 +7468,7 @@
               36.9116
             ],
             [
-              10.0,
+              10,
               36.9182
             ],
             [
@@ -7436,7 +7528,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 287.47007895,
         "center_lon": 9.76209748,
-        "center_lat": 36.87532976
+        "center_lat": 36.87532976,
+        "display_name": "Tebourba",
+        "display_label": "Tebourba — Delegation, Manubah"
       },
       "geometry": {
         "type": "Polygon",
@@ -8043,7 +8137,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 156.85580468,
         "center_lon": 9.73668832,
-        "center_lat": 36.77059057
+        "center_lat": 36.77059057,
+        "display_name": "El Battan",
+        "display_label": "El Battan — Delegation, Manubah"
       },
       "geometry": {
         "type": "Polygon",
@@ -8434,7 +8530,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 72.74380533,
         "center_lon": 10.67075333,
-        "center_lat": 36.48208396
+        "center_lat": 36.48208396,
+        "display_name": "Nabeul",
+        "display_label": "Nabeul — Delegation, Nabeul"
       },
       "geometry": {
         "type": "Polygon",
@@ -8653,7 +8751,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 69.41159534,
         "center_lon": 10.71563152,
-        "center_lat": 36.51800569
+        "center_lat": 36.51800569,
+        "display_name": "Dar Chaabane El Fehri",
+        "display_label": "Dar Chaabane El Fehri — Delegation, Nabeul"
       },
       "geometry": {
         "type": "Polygon",
@@ -8976,7 +9076,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 106.65648323,
         "center_lon": 10.77420178,
-        "center_lat": 36.52323326
+        "center_lat": 36.52323326,
+        "display_name": "Beni Khiar",
+        "display_label": "Beni Khiar — Delegation, Nabeul"
       },
       "geometry": {
         "type": "Polygon",
@@ -9283,7 +9385,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 205.5356315,
         "center_lon": 10.797532,
-        "center_lat": 36.60568444
+        "center_lat": 36.60568444,
+        "display_name": "Korba",
+        "display_label": "Korba — Delegation, Nabeul"
       },
       "geometry": {
         "type": "Polygon",
@@ -9702,7 +9806,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 259.642187,
         "center_lon": 10.88955083,
-        "center_lat": 36.8075042
+        "center_lat": 36.8075042,
+        "display_name": "Menzel Temime",
+        "display_label": "Menzel Temime — Delegation, Nabeul"
       },
       "geometry": {
         "type": "Polygon",
@@ -10121,7 +10227,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 154.81097123,
         "center_lon": 10.85821827,
-        "center_lat": 36.72131883
+        "center_lat": 36.72131883,
+        "display_name": "El Mida",
+        "display_label": "El Mida — Delegation, Nabeul"
       },
       "geometry": {
         "type": "Polygon",
@@ -10496,7 +10604,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 125.53588099,
         "center_lon": 11.00535266,
-        "center_lat": 36.87935765
+        "center_lat": 36.87935765,
+        "display_name": "Kelibia",
+        "display_label": "Kelibia — Delegation, Nabeul"
       },
       "geometry": {
         "type": "Polygon",
@@ -10835,7 +10945,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 94.43930373,
         "center_lon": 11.06869007,
-        "center_lat": 36.93252707
+        "center_lat": 36.93252707,
+        "display_name": "Hammam Ghezaz",
+        "display_label": "Hammam Ghezaz — Delegation, Nabeul"
       },
       "geometry": {
         "type": "Polygon",
@@ -11098,7 +11210,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 315.31956196,
         "center_lon": 10.91284331,
-        "center_lat": 36.95499477
+        "center_lat": 36.95499477,
+        "display_name": "Haouaria",
+        "display_label": "Haouaria — Delegation, Nabeul"
       },
       "geometry": {
         "type": "MultiPolygon",
@@ -11759,7 +11873,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 278.13550911,
         "center_lon": 10.67518744,
-        "center_lat": 36.79357242
+        "center_lat": 36.79357242,
+        "display_name": "Takelsa",
+        "display_label": "Takelsa — Delegation, Nabeul"
       },
       "geometry": {
         "type": "Polygon",
@@ -12282,7 +12398,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 143.8730346,
         "center_lon": 10.55642027,
-        "center_lat": 36.74925426
+        "center_lat": 36.74925426,
+        "display_name": "Soliman",
+        "display_label": "Soliman — Delegation, Nabeul"
       },
       "geometry": {
         "type": "MultiPolygon",
@@ -12847,7 +12965,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 132.38911291,
         "center_lon": 10.60013568,
-        "center_lat": 36.70450814
+        "center_lat": 36.70450814,
+        "display_name": "Menzel Bouzelfa",
+        "display_label": "Menzel Bouzelfa — Delegation, Nabeul"
       },
       "geometry": {
         "type": "Polygon",
@@ -13342,7 +13462,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 114.6323248,
         "center_lon": 10.63492693,
-        "center_lat": 36.62490183
+        "center_lat": 36.62490183,
+        "display_name": "Beni Khalled",
+        "display_label": "Beni Khalled — Delegation, Nabeul"
       },
       "geometry": {
         "type": "Polygon",
@@ -13701,7 +13823,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 297.27077334,
         "center_lon": 10.46316342,
-        "center_lat": 36.5933146
+        "center_lat": 36.5933146,
+        "display_name": "Grombalia",
+        "display_label": "Grombalia — Delegation, Nabeul"
       },
       "geometry": {
         "type": "Polygon",
@@ -14184,7 +14308,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 131.5710453,
         "center_lon": 10.57017213,
-        "center_lat": 36.52836071
+        "center_lat": 36.52836071,
+        "display_name": "Bou Argoub",
+        "display_label": "Bou Argoub — Delegation, Nabeul"
       },
       "geometry": {
         "type": "Polygon",
@@ -14491,7 +14617,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 322.26340105,
         "center_lon": 10.50923396,
-        "center_lat": 36.40868976
+        "center_lat": 36.40868976,
+        "display_name": "Hammamet",
+        "display_label": "Hammamet — Delegation, Nabeul"
       },
       "geometry": {
         "type": "Polygon",
@@ -14942,7 +15070,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 420.1027271,
         "center_lon": 10.2027051,
-        "center_lat": 36.41433327
+        "center_lat": 36.41433327,
+        "display_name": "Zaghouan",
+        "display_label": "Zaghouan — Delegation, Zaghouan"
       },
       "geometry": {
         "type": "Polygon",
@@ -15669,7 +15799,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 339.42691661,
         "center_lon": 10.22297504,
-        "center_lat": 36.31414904
+        "center_lat": 36.31414904,
+        "display_name": "Zriba",
+        "display_label": "Zriba — Delegation, Zaghouan"
       },
       "geometry": {
         "type": "Polygon",
@@ -16140,7 +16272,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 534.82514288,
         "center_lon": 9.99805805,
-        "center_lat": 36.52811289
+        "center_lat": 36.52811289,
+        "display_name": "Bir Mchergua",
+        "display_label": "Bir Mchergua — Delegation, Zaghouan"
       },
       "geometry": {
         "type": "Polygon",
@@ -16923,7 +17057,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 926.58824848,
         "center_lon": 9.83275369,
-        "center_lat": 36.27018181
+        "center_lat": 36.27018181,
+        "display_name": "Fahs",
+        "display_label": "Fahs — Delegation, Zaghouan"
       },
       "geometry": {
         "type": "Polygon",
@@ -18050,7 +18186,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 355.63888104,
         "center_lon": 9.98726581,
-        "center_lat": 36.11174591
+        "center_lat": 36.11174591,
+        "display_name": "Nadhour",
+        "display_label": "Nadhour — Delegation, Zaghouan"
       },
       "geometry": {
         "type": "Polygon",
@@ -18745,7 +18883,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 260.99377931,
         "center_lon": 10.15004468,
-        "center_lat": 36.21554523
+        "center_lat": 36.21554523,
+        "display_name": "Saouaf",
+        "display_label": "Saouaf — Delegation, Zaghouan"
       },
       "geometry": {
         "type": "Polygon",
@@ -19080,7 +19220,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 54.82312379,
         "center_lon": 9.82569965,
-        "center_lat": 37.30098265
+        "center_lat": 37.30098265,
+        "display_name": "Bizerte Nord",
+        "display_label": "Bizerte Nord — Delegation, Bizerte"
       },
       "geometry": {
         "type": "MultiPolygon",
@@ -19505,7 +19647,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 6.20787367,
         "center_lon": 9.88847651,
-        "center_lat": 37.25769725
+        "center_lat": 37.25769725,
+        "display_name": "Jarzouna",
+        "display_label": "Jarzouna — Delegation, Bizerte"
       },
       "geometry": {
         "type": "Polygon",
@@ -19596,7 +19740,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 408.01803133,
         "center_lon": 9.66788611,
-        "center_lat": 37.25803936
+        "center_lat": 37.25803936,
+        "display_name": "Bizerte Sud",
+        "display_label": "Bizerte Sud — Delegation, Bizerte"
       },
       "geometry": {
         "type": "MultiPolygon",
@@ -20245,7 +20391,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 626.64630549,
         "center_lon": 9.23609441,
-        "center_lat": 37.13694878
+        "center_lat": 37.13694878,
+        "display_name": "Sejnane",
+        "display_label": "Sejnane — Delegation, Bizerte"
       },
       "geometry": {
         "type": "MultiPolygon",
@@ -21034,7 +21182,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 552.12554169,
         "center_lon": 9.44760978,
-        "center_lat": 36.87807766
+        "center_lat": 36.87807766,
+        "display_name": "Joumine",
+        "display_label": "Joumine — Delegation, Bizerte"
       },
       "geometry": {
         "type": "Polygon",
@@ -21773,7 +21923,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 564.40204392,
         "center_lon": 9.67091596,
-        "center_lat": 36.98609659
+        "center_lat": 36.98609659,
+        "display_name": "Mateur",
+        "display_label": "Mateur — Delegation, Bizerte"
       },
       "geometry": {
         "type": "Polygon",
@@ -22288,7 +22440,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 409.79317859,
         "center_lon": 9.48563124,
-        "center_lat": 37.07913556
+        "center_lat": 37.07913556,
+        "display_name": "Ghazala",
+        "display_label": "Ghazala — Delegation, Bizerte"
       },
       "geometry": {
         "type": "Polygon",
@@ -22991,7 +23145,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 126.28073929,
         "center_lon": 9.85806737,
-        "center_lat": 37.10670497
+        "center_lat": 37.10670497,
+        "display_name": "Menzel Bourguiba",
+        "display_label": "Menzel Bourguiba — Delegation, Bizerte"
       },
       "geometry": {
         "type": "Polygon",
@@ -23302,7 +23458,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 60.82246571,
         "center_lon": 9.66529718,
-        "center_lat": 37.12975971
+        "center_lat": 37.12975971,
+        "display_name": "Tinja",
+        "display_label": "Tinja — Delegation, Bizerte"
       },
       "geometry": {
         "type": "Polygon",
@@ -23649,7 +23807,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 376.41055394,
         "center_lon": 9.95997511,
-        "center_lat": 37.030103
+        "center_lat": 37.030103,
+        "display_name": "Utique",
+        "display_label": "Utique — Delegation, Bizerte"
       },
       "geometry": {
         "type": "Polygon",
@@ -24036,7 +24196,7 @@
               36.9265
             ],
             [
-              10.0,
+              10,
               36.9182
             ],
             [
@@ -24248,7 +24408,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 93.26610619,
         "center_lon": 10.09295155,
-        "center_lat": 37.14555797
+        "center_lat": 37.14555797,
+        "display_name": "Ghar El Melh",
+        "display_label": "Ghar El Melh — Delegation, Bizerte"
       },
       "geometry": {
         "type": "MultiPolygon",
@@ -24605,7 +24767,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 80.34389943,
         "center_lon": 9.98395428,
-        "center_lat": 37.203524
+        "center_lat": 37.203524,
+        "display_name": "Menzel Jemil",
+        "display_label": "Menzel Jemil — Delegation, Bizerte"
       },
       "geometry": {
         "type": "Polygon",
@@ -24852,7 +25016,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 84.94324263,
         "center_lon": 9.9992804,
-        "center_lat": 37.15822259
+        "center_lat": 37.15822259,
+        "display_name": "El Alia",
+        "display_label": "El Alia — Delegation, Bizerte"
       },
       "geometry": {
         "type": "Polygon",
@@ -25131,7 +25297,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 84.67880743,
         "center_lon": 10.0844047,
-        "center_lat": 37.22194627
+        "center_lat": 37.22194627,
+        "display_name": "Ras Jebel",
+        "display_label": "Ras Jebel — Delegation, Bizerte"
       },
       "geometry": {
         "type": "MultiPolygon",
@@ -25488,7 +25656,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 427.80458594,
         "center_lon": 9.24308319,
-        "center_lat": 36.80427185
+        "center_lat": 36.80427185,
+        "display_name": "Béja Nord",
+        "display_label": "Béja Nord — Delegation, Béja"
       },
       "geometry": {
         "type": "Polygon",
@@ -26087,7 +26257,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 364.56110333,
         "center_lon": 9.17643322,
-        "center_lat": 36.63597585
+        "center_lat": 36.63597585,
+        "display_name": "Béja Sud",
+        "display_label": "Béja Sud — Delegation, Béja"
       },
       "geometry": {
         "type": "Polygon",
@@ -26590,7 +26762,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 238.3557492,
         "center_lon": 9.028602,
-        "center_lat": 36.77729656
+        "center_lat": 36.77729656,
+        "display_name": "Amdoun",
+        "display_label": "Amdoun — Delegation, Béja"
       },
       "geometry": {
         "type": "Polygon",
@@ -27249,7 +27423,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 591.71852592,
         "center_lon": 9.06936373,
-        "center_lat": 36.98806737
+        "center_lat": 36.98806737,
+        "display_name": "Nefza",
+        "display_label": "Nefza — Delegation, Béja"
       },
       "geometry": {
         "type": "Polygon",
@@ -28016,7 +28192,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 395.45059172,
         "center_lon": 9.23495187,
-        "center_lat": 36.45975879
+        "center_lat": 36.45975879,
+        "display_name": "Téboursouk",
+        "display_label": "Téboursouk — Delegation, Béja"
       },
       "geometry": {
         "type": "Polygon",
@@ -28611,7 +28789,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 114.42067392,
         "center_lon": 9.10885056,
-        "center_lat": 36.51865164
+        "center_lat": 36.51865164,
+        "display_name": "Thibar",
+        "display_label": "Thibar — Delegation, Béja"
       },
       "geometry": {
         "type": "Polygon",
@@ -28938,7 +29118,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 642.6782112,
         "center_lon": 9.41087402,
-        "center_lat": 36.5932285
+        "center_lat": 36.5932285,
+        "display_name": "Testour",
+        "display_label": "Testour — Delegation, Béja"
       },
       "geometry": {
         "type": "Polygon",
@@ -29657,7 +29839,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 415.57994341,
         "center_lon": 9.68761683,
-        "center_lat": 36.52830567
+        "center_lat": 36.52830567,
+        "display_name": "Goubellat",
+        "display_label": "Goubellat — Delegation, Béja"
       },
       "geometry": {
         "type": "Polygon",
@@ -30156,7 +30340,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 460.07015205,
         "center_lon": 9.63854093,
-        "center_lat": 36.7089281
+        "center_lat": 36.7089281,
+        "display_name": "Mejez El Bab",
+        "display_label": "Mejez El Bab — Delegation, Béja"
       },
       "geometry": {
         "type": "Polygon",
@@ -30679,7 +30865,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 254.29033679,
         "center_lon": 8.83024459,
-        "center_lat": 36.48449651
+        "center_lat": 36.48449651,
+        "display_name": "Jendouba Sud",
+        "display_label": "Jendouba Sud — Delegation, Jendouba"
       },
       "geometry": {
         "type": "Polygon",
@@ -31622,7 +31810,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 289.44910725,
         "center_lon": 8.67366659,
-        "center_lat": 36.53415211
+        "center_lat": 36.53415211,
+        "display_name": "Jendouba Nord",
+        "display_label": "Jendouba Nord — Delegation, Jendouba"
       },
       "geometry": {
         "type": "Polygon",
@@ -32669,7 +32859,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 296.5558523,
         "center_lon": 8.9843135,
-        "center_lat": 36.55837835
+        "center_lat": 36.55837835,
+        "display_name": "Bousalem",
+        "display_label": "Bousalem — Delegation, Jendouba"
       },
       "geometry": {
         "type": "Polygon",
@@ -33280,7 +33472,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 376.29481713,
         "center_lon": 8.82277942,
-        "center_lat": 36.90686981
+        "center_lat": 36.90686981,
+        "display_name": "Tabarka",
+        "display_label": "Tabarka — Delegation, Jendouba"
       },
       "geometry": {
         "type": "Polygon",
@@ -33883,7 +34077,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 488.80120741,
         "center_lon": 8.77534586,
-        "center_lat": 36.79402258
+        "center_lat": 36.79402258,
+        "display_name": "Aïn Draham",
+        "display_label": "Aïn Draham — Delegation, Jendouba"
       },
       "geometry": {
         "type": "Polygon",
@@ -34786,7 +34982,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 396.54063384,
         "center_lon": 8.622398,
-        "center_lat": 36.65266441
+        "center_lat": 36.65266441,
+        "display_name": "Fernana",
+        "display_label": "Fernana — Delegation, Jendouba"
       },
       "geometry": {
         "type": "Polygon",
@@ -35669,7 +35867,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 511.96155351,
         "center_lon": 8.34070706,
-        "center_lat": 36.48467274
+        "center_lat": 36.48467274,
+        "display_name": "Ghardimaou",
+        "display_label": "Ghardimaou — Delegation, Jendouba"
       },
       "geometry": {
         "type": "Polygon",
@@ -36484,7 +36684,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 198.35942495,
         "center_lon": 8.62310544,
-        "center_lat": 36.48525515
+        "center_lat": 36.48525515,
+        "display_name": "Oued Mliz",
+        "display_label": "Oued Mliz — Delegation, Jendouba"
       },
       "geometry": {
         "type": "Polygon",
@@ -37099,7 +37301,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 289.14350985,
         "center_lon": 8.91535547,
-        "center_lat": 36.69214744
+        "center_lat": 36.69214744,
+        "display_name": "Balta Bou Aouane",
+        "display_label": "Balta Bou Aouane — Delegation, Jendouba"
       },
       "geometry": {
         "type": "Polygon",
@@ -37762,7 +37966,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 210.70937888,
         "center_lon": 8.60819629,
-        "center_lat": 36.15363991
+        "center_lat": 36.15363991,
+        "display_name": "Kef Ouest",
+        "display_label": "Kef Ouest — Delegation, Le Kef"
       },
       "geometry": {
         "type": "Polygon",
@@ -38329,7 +38535,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 395.47236262,
         "center_lon": 8.86582506,
-        "center_lat": 36.18385246
+        "center_lat": 36.18385246,
+        "display_name": "Kef Est",
+        "display_label": "Kef Est — Delegation, Le Kef"
       },
       "geometry": {
         "type": "Polygon",
@@ -38808,7 +39016,7 @@
               36.2437
             ],
             [
-              9.0,
+              9,
               36.2399
             ],
             [
@@ -38884,7 +39092,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 719.41569011,
         "center_lon": 8.7421409,
-        "center_lat": 36.3293719
+        "center_lat": 36.3293719,
+        "display_name": "Nebeur",
+        "display_label": "Nebeur — Delegation, Le Kef"
       },
       "geometry": {
         "type": "Polygon",
@@ -39763,7 +39973,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 727.69180681,
         "center_lon": 8.42656522,
-        "center_lat": 36.1686435
+        "center_lat": 36.1686435,
+        "display_name": "Sakiet Sidi Youssef",
+        "display_label": "Sakiet Sidi Youssef — Delegation, Le Kef"
       },
       "geometry": {
         "type": "Polygon",
@@ -40650,7 +40862,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 722.28107243,
         "center_lon": 8.54661801,
-        "center_lat": 35.96573229
+        "center_lat": 35.96573229,
+        "display_name": "Tajerouine",
+        "display_label": "Tajerouine — Delegation, Le Kef"
       },
       "geometry": {
         "type": "Polygon",
@@ -41537,7 +41751,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 513.11492279,
         "center_lon": 8.40793919,
-        "center_lat": 35.79709797
+        "center_lat": 35.79709797,
+        "display_name": "Kalaat Senan",
+        "display_label": "Kalaat Senan — Delegation, Le Kef"
       },
       "geometry": {
         "type": "Polygon",
@@ -42272,7 +42488,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 206.47911466,
         "center_lon": 8.51853062,
-        "center_lat": 35.72742577
+        "center_lat": 35.72742577,
+        "display_name": "Kalaa Khesba",
+        "display_label": "Kalaa Khesba — Delegation, Le Kef"
       },
       "geometry": {
         "type": "Polygon",
@@ -42751,7 +42969,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 176.37869524,
         "center_lon": 8.64351944,
-        "center_lat": 35.81677081
+        "center_lat": 35.81677081,
+        "display_name": "Jerissa",
+        "display_label": "Jerissa — Delegation, Le Kef"
       },
       "geometry": {
         "type": "Polygon",
@@ -43098,7 +43318,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 450.40123114,
         "center_lon": 8.94159024,
-        "center_lat": 35.83013578
+        "center_lat": 35.83013578,
+        "display_name": "Ksour",
+        "display_label": "Ksour — Delegation, Le Kef"
       },
       "geometry": {
         "type": "Polygon",
@@ -43645,7 +43867,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 550.38448582,
         "center_lon": 8.79479725,
-        "center_lat": 35.93529065
+        "center_lat": 35.93529065,
+        "display_name": "Dahmani",
+        "display_label": "Dahmani — Delegation, Le Kef"
       },
       "geometry": {
         "type": "Polygon",
@@ -44296,7 +44520,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 430.76650484,
         "center_lon": 9.04856927,
-        "center_lat": 36.06278794
+        "center_lat": 36.06278794,
+        "display_name": "Es Sers",
+        "display_label": "Es Sers — Delegation, Le Kef"
       },
       "geometry": {
         "type": "Polygon",
@@ -44903,7 +45129,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 386.3263561,
         "center_lon": 9.22358875,
-        "center_lat": 36.03059878
+        "center_lat": 36.03059878,
+        "display_name": "Siliana Nord",
+        "display_label": "Siliana Nord — Delegation, Siliana"
       },
       "geometry": {
         "type": "Polygon",
@@ -45359,7 +45587,7 @@
             ],
             [
               9.2722,
-              36.0
+              36
             ],
             [
               9.2821,
@@ -45674,7 +45902,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 493.17727843,
         "center_lon": 9.42981161,
-        "center_lat": 35.96968988
+        "center_lat": 35.96968988,
+        "display_name": "Siliana Sud",
+        "display_label": "Siliana Sud — Delegation, Siliana"
       },
       "geometry": {
         "type": "Polygon",
@@ -45846,7 +46076,7 @@
             ],
             [
               9.2722,
-              36.0
+              36
             ],
             [
               9.2635,
@@ -46305,7 +46535,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 376.76092567,
         "center_lon": 9.63153076,
-        "center_lat": 36.31348704
+        "center_lat": 36.31348704,
+        "display_name": "Bouarada",
+        "display_label": "Bouarada — Delegation, Siliana"
       },
       "geometry": {
         "type": "Polygon",
@@ -47028,7 +47260,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 461.11133925,
         "center_lon": 9.33247916,
-        "center_lat": 36.25215736
+        "center_lat": 36.25215736,
+        "display_name": "Gaafour",
+        "display_label": "Gaafour — Delegation, Siliana"
       },
       "geometry": {
         "type": "Polygon",
@@ -47723,7 +47957,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 424.34574993,
         "center_lon": 9.12632324,
-        "center_lat": 36.34814834
+        "center_lat": 36.34814834,
+        "display_name": "El Krib",
+        "display_label": "El Krib — Delegation, Siliana"
       },
       "geometry": {
         "type": "Polygon",
@@ -48074,7 +48310,7 @@
               36.2412
             ],
             [
-              9.0,
+              9,
               36.2399
             ],
             [
@@ -48574,7 +48810,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 274.41894678,
         "center_lon": 9.13198962,
-        "center_lat": 36.1884572
+        "center_lat": 36.1884572,
+        "display_name": "Bourouis",
+        "display_label": "Bourouis — Delegation, Siliana"
       },
       "geometry": {
         "type": "Polygon",
@@ -49021,7 +49259,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 347.30971736,
         "center_lon": 9.16367859,
-        "center_lat": 35.87022672
+        "center_lat": 35.87022672,
+        "display_name": "Makthar",
+        "display_label": "Makthar — Delegation, Siliana"
       },
       "geometry": {
         "type": "Polygon",
@@ -49664,7 +49904,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 662.06496428,
         "center_lon": 9.1480848,
-        "center_lat": 35.65717545
+        "center_lat": 35.65717545,
+        "display_name": "Rouhia",
+        "display_label": "Rouhia — Delegation, Siliana"
       },
       "geometry": {
         "type": "Polygon",
@@ -49863,7 +50105,7 @@
               35.6751
             ],
             [
-              9.0,
+              9,
               35.6663
             ],
             [
@@ -50511,7 +50753,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 439.48168526,
         "center_lon": 9.39187393,
-        "center_lat": 35.80336615
+        "center_lat": 35.80336615,
+        "display_name": "Kesra",
+        "display_label": "Kesra — Delegation, Siliana"
       },
       "geometry": {
         "type": "Polygon",
@@ -51206,7 +51450,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 457.88224477,
         "center_lon": 9.62313788,
-        "center_lat": 36.1002164
+        "center_lat": 36.1002164,
+        "display_name": "Bargou",
+        "display_label": "Bargou — Delegation, Siliana"
       },
       "geometry": {
         "type": "Polygon",
@@ -51645,7 +51891,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 360.60947566,
         "center_lon": 9.44913357,
-        "center_lat": 36.35383202
+        "center_lat": 36.35383202,
+        "display_name": "Laroussa",
+        "display_label": "Laroussa — Delegation, Siliana"
       },
       "geometry": {
         "type": "Polygon",
@@ -52308,7 +52556,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 6.3894309,
         "center_lon": 10.63140039,
-        "center_lat": 35.83686653
+        "center_lat": 35.83686653,
+        "display_name": "Sousse Médina",
+        "display_label": "Sousse Médina — Delegation, Sousse"
       },
       "geometry": {
         "type": "Polygon",
@@ -52403,7 +52653,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 10.08914116,
         "center_lon": 10.59675987,
-        "center_lat": 35.80479345
+        "center_lat": 35.80479345,
+        "display_name": "Sousse Riadh",
+        "display_label": "Sousse Riadh — Delegation, Sousse"
       },
       "geometry": {
         "type": "Polygon",
@@ -52466,7 +52718,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 13.84949061,
         "center_lon": 10.61194751,
-        "center_lat": 35.82876075
+        "center_lat": 35.82876075,
+        "display_name": "Sousse Jaouhara",
+        "display_label": "Sousse Jaouhara — Delegation, Sousse"
       },
       "geometry": {
         "type": "Polygon",
@@ -52557,7 +52811,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 12.46964205,
         "center_lon": 10.66145159,
-        "center_lat": 35.79619668
+        "center_lat": 35.79619668,
+        "display_name": "Sousse Sidi Abdelhamid",
+        "display_label": "Sousse Sidi Abdelhamid — Delegation, Sousse"
       },
       "geometry": {
         "type": "Polygon",
@@ -52664,7 +52920,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 18.19211296,
         "center_lon": 10.59391893,
-        "center_lat": 35.87475461
+        "center_lat": 35.87475461,
+        "display_name": "Hammam Sousse",
+        "display_label": "Hammam Sousse — Delegation, Sousse"
       },
       "geometry": {
         "type": "Polygon",
@@ -52787,7 +53045,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 44.78269902,
         "center_lon": 10.56218201,
-        "center_lat": 35.90522496
+        "center_lat": 35.90522496,
+        "display_name": "Akouda",
+        "display_label": "Akouda — Delegation, Sousse"
       },
       "geometry": {
         "type": "Polygon",
@@ -52990,7 +53250,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 238.38553272,
         "center_lon": 10.45277894,
-        "center_lat": 35.86843854
+        "center_lat": 35.86843854,
+        "display_name": "Kalaa Kebira",
+        "display_label": "Kalaa Kebira — Delegation, Sousse"
       },
       "geometry": {
         "type": "Polygon",
@@ -53281,7 +53543,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 129.48644503,
         "center_lon": 10.42554516,
-        "center_lat": 35.96929495
+        "center_lat": 35.96929495,
+        "display_name": "Sidi Bou Ali",
+        "display_label": "Sidi Bou Ali — Delegation, Sousse"
       },
       "geometry": {
         "type": "Polygon",
@@ -53461,7 +53725,7 @@
             ],
             [
               10.4807,
-              36.0
+              36
             ],
             [
               10.4754,
@@ -53564,7 +53828,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 95.00247637,
         "center_lon": 10.44519103,
-        "center_lat": 36.02825487
+        "center_lat": 36.02825487,
+        "display_name": "Hergla",
+        "display_label": "Hergla — Delegation, Sousse"
       },
       "geometry": {
         "type": "Polygon",
@@ -53712,7 +53978,7 @@
             ],
             [
               10.4807,
-              36.0
+              36
             ],
             [
               10.4928,
@@ -53815,7 +54081,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 377.66480508,
         "center_lon": 10.33567253,
-        "center_lat": 36.12779542
+        "center_lat": 36.12779542,
+        "display_name": "Enfidha",
+        "display_label": "Enfidha — Delegation, Sousse"
       },
       "geometry": {
         "type": "Polygon",
@@ -54278,7 +54546,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 260.97935721,
         "center_lon": 10.42590072,
-        "center_lat": 36.27436664
+        "center_lat": 36.27436664,
+        "display_name": "Bouficha",
+        "display_label": "Bouficha — Delegation, Sousse"
       },
       "geometry": {
         "type": "Polygon",
@@ -54717,7 +54987,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 178.32285752,
         "center_lon": 10.24502975,
-        "center_lat": 35.90446809
+        "center_lat": 35.90446809,
+        "display_name": "Kondar",
+        "display_label": "Kondar — Delegation, Sousse"
       },
       "geometry": {
         "type": "Polygon",
@@ -55120,7 +55392,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 320.90729538,
         "center_lon": 10.31891555,
-        "center_lat": 35.69931118
+        "center_lat": 35.69931118,
+        "display_name": "Sidi El Heni",
+        "display_label": "Sidi El Heni — Delegation, Sousse"
       },
       "geometry": {
         "type": "Polygon",
@@ -55603,7 +55877,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 334.23815292,
         "center_lon": 10.53876788,
-        "center_lat": 35.67310176
+        "center_lat": 35.67310176,
+        "display_name": "M'Saken",
+        "display_label": "M'Saken — Delegation, Sousse"
       },
       "geometry": {
         "type": "Polygon",
@@ -55986,7 +56262,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 102.52871571,
         "center_lon": 10.47091273,
-        "center_lat": 35.79798875
+        "center_lat": 35.79798875,
+        "display_name": "Kalaa Sghira",
+        "display_label": "Kalaa Sghira — Delegation, Sousse"
       },
       "geometry": {
         "type": "Polygon",
@@ -56225,7 +56503,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 37.03676266,
         "center_lon": 10.63817848,
-        "center_lat": 35.76801713
+        "center_lat": 35.76801713,
+        "display_name": "Zaouia Ksiba Thraya",
+        "display_label": "Zaouia Ksiba Thraya — Delegation, Sousse"
       },
       "geometry": {
         "type": "Polygon",
@@ -56388,7 +56668,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 61.16103594,
         "center_lon": 10.79857355,
-        "center_lat": 35.73796551
+        "center_lat": 35.73796551,
+        "display_name": "Monastir",
+        "display_label": "Monastir — Delegation, Monastir"
       },
       "geometry": {
         "type": "Polygon",
@@ -56587,7 +56869,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 51.31668602,
         "center_lon": 10.6771591,
-        "center_lat": 35.70105815
+        "center_lat": 35.70105815,
+        "display_name": "Ouerdanine",
+        "display_label": "Ouerdanine — Delegation, Monastir"
       },
       "geometry": {
         "type": "Polygon",
@@ -56798,7 +57082,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 42.28398251,
         "center_lon": 10.7225846,
-        "center_lat": 35.74194675
+        "center_lat": 35.74194675,
+        "display_name": "Sahline",
+        "display_label": "Sahline — Delegation, Monastir"
       },
       "geometry": {
         "type": "Polygon",
@@ -56957,7 +57243,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 248.74362868,
         "center_lon": 10.69497274,
-        "center_lat": 35.56441494
+        "center_lat": 35.56441494,
+        "display_name": "Zeramdine",
+        "display_label": "Zeramdine — Delegation, Monastir"
       },
       "geometry": {
         "type": "Polygon",
@@ -57332,7 +57620,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 86.31287931,
         "center_lon": 10.77838073,
-        "center_lat": 35.53502935
+        "center_lat": 35.53502935,
+        "display_name": "Beni Hassen",
+        "display_label": "Beni Hassen — Delegation, Monastir"
       },
       "geometry": {
         "type": "Polygon",
@@ -57707,7 +57997,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 156.56427281,
         "center_lon": 10.77325531,
-        "center_lat": 35.60671711
+        "center_lat": 35.60671711,
+        "display_name": "Jammel",
+        "display_label": "Jammel — Delegation, Monastir"
       },
       "geometry": {
         "type": "Polygon",
@@ -58086,7 +58378,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 48.91967258,
         "center_lon": 10.7585481,
-        "center_lat": 35.68150803
+        "center_lat": 35.68150803,
+        "display_name": "Bembla",
+        "display_label": "Bembla — Delegation, Monastir"
       },
       "geometry": {
         "type": "Polygon",
@@ -58281,7 +58575,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 197.28033251,
         "center_lon": 10.87785753,
-        "center_lat": 35.53680325
+        "center_lat": 35.53680325,
+        "display_name": "Moknine",
+        "display_label": "Moknine — Delegation, Monastir"
       },
       "geometry": {
         "type": "Polygon",
@@ -58824,7 +59120,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 44.17220645,
         "center_lon": 11.00979611,
-        "center_lat": 35.59674301
+        "center_lat": 35.59674301,
+        "display_name": "Bekalta",
+        "display_label": "Bekalta — Delegation, Monastir"
       },
       "geometry": {
         "type": "MultiPolygon",
@@ -59077,7 +59375,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 19.29001013,
         "center_lon": 10.96111192,
-        "center_lat": 35.63962667
+        "center_lat": 35.63962667,
+        "display_name": "Teboulba",
+        "display_label": "Teboulba — Delegation, Monastir"
       },
       "geometry": {
         "type": "Polygon",
@@ -59212,7 +59512,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 22.01455758,
         "center_lon": 10.86979348,
-        "center_lat": 35.6374095
+        "center_lat": 35.6374095,
+        "display_name": "Ksar Hellal",
+        "display_label": "Ksar Hellal — Delegation, Monastir"
       },
       "geometry": {
         "type": "Polygon",
@@ -59375,7 +59677,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 36.68675596,
         "center_lon": 10.81633162,
-        "center_lat": 35.64429532
+        "center_lat": 35.64429532,
+        "display_name": "Ksibet El Mediouni",
+        "display_label": "Ksibet El Mediouni — Delegation, Monastir"
       },
       "geometry": {
         "type": "Polygon",
@@ -59594,7 +59898,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 12.37717349,
         "center_lon": 10.88596768,
-        "center_lat": 35.66693409
+        "center_lat": 35.66693409,
+        "display_name": "Sayada-Lamta-Bou Hjar",
+        "display_label": "Sayada-Lamta-Bou Hjar — Delegation, Monastir"
       },
       "geometry": {
         "type": "Polygon",
@@ -59713,7 +60019,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 166.55045741,
         "center_lon": 10.96263394,
-        "center_lat": 35.48768806
+        "center_lat": 35.48768806,
+        "display_name": "Mahdia",
+        "display_label": "Mahdia — Delegation, Mahdia"
       },
       "geometry": {
         "type": "Polygon",
@@ -60104,7 +60412,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 191.0238934,
         "center_lon": 10.69654898,
-        "center_lat": 35.42431899
+        "center_lat": 35.42431899,
+        "display_name": "Boumerdès",
+        "display_label": "Boumerdès — Delegation, Mahdia"
       },
       "geometry": {
         "type": "Polygon",
@@ -60587,7 +60897,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 357.75482849,
         "center_lon": 10.33924434,
-        "center_lat": 35.47809665
+        "center_lat": 35.47809665,
+        "display_name": "Ouled Chamekh",
+        "display_label": "Ouled Chamekh — Delegation, Mahdia"
       },
       "geometry": {
         "type": "Polygon",
@@ -61086,7 +61398,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 444.48624656,
         "center_lon": 10.43534304,
-        "center_lat": 35.22691807
+        "center_lat": 35.22691807,
+        "display_name": "Chorbane",
+        "display_label": "Chorbane — Delegation, Mahdia"
       },
       "geometry": {
         "type": "Polygon",
@@ -61577,7 +61891,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 315.81617663,
         "center_lon": 10.22640718,
-        "center_lat": 35.2775832
+        "center_lat": 35.2775832,
+        "display_name": "Hbira",
+        "display_label": "Hbira — Delegation, Mahdia"
       },
       "geometry": {
         "type": "Polygon",
@@ -61992,7 +62308,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 343.10951094,
         "center_lon": 10.50319365,
-        "center_lat": 35.34081133
+        "center_lat": 35.34081133,
+        "display_name": "Souassi",
+        "display_label": "Souassi — Delegation, Mahdia"
       },
       "geometry": {
         "type": "Polygon",
@@ -62743,7 +63061,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 286.43385667,
         "center_lon": 10.72427929,
-        "center_lat": 35.31584753
+        "center_lat": 35.31584753,
+        "display_name": "El Jem",
+        "display_label": "El Jem — Delegation, Mahdia"
       },
       "geometry": {
         "type": "Polygon",
@@ -63166,7 +63486,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 118.17120619,
         "center_lon": 11.06055671,
-        "center_lat": 35.22499458
+        "center_lat": 35.22499458,
+        "display_name": "Chebba",
+        "display_label": "Chebba — Delegation, Mahdia"
       },
       "geometry": {
         "type": "MultiPolygon",
@@ -63563,7 +63885,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 160.89170909,
         "center_lon": 10.98821703,
-        "center_lat": 35.18003874
+        "center_lat": 35.18003874,
+        "display_name": "Melloulech",
+        "display_label": "Melloulech — Delegation, Mahdia"
       },
       "geometry": {
         "type": "Polygon",
@@ -63786,7 +64110,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 288.90772779,
         "center_lon": 10.89055667,
-        "center_lat": 35.28774526
+        "center_lat": 35.28774526,
+        "display_name": "Sidi Alouane",
+        "display_label": "Sidi Alouane — Delegation, Mahdia"
       },
       "geometry": {
         "type": "Polygon",
@@ -64157,7 +64483,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 221.21387649,
         "center_lon": 10.99491172,
-        "center_lat": 35.35635043
+        "center_lat": 35.35635043,
+        "display_name": "Ksour Essef",
+        "display_label": "Ksour Essef — Delegation, Mahdia"
       },
       "geometry": {
         "type": "Polygon",
@@ -64604,7 +64932,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 22.82502765,
         "center_lon": 10.76655796,
-        "center_lat": 34.73734005
+        "center_lat": 34.73734005,
+        "display_name": "Sfax Médina",
+        "display_label": "Sfax Médina — Delegation, Sfax"
       },
       "geometry": {
         "type": "Polygon",
@@ -64879,7 +65209,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 16.19578994,
         "center_lon": 10.72175679,
-        "center_lat": 34.73515586
+        "center_lat": 34.73515586,
+        "display_name": "Sfax Ouest",
+        "display_label": "Sfax Ouest — Delegation, Sfax"
       },
       "geometry": {
         "type": "Polygon",
@@ -64966,7 +65298,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 92.76021166,
         "center_lon": 10.73997151,
-        "center_lat": 34.86032463
+        "center_lat": 34.86032463,
+        "display_name": "Sakiet Ezzit",
+        "display_label": "Sakiet Ezzit — Delegation, Sfax"
       },
       "geometry": {
         "type": "Polygon",
@@ -65209,7 +65543,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 113.33177327,
         "center_lon": 10.82948924,
-        "center_lat": 34.83657344
+        "center_lat": 34.83657344,
+        "display_name": "Sakiet Eddaier",
+        "display_label": "Sakiet Eddaier — Delegation, Sfax"
       },
       "geometry": {
         "type": "Polygon",
@@ -65492,7 +65828,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 196.08770685,
         "center_lon": 10.65911936,
-        "center_lat": 34.83368276
+        "center_lat": 34.83368276,
+        "display_name": "Sfax Sud",
+        "display_label": "Sfax Sud — Delegation, Sfax"
       },
       "geometry": {
         "type": "Polygon",
@@ -65807,7 +66145,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 88.93319809,
         "center_lon": 10.67763677,
-        "center_lat": 34.68563505
+        "center_lat": 34.68563505,
+        "display_name": "Thyna",
+        "display_label": "Thyna — Delegation, Sfax"
       },
       "geometry": {
         "type": "Polygon",
@@ -65978,7 +66318,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 734.87359036,
         "center_lon": 10.46034943,
-        "center_lat": 34.74480888
+        "center_lat": 34.74480888,
+        "display_name": "Agareb",
+        "display_label": "Agareb — Delegation, Sfax"
       },
       "geometry": {
         "type": "Polygon",
@@ -66497,7 +66839,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 253.20675165,
         "center_lon": 10.88963308,
-        "center_lat": 35.09400799
+        "center_lat": 35.09400799,
+        "display_name": "Jebeniana",
+        "display_label": "Jebeniana — Delegation, Sfax"
       },
       "geometry": {
         "type": "Polygon",
@@ -66732,7 +67076,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 178.83182456,
         "center_lon": 10.85991806,
-        "center_lat": 34.93668611
+        "center_lat": 34.93668611,
+        "display_name": "El Amra",
+        "display_label": "El Amra — Delegation, Sfax"
       },
       "geometry": {
         "type": "Polygon",
@@ -67007,7 +67353,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 526.76367495,
         "center_lon": 10.71489345,
-        "center_lat": 35.08732284
+        "center_lat": 35.08732284,
+        "display_name": "Hencha",
+        "display_label": "Hencha — Delegation, Sfax"
       },
       "geometry": {
         "type": "Polygon",
@@ -67470,7 +67818,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 1636.28387674,
         "center_lon": 10.38337903,
-        "center_lat": 35.02909922
+        "center_lat": 35.02909922,
+        "display_name": "Menzel Chaker",
+        "display_label": "Menzel Chaker — Delegation, Sfax"
       },
       "geometry": {
         "type": "Polygon",
@@ -68129,7 +68479,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 433.15532289,
         "center_lon": 10.20157263,
-        "center_lat": 34.48343381
+        "center_lat": 34.48343381,
+        "display_name": "El Ghraiba",
+        "display_label": "El Ghraiba — Delegation, Sfax"
       },
       "geometry": {
         "type": "Polygon",
@@ -68664,7 +69016,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 1208.06652612,
         "center_lon": 10.11976176,
-        "center_lat": 34.76329638
+        "center_lat": 34.76329638,
+        "display_name": "Bir Ali Ben Khélifa",
+        "display_label": "Bir Ali Ben Khélifa — Delegation, Sfax"
       },
       "geometry": {
         "type": "Polygon",
@@ -69179,7 +69533,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 913.27095399,
         "center_lon": 9.96958667,
-        "center_lat": 34.34486191
+        "center_lat": 34.34486191,
+        "display_name": "Skhira",
+        "display_label": "Skhira — Delegation, Sfax"
       },
       "geometry": {
         "type": "Polygon",
@@ -69914,7 +70270,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 437.06784368,
         "center_lon": 10.46586736,
-        "center_lat": 34.52857981
+        "center_lat": 34.52857981,
+        "display_name": "Mahres",
+        "display_label": "Mahres — Delegation, Sfax"
       },
       "geometry": {
         "type": "Polygon",
@@ -70485,7 +70843,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 158.44656006,
         "center_lon": 11.20388065,
-        "center_lat": 34.71991165
+        "center_lat": 34.71991165,
+        "display_name": "Kerkennah",
+        "display_label": "Kerkennah — Delegation, Sfax"
       },
       "geometry": {
         "type": "MultiPolygon",
@@ -71438,7 +71798,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 250.85850481,
         "center_lon": 10.09261841,
-        "center_lat": 35.74265368
+        "center_lat": 35.74265368,
+        "display_name": "Kairouan Nord",
+        "display_label": "Kairouan Nord — Delegation, Kairouan"
       },
       "geometry": {
         "type": "Polygon",
@@ -71809,7 +72171,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 519.02787779,
         "center_lon": 10.15938702,
-        "center_lat": 35.57633803
+        "center_lat": 35.57633803,
+        "display_name": "Kairouan Sud",
+        "display_label": "Kairouan Sud — Delegation, Kairouan"
       },
       "geometry": {
         "type": "Polygon",
@@ -72420,7 +72784,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 512.62957308,
         "center_lon": 9.92764933,
-        "center_lat": 35.65887244
+        "center_lat": 35.65887244,
+        "display_name": "Chebika",
+        "display_label": "Chebika — Delegation, Kairouan"
       },
       "geometry": {
         "type": "Polygon",
@@ -73083,7 +73449,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 1058.21705885,
         "center_lon": 10.02598148,
-        "center_lat": 35.95098906
+        "center_lat": 35.95098906,
+        "display_name": "Sbikha",
+        "display_label": "Sbikha — Delegation, Kairouan"
       },
       "geometry": {
         "type": "Polygon",
@@ -73962,7 +74330,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 912.46411075,
         "center_lon": 9.63111328,
-        "center_lat": 35.89336582
+        "center_lat": 35.89336582,
+        "display_name": "Oueslatia",
+        "display_label": "Oueslatia — Delegation, Kairouan"
       },
       "geometry": {
         "type": "Polygon",
@@ -74781,7 +75151,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 611.3089221,
         "center_lon": 9.73591571,
-        "center_lat": 35.61649856
+        "center_lat": 35.61649856,
+        "display_name": "Haffouz",
+        "display_label": "Haffouz — Delegation, Kairouan"
       },
       "geometry": {
         "type": "Polygon",
@@ -75592,7 +75964,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 361.29397153,
         "center_lon": 9.48259407,
-        "center_lat": 35.62919793
+        "center_lat": 35.62919793,
+        "display_name": "Alaa",
+        "display_label": "Alaa — Delegation, Kairouan"
       },
       "geometry": {
         "type": "Polygon",
@@ -76267,7 +76641,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 582.93813888,
         "center_lon": 9.59947577,
-        "center_lat": 35.41660296
+        "center_lat": 35.41660296,
+        "display_name": "Hajeb El Ayoun",
+        "display_label": "Hajeb El Ayoun — Delegation, Kairouan"
       },
       "geometry": {
         "type": "Polygon",
@@ -77010,7 +77386,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 685.09858898,
         "center_lon": 9.81266761,
-        "center_lat": 35.33767325
+        "center_lat": 35.33767325,
+        "display_name": "Nasrallah",
+        "display_label": "Nasrallah — Delegation, Kairouan"
       },
       "geometry": {
         "type": "Polygon",
@@ -77541,7 +77919,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 329.89130678,
         "center_lon": 10.1051927,
-        "center_lat": 35.15057191
+        "center_lat": 35.15057191,
+        "display_name": "Chrarda",
+        "display_label": "Chrarda — Delegation, Kairouan"
       },
       "geometry": {
         "type": "Polygon",
@@ -77964,7 +78344,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 689.45800584,
         "center_lon": 10.04219578,
-        "center_lat": 35.38307695
+        "center_lat": 35.38307695,
+        "display_name": "Bouhajla",
+        "display_label": "Bouhajla — Delegation, Kairouan"
       },
       "geometry": {
         "type": "Polygon",
@@ -78459,7 +78841,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 97.77942176,
         "center_lon": 8.76988714,
-        "center_lat": 35.21578591
+        "center_lat": 35.21578591,
+        "display_name": "Kasserine Nord",
+        "display_label": "Kasserine Nord — Delegation, Kassérine"
       },
       "geometry": {
         "type": "Polygon",
@@ -78870,7 +79254,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 865.48082244,
         "center_lon": 8.79065127,
-        "center_lat": 35.09786841
+        "center_lat": 35.09786841,
+        "display_name": "Kasserine Sud",
+        "display_label": "Kasserine Sud — Delegation, Kassérine"
       },
       "geometry": {
         "type": "Polygon",
@@ -79665,7 +80051,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 3.17056637,
         "center_lon": 8.83077981,
-        "center_lat": 35.15881205
+        "center_lat": 35.15881205,
+        "display_name": "Ezzouhour",
+        "display_label": "Ezzouhour — Delegation, Kassérine"
       },
       "geometry": {
         "type": "Polygon",
@@ -79764,7 +80152,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 969.11277235,
         "center_lon": 8.91025045,
-        "center_lat": 34.96267984
+        "center_lat": 34.96267984,
+        "display_name": "Hassi El Ferid",
+        "display_label": "Hassi El Ferid — Delegation, Kassérine"
       },
       "geometry": {
         "type": "Polygon",
@@ -80359,7 +80749,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 1115.30091584,
         "center_lon": 9.05779248,
-        "center_lat": 35.24214293
+        "center_lat": 35.24214293,
+        "display_name": "Sbeitla",
+        "display_label": "Sbeitla — Delegation, Kassérine"
       },
       "geometry": {
         "type": "Polygon",
@@ -81030,7 +81422,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 447.46984355,
         "center_lon": 9.16933877,
-        "center_lat": 35.49605282
+        "center_lat": 35.49605282,
+        "display_name": "Sbiba",
+        "display_label": "Sbiba — Delegation, Kassérine"
       },
       "geometry": {
         "type": "Polygon",
@@ -81517,7 +81911,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 275.10332083,
         "center_lon": 8.8863631,
-        "center_lat": 35.65703618
+        "center_lat": 35.65703618,
+        "display_name": "Jedeliane",
+        "display_label": "Jedeliane — Delegation, Kassérine"
       },
       "geometry": {
         "type": "Polygon",
@@ -81896,7 +82292,7 @@
               35.6642
             ],
             [
-              9.0,
+              9,
               35.6663
             ],
             [
@@ -82024,7 +82420,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 411.57670123,
         "center_lon": 8.90936122,
-        "center_lat": 35.48989943
+        "center_lat": 35.48989943,
+        "display_name": "Ayoun",
+        "display_label": "Ayoun — Delegation, Kassérine"
       },
       "geometry": {
         "type": "Polygon",
@@ -82431,7 +82829,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 716.65673253,
         "center_lon": 8.66070548,
-        "center_lat": 35.57671385
+        "center_lat": 35.57671385,
+        "display_name": "Thala",
+        "display_label": "Thala — Delegation, Kassérine"
       },
       "geometry": {
         "type": "Polygon",
@@ -83170,7 +83570,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 497.75575214,
         "center_lon": 8.46639942,
-        "center_lat": 35.53956054
+        "center_lat": 35.53956054,
+        "display_name": "Hidra",
+        "display_label": "Hidra — Delegation, Kassérine"
       },
       "geometry": {
         "type": "Polygon",
@@ -83649,7 +84051,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 915.02280783,
         "center_lon": 8.56557747,
-        "center_lat": 35.34052115
+        "center_lat": 35.34052115,
+        "display_name": "Foussana",
+        "display_label": "Foussana — Delegation, Kassérine"
       },
       "geometry": {
         "type": "Polygon",
@@ -84216,7 +84620,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 1004.46056234,
         "center_lon": 8.45012016,
-        "center_lat": 35.03068638
+        "center_lat": 35.03068638,
+        "display_name": "Feriana",
+        "display_label": "Feriana — Delegation, Kassérine"
       },
       "geometry": {
         "type": "Polygon",
@@ -84703,7 +85109,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 887.28583616,
         "center_lon": 8.55107941,
-        "center_lat": 34.76405007
+        "center_lat": 34.76405007,
+        "display_name": "Majel Belabbes",
+        "display_label": "Majel Belabbes — Delegation, Kassérine"
       },
       "geometry": {
         "type": "Polygon",
@@ -85050,7 +85458,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 423.28965067,
         "center_lon": 9.41296118,
-        "center_lat": 34.98576128
+        "center_lat": 34.98576128,
+        "display_name": "Sidi Bouzid Ouest",
+        "display_label": "Sidi Bouzid Ouest — Delegation, Sidi Bou Zid"
       },
       "geometry": {
         "type": "Polygon",
@@ -85489,7 +85899,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 795.20309555,
         "center_lon": 9.60452269,
-        "center_lat": 35.07232939
+        "center_lat": 35.07232939,
+        "display_name": "Sidi Bouzid Est",
+        "display_label": "Sidi Bouzid Est — Delegation, Sidi Bou Zid"
       },
       "geometry": {
         "type": "Polygon",
@@ -86184,7 +86596,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 669.24612064,
         "center_lon": 9.39451025,
-        "center_lat": 35.32942675
+        "center_lat": 35.32942675,
+        "display_name": "Jelma",
+        "display_label": "Jelma — Delegation, Sidi Bou Zid"
       },
       "geometry": {
         "type": "Polygon",
@@ -86767,7 +87181,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 295.56236047,
         "center_lon": 9.31273826,
-        "center_lat": 35.22836674
+        "center_lat": 35.22836674,
+        "display_name": "Sabalat Ouled Asker",
+        "display_label": "Sabalat Ouled Asker — Delegation, Sidi Bou Zid"
       },
       "geometry": {
         "type": "Polygon",
@@ -87110,7 +87526,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 515.09440178,
         "center_lon": 9.28437663,
-        "center_lat": 34.87419259
+        "center_lat": 34.87419259,
+        "display_name": "Bir El Hfay",
+        "display_label": "Bir El Hfay — Delegation, Sidi Bou Zid"
       },
       "geometry": {
         "type": "Polygon",
@@ -87573,7 +87991,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 614.60876497,
         "center_lon": 9.09979232,
-        "center_lat": 34.82336654
+        "center_lat": 34.82336654,
+        "display_name": "Sidi Ali Ben Aoun",
+        "display_label": "Sidi Ali Ben Aoun — Delegation, Sidi Bou Zid"
       },
       "geometry": {
         "type": "Polygon",
@@ -88080,7 +88500,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 554.93176084,
         "center_lon": 9.38720972,
-        "center_lat": 34.6285044
+        "center_lat": 34.6285044,
+        "display_name": "Menzel Bouzaiene",
+        "display_label": "Menzel Bouzaiene — Delegation, Sidi Bou Zid"
       },
       "geometry": {
         "type": "Polygon",
@@ -88543,7 +88965,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 623.74662642,
         "center_lon": 9.66263792,
-        "center_lat": 34.63557401
+        "center_lat": 34.63557401,
+        "display_name": "Meknassi",
+        "display_label": "Meknassi — Delegation, Sidi Bou Zid"
       },
       "geometry": {
         "type": "Polygon",
@@ -89046,7 +89470,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 346.34914589,
         "center_lon": 9.54903339,
-        "center_lat": 34.86709245
+        "center_lat": 34.86709245,
+        "display_name": "Souk Jedid",
+        "display_label": "Souk Jedid — Delegation, Sidi Bou Zid"
       },
       "geometry": {
         "type": "Polygon",
@@ -89465,7 +89891,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 1137.71566281,
         "center_lon": 9.68983465,
-        "center_lat": 34.46276272
+        "center_lat": 34.46276272,
+        "display_name": "Mazzouna",
+        "display_label": "Mazzouna — Delegation, Sidi Bou Zid"
       },
       "geometry": {
         "type": "Polygon",
@@ -90096,7 +90524,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 1035.10905908,
         "center_lon": 9.80156282,
-        "center_lat": 34.85419178
+        "center_lat": 34.85419178,
+        "display_name": "Regueb",
+        "display_label": "Regueb — Delegation, Sidi Bou Zid"
       },
       "geometry": {
         "type": "Polygon",
@@ -90591,7 +91021,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 422.36123651,
         "center_lon": 9.86073322,
-        "center_lat": 35.09971112
+        "center_lat": 35.09971112,
+        "display_name": "Ouled Haffouz",
+        "display_label": "Ouled Haffouz — Delegation, Sidi Bou Zid"
       },
       "geometry": {
         "type": "Polygon",
@@ -90986,7 +91418,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 15.80879877,
         "center_lon": 10.09535942,
-        "center_lat": 33.90450597
+        "center_lat": 33.90450597,
+        "display_name": "Gabès Médina",
+        "display_label": "Gabès Médina — Delegation, Gabès"
       },
       "geometry": {
         "type": "Polygon",
@@ -91097,7 +91531,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 154.37095686,
         "center_lon": 9.99809613,
-        "center_lat": 33.87804328
+        "center_lat": 33.87804328,
+        "display_name": "Gabès Ouest",
+        "display_label": "Gabès Ouest — Delegation, Gabès"
       },
       "geometry": {
         "type": "Polygon",
@@ -91332,7 +91768,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 293.74377672,
         "center_lon": 10.05231115,
-        "center_lat": 33.77977873
+        "center_lat": 33.77977873,
+        "display_name": "Gabès Sud",
+        "display_label": "Gabès Sud — Delegation, Gabès"
       },
       "geometry": {
         "type": "Polygon",
@@ -91719,7 +92157,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 19.38853427,
         "center_lon": 10.05392141,
-        "center_lat": 33.94770907
+        "center_lat": 33.94770907,
+        "display_name": "Ghannouch",
+        "display_label": "Ghannouch — Delegation, Gabès"
       },
       "geometry": {
         "type": "Polygon",
@@ -91818,7 +92258,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 407.79468101,
         "center_lon": 9.95091905,
-        "center_lat": 34.06137965
+        "center_lat": 34.06137965,
+        "display_name": "Metouia",
+        "display_label": "Metouia — Delegation, Gabès"
       },
       "geometry": {
         "type": "Polygon",
@@ -92221,7 +92663,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 952.09536712,
         "center_lon": 9.58828403,
-        "center_lat": 34.15372612
+        "center_lat": 34.15372612,
+        "display_name": "Menzel Habib",
+        "display_label": "Menzel Habib — Delegation, Gabès"
       },
       "geometry": {
         "type": "Polygon",
@@ -92776,7 +93220,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 2641.99458731,
         "center_lon": 9.59308365,
-        "center_lat": 33.86020252
+        "center_lat": 33.86020252,
+        "display_name": "Hamma",
+        "display_label": "Hamma — Delegation, Gabès"
       },
       "geometry": {
         "type": "Polygon",
@@ -93279,7 +93725,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 1241.66676361,
         "center_lon": 9.80770432,
-        "center_lat": 33.46631229
+        "center_lat": 33.46631229,
+        "display_name": "Matmata",
+        "display_label": "Matmata — Delegation, Gabès"
       },
       "geometry": {
         "type": "Polygon",
@@ -93982,7 +94430,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 752.39570915,
         "center_lon": 10.00948301,
-        "center_lat": 33.61714535
+        "center_lat": 33.61714535,
+        "display_name": "Matmata Nouvelle",
+        "display_label": "Matmata Nouvelle — Delegation, Gabès"
       },
       "geometry": {
         "type": "Polygon",
@@ -94725,7 +95175,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 1001.81063866,
         "center_lon": 10.25498827,
-        "center_lat": 33.55935615
+        "center_lat": 33.55935615,
+        "display_name": "Mareth",
+        "display_label": "Mareth — Delegation, Gabès"
       },
       "geometry": {
         "type": "Polygon",
@@ -95592,7 +96044,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 334.2903792,
         "center_lon": 10.39271425,
-        "center_lat": 33.36360782
+        "center_lat": 33.36360782,
+        "display_name": "Médenine Nord",
+        "display_label": "Médenine Nord — Delegation, Médenine"
       },
       "geometry": {
         "type": "Polygon",
@@ -95903,7 +96357,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 736.46475815,
         "center_lon": 10.65401647,
-        "center_lat": 33.41907932
+        "center_lat": 33.41907932,
+        "display_name": "Médenine Sud",
+        "display_label": "Médenine Sud — Delegation, Médenine"
       },
       "geometry": {
         "type": "Polygon",
@@ -96362,7 +96818,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 1359.46119414,
         "center_lon": 10.09646008,
-        "center_lat": 33.24049565
+        "center_lat": 33.24049565,
+        "display_name": "Beni Khedache",
+        "display_label": "Beni Khedache — Delegation, Médenine"
       },
       "geometry": {
         "type": "Polygon",
@@ -96889,7 +97347,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 4813.5878479,
         "center_lon": 11.30443597,
-        "center_lat": 32.81801784
+        "center_lat": 32.81801784,
+        "display_name": "Ben Guerdane",
+        "display_label": "Ben Guerdane — Delegation, Médenine"
       },
       "geometry": {
         "type": "MultiPolygon",
@@ -97882,7 +98342,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 888.44853558,
         "center_lon": 10.93657883,
-        "center_lat": 33.45787829
+        "center_lat": 33.45787829,
+        "display_name": "Zarzis",
+        "display_label": "Zarzis — Delegation, Médenine"
       },
       "geometry": {
         "type": "MultiPolygon",
@@ -98563,7 +99025,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 167.73137183,
         "center_lon": 10.86334149,
-        "center_lat": 33.84667906
+        "center_lat": 33.84667906,
+        "display_name": "Houmt Souk",
+        "display_label": "Houmt Souk — Delegation, Médenine"
       },
       "geometry": {
         "type": "Polygon",
@@ -98902,7 +99366,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 193.1557217,
         "center_lon": 10.95406771,
-        "center_lat": 33.76465281
+        "center_lat": 33.76465281,
+        "display_name": "Djerba Midoun",
+        "display_label": "Djerba Midoun — Delegation, Médenine"
       },
       "geometry": {
         "type": "Polygon",
@@ -99213,7 +99679,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 162.94974673,
         "center_lon": 10.80079691,
-        "center_lat": 33.73799242
+        "center_lat": 33.73799242,
+        "display_name": "Djerba Ajim",
+        "display_label": "Djerba Ajim — Delegation, Médenine"
       },
       "geometry": {
         "type": "Polygon",
@@ -99524,7 +99992,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 668.11234215,
         "center_lon": 10.47963487,
-        "center_lat": 33.54086346
+        "center_lat": 33.54086346,
+        "display_name": "Sidi Makhlouf",
+        "display_label": "Sidi Makhlouf — Delegation, Médenine"
       },
       "geometry": {
         "type": "Polygon",
@@ -100015,7 +100485,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 2838.4674754,
         "center_lon": 10.62324471,
-        "center_lat": 32.70343721
+        "center_lat": 32.70343721,
+        "display_name": "Tataouine Nord",
+        "display_label": "Tataouine Nord — Delegation, Tataouine"
       },
       "geometry": {
         "type": "Polygon",
@@ -100794,7 +101266,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 1899.85048165,
         "center_lon": 10.18712275,
-        "center_lat": 32.77869378
+        "center_lat": 32.77869378,
+        "display_name": "Tataouine Sud",
+        "display_label": "Tataouine Sud — Delegation, Tataouine"
       },
       "geometry": {
         "type": "Polygon",
@@ -101509,7 +101983,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 1989.94172269,
         "center_lon": 10.97329387,
-        "center_lat": 32.70343721
+        "center_lat": 32.70343721,
+        "display_name": "Samar",
+        "display_label": "Samar — Delegation, Tataouine"
       },
       "geometry": {
         "type": "Polygon",
@@ -102132,7 +102608,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 244.35004986,
         "center_lon": 10.43927359,
-        "center_lat": 33.14441082
+        "center_lat": 33.14441082,
+        "display_name": "Bir Lahmar",
+        "display_label": "Bir Lahmar — Delegation, Tataouine"
       },
       "geometry": {
         "type": "Polygon",
@@ -102435,7 +102913,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 692.42511168,
         "center_lon": 10.20875685,
-        "center_lat": 33.04624207
+        "center_lat": 33.04624207,
+        "display_name": "Ghomrassen",
+        "display_label": "Ghomrassen — Delegation, Tataouine"
       },
       "geometry": {
         "type": "Polygon",
@@ -103030,7 +103510,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 3178.55300343,
         "center_lon": 10.47242233,
-        "center_lat": 31.970355
+        "center_lat": 31.970355,
+        "display_name": "Dhiba",
+        "display_label": "Dhiba — Delegation, Tataouine"
       },
       "geometry": {
         "type": "Polygon",
@@ -103550,7 +104032,7 @@
             ],
             [
               10.7947,
-              32.0
+              32
             ],
             [
               10.8377,
@@ -103661,7 +104143,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 27425.82264764,
         "center_lon": 9.66142321,
-        "center_lat": 31.52154407
+        "center_lat": 31.52154407,
+        "display_name": "Remada",
+        "display_label": "Remada — Delegation, Tataouine"
       },
       "geometry": {
         "type": "Polygon",
@@ -104844,7 +105328,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 534.81323811,
         "center_lon": 8.8632766,
-        "center_lat": 34.57708505
+        "center_lat": 34.57708505,
+        "display_name": "Gafsa Nord",
+        "display_label": "Gafsa Nord — Delegation, Gafsa"
       },
       "geometry": {
         "type": "Polygon",
@@ -105383,7 +105869,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 442.91887031,
         "center_lon": 8.82109051,
-        "center_lat": 34.6940748
+        "center_lat": 34.6940748,
+        "display_name": "Sidi Aich",
+        "display_label": "Sidi Aich — Delegation, Gafsa"
       },
       "geometry": {
         "type": "Polygon",
@@ -105698,7 +106186,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 281.83515403,
         "center_lon": 8.91860157,
-        "center_lat": 34.41212051
+        "center_lat": 34.41212051,
+        "display_name": "Ksar",
+        "display_label": "Ksar — Delegation, Gafsa"
       },
       "geometry": {
         "type": "Polygon",
@@ -106017,7 +106507,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 750.42676505,
         "center_lon": 8.67669942,
-        "center_lat": 34.44377161
+        "center_lat": 34.44377161,
+        "display_name": "Gafsa Sud",
+        "display_label": "Gafsa Sud — Delegation, Gafsa"
       },
       "geometry": {
         "type": "Polygon",
@@ -106636,7 +107128,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 973.89731594,
         "center_lon": 8.34557063,
-        "center_lat": 34.56624602
+        "center_lat": 34.56624602,
+        "display_name": "Oum Larais",
+        "display_label": "Oum Larais — Delegation, Gafsa"
       },
       "geometry": {
         "type": "Polygon",
@@ -107251,7 +107745,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 403.77020829,
         "center_lon": 8.13309149,
-        "center_lat": 34.35324686
+        "center_lat": 34.35324686,
+        "display_name": "Redeyef",
+        "display_label": "Redeyef — Delegation, Gafsa"
       },
       "geometry": {
         "type": "Polygon",
@@ -107570,7 +108066,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 973.29751557,
         "center_lon": 8.31197228,
-        "center_lat": 34.23497726
+        "center_lat": 34.23497726,
+        "display_name": "Metlaoui",
+        "display_label": "Metlaoui — Delegation, Gafsa"
       },
       "geometry": {
         "type": "Polygon",
@@ -108297,7 +108795,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 644.4462355,
         "center_lon": 8.69715667,
-        "center_lat": 34.20099882
+        "center_lat": 34.20099882,
+        "display_name": "Mdhilla",
+        "display_label": "Mdhilla — Delegation, Gafsa"
       },
       "geometry": {
         "type": "Polygon",
@@ -109028,7 +109528,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 933.39116148,
         "center_lon": 8.965877,
-        "center_lat": 34.27165863
+        "center_lat": 34.27165863,
+        "display_name": "Guetar",
+        "display_label": "Guetar — Delegation, Gafsa"
       },
       "geometry": {
         "type": "Polygon",
@@ -109611,7 +110113,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 840.85401465,
         "center_lon": 9.41814542,
-        "center_lat": 34.33522583
+        "center_lat": 34.33522583,
+        "display_name": "Belkhir",
+        "display_label": "Belkhir — Delegation, Gafsa"
       },
       "geometry": {
         "type": "Polygon",
@@ -110094,7 +110598,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 768.39135777,
         "center_lon": 9.16763564,
-        "center_lat": 34.54331736
+        "center_lat": 34.54331736,
+        "display_name": "Sened",
+        "display_label": "Sened — Delegation, Gafsa"
       },
       "geometry": {
         "type": "Polygon",
@@ -110553,7 +111059,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 817.54671177,
         "center_lon": 8.11182516,
-        "center_lat": 33.91348287
+        "center_lat": 33.91348287,
+        "display_name": "Tozeur",
+        "display_label": "Tozeur — Delegation, Tozeur"
       },
       "geometry": {
         "type": "Polygon",
@@ -110736,7 +111244,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 1408.22528641,
         "center_lon": 8.36671028,
-        "center_lat": 34.03386544
+        "center_lat": 34.03386544,
+        "display_name": "Degueche",
+        "display_label": "Degueche — Delegation, Tozeur"
       },
       "geometry": {
         "type": "Polygon",
@@ -111171,7 +111681,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 896.38000995,
         "center_lon": 7.89085681,
-        "center_lat": 34.29219485
+        "center_lat": 34.29219485,
+        "display_name": "Tamaghza",
+        "display_label": "Tamaghza — Delegation, Tozeur"
       },
       "geometry": {
         "type": "Polygon",
@@ -111598,7 +112110,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 1637.1473571,
         "center_lon": 7.87245171,
-        "center_lat": 33.82049163
+        "center_lat": 33.82049163,
+        "display_name": "Nefta",
+        "display_label": "Nefta — Delegation, Tozeur"
       },
       "geometry": {
         "type": "Polygon",
@@ -111773,7 +112287,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 1282.35608399,
         "center_lon": 7.64571651,
-        "center_lat": 33.7696596
+        "center_lat": 33.7696596,
+        "display_name": "Hazoua",
+        "display_label": "Hazoua — Delegation, Tozeur"
       },
       "geometry": {
         "type": "Polygon",
@@ -111952,7 +112468,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 1142.04338055,
         "center_lon": 9.21173126,
-        "center_lat": 33.61797056
+        "center_lat": 33.61797056,
+        "display_name": "Kebili Sud",
+        "display_label": "Kebili Sud — Delegation, Kebili"
       },
       "geometry": {
         "type": "Polygon",
@@ -112687,7 +113205,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 1205.2916062,
         "center_lon": 9.16919538,
-        "center_lat": 33.86905628
+        "center_lat": 33.86905628,
+        "display_name": "Kebili Nord",
+        "display_label": "Kebili Nord — Delegation, Kebili"
       },
       "geometry": {
         "type": "Polygon",
@@ -113422,7 +113942,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 2280.83813444,
         "center_lon": 8.80244863,
-        "center_lat": 33.90598889
+        "center_lat": 33.90598889,
+        "display_name": "Souk El Ahed",
+        "display_label": "Souk El Ahed — Delegation, Kebili"
       },
       "geometry": {
         "type": "Polygon",
@@ -113993,7 +114515,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 3458.05509078,
         "center_lon": 9.59921421,
-        "center_lat": 33.20279283
+        "center_lat": 33.20279283,
+        "display_name": "Douz Nord",
+        "display_label": "Douz Nord — Delegation, Kebili"
       },
       "geometry": {
         "type": "Polygon",
@@ -114768,7 +115292,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 4588.10155415,
         "center_lon": 9.14556174,
-        "center_lat": 33.07044601
+        "center_lat": 33.07044601,
+        "display_name": "Douz Sud",
+        "display_label": "Douz Sud — Delegation, Kebili"
       },
       "geometry": {
         "type": "Polygon",
@@ -115763,7 +116289,9 @@
         "source_level": "COD-AB ADM3",
         "area_sqkm": 9692.01185827,
         "center_lon": 8.40720438,
-        "center_lat": 33.15652386
+        "center_lat": 33.15652386,
+        "display_name": "Faouar",
+        "display_label": "Faouar — Delegation, Kebili"
       },
       "geometry": {
         "type": "Polygon",

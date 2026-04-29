@@ -1,11 +1,9 @@
 import { aggregateCells, formatMetric } from './adminAggregation'
 
 export const COCKPIT_TABS = [
-  { id: 'triage', label: 'Triage', short: 'TR' },
-  { id: 'operations', label: 'Operations', short: 'OP' },
-  { id: 'actions', label: 'Actions', short: 'AC' },
-  { id: 'data', label: 'Data', short: 'DA' },
-  { id: 'system', label: 'System', short: 'SY' },
+  { id: 'overview', label: 'Overview', short: 'OV' },
+  { id: 'peak-hours', label: 'Peak Hours', short: 'PH' },
+  { id: 'qos', label: 'QoS Analysis', short: 'QS' },
 ]
 
 export const DEFAULT_FILTERS = {
@@ -106,8 +104,8 @@ export function summarizeAlerts(cells = []) {
 }
 
 export function buildActionNarrative(scope, summary, alerts) {
-  if (!summary?.observed_cells) return 'No matched radio assets in the current scope. Review Data tab and admin reconciliation.'
-  if (alerts?.length) return `${alerts.length} cells need review. Start with ${alerts[0].cell_name} (${stateLabel(getCellState(alerts[0]))}, PRB ${formatMetric(alerts[0].prb_load)}%).`
-  if (scope.level === 'cell') return 'Cell is selected. Validate recommendation evidence and run a supported simulation if operationally justified.'
+  if (!summary?.observed_cells) return 'No matched radio assets in the current scope. Review data quality and admin reconciliation.'
+  if (alerts?.length) return `${alerts.length} cells need QoS review. Start with ${alerts[0].cell_name} (${stateLabel(getCellState(alerts[0]))}, PRB ${formatMetric(alerts[0].prb_load)}%).`
+  if (scope.level === 'cell') return 'Cell is selected. Review QoS evidence before deciding an operational action outside this dashboard phase.'
   return 'No severe QoS issue in this slice. Use timeline or filters to inspect other operating conditions.'
 }

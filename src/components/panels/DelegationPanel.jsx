@@ -18,7 +18,7 @@ export default function DelegationPanel({ delegation, summary, sites, onSelectCe
           {sites.map((site) => <tr key={site.site_name} onClick={() => site.cells[0] && onSelectCell(site.cells[0].cell_name)}><td>{site.site_name}</td><td>{site.cells.length}</td><td><StatusBadge status={site.status} /></td><td>{formatMetric(site.avg_prb)}%</td><td>{formatMetric(site.active_users, 0)}</td></tr>)}
         </tbody></table> : <div className="empty-state">No matched radio assets in this delegation.</div>}
       </div>
-      <div className="diagnosis-box">Select a site/cell to enable recommendation and simulation workflow. Sites and sectors are intentionally hidden before delegation scope.</div>
+      <div className="diagnosis-box">Select a site/cell to inspect QoS evidence. Sites and cells are intentionally hidden before delegation scope.</div>
     </section>
   )
 }

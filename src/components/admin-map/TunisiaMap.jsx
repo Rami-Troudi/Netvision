@@ -10,7 +10,13 @@ function decorateFeatures(fc, rows, idKey, metricMode) {
     const id = feature.properties?.[idKey]
     const row = byId.get(id)
     const value = metricValue(row, metricMode)
-    return { ...feature, properties: { ...(feature.properties || {}), metric_value: value, fill_color: metricColor(value, metricMode), observed_cells: row?.observed_cells || 0, congestion_rate: row?.congestion_rate || 0, avg_prb: row?.avg_prb || 0, avg_throughput: row?.avg_throughput || 0, status: row?.status || 'stable' } }
+    const props = feature.properties || {}
+    const isDelegation = idKey === 'deleg_id'
+    const fallbackName = isDelegation ? 'Unknown delegation' : 'Unknown governorate'
+    const sourceName = props.display_name || props.deleg_name || props.gov_name || row?.name || row?.deleg_name || row?.gov_name || ''
+    const displayName = String(sourceName || fallbackName).trim() || fallbackName
+    const displayLabel = props.display_label || (isDelegation ? `${displayName} — Delegation, ${props.gov_name || row?.gov_name || 'Unknown governorate'}` : `${displayName} — Governorate`)
+    return { ...feature, properties: { ...props, display_name: displayName, display_label: displayLabel, needs_registry_review: !sourceName, metric_value: value, fill_color: metricColor(value, metricMode), observed_cells: row?.observed_cells || 0, congestion_rate: row?.congestion_rate || 0, avg_prb: row?.avg_prb || 0, avg_throughput: row?.avg_throughput || 0, status: row?.status || 'stable' } }
   }) }
 }
 
@@ -49,7 +55,6 @@ export default function TunisiaMap({ governoratesGeo, delegationsGeo, governorat
   const delSource = useMemo(() => decorateFeatures(delegationsGeo, delegationRows, 'deleg_id', metricMode), [delegationsGeo, delegationRows, metricMode])
   const scopedCells = useMemo(() => {
     if (scope.level === 'national') return []
-    if (scope.level === 'governorate') return filteredCells.filter((cell) => cell.admin?.gov_id === scope.governorateId)
     if (scope.level === 'delegation' || scope.level === 'cell') return filteredCells.filter((cell) => cell.admin?.deleg_id === scope.delegationId)
     return []
   }, [filteredCells, scope])
@@ -167,7 +172,8 @@ export default function TunisiaMap({ governoratesGeo, delegationsGeo, governorat
     }
   }, [scope.level, scope.governorateId, scope.delegationId, governoratesGeo, delegationsGeo])
 
-  const hoverTitle = hover?.props?.site_name || hover?.props?.gov_name || hover?.props?.deleg_name
+  const hoverTitle = hover?.props?.site_name || hover?.props?.display_name || hover?.props?.gov_name || hover?.props?.deleg_name || 'Unknown area'
+  const hoverType = hover?.layer === 'admin-delegations-fill' ? 'Delegation' : hover?.layer === 'admin-governorates-fill' ? 'Governorate' : 'Site'
   return (
     <div className="map-card">
       <div ref={mapNode} className="netvision-map-container" aria-label={`Map metric ${metric.label}`} />
@@ -181,7 +187,7 @@ export default function TunisiaMap({ governoratesGeo, delegationsGeo, governorat
         {['critical','watch','degraded','healthy','no_data','unmatched'].map((state) => <span key={state}><i style={{ background: stateColor(state) }} />{state.replace('_', ' ')}</span>)}
       </div>
       <div className="map-legend" role="note" aria-label={`${metric.label} legend low to high`}><div /><span>Low</span><span>High</span></div>
-      {hover ? <div className="hover-card"><strong>{hoverTitle}</strong>{hover.props.site_name ? <><span>{hover.props.state_label} · {hover.props.cell_count} cells</span><span>PRB {Number(hover.props.avg_prb || 0).toFixed(1)}% · Throughput {Number(hover.props.avg_throughput || 0).toFixed(1)} Mbps · CQI {Number(hover.props.avg_cqi || 0).toFixed(1)}</span><em>Click to inspect worst cell {hover.props.worst_cell}</em></> : <><span>{metric.label}: {Number(hover.props.metric_value || 0).toFixed(1)}{metric.unit}</span><em>Click to focus</em></>}</div> : null}
+      {hover ? <div className="hover-card"><strong>{hoverTitle}</strong>{hover.props.site_name ? <><span>{hover.props.state_label} - {hover.props.cell_count} cells</span><span>PRB {Number(hover.props.avg_prb || 0).toFixed(1)}% - Throughput {Number(hover.props.avg_throughput || 0).toFixed(1)} Mbps - CQI {Number(hover.props.avg_cqi || 0).toFixed(1)}</span><em>Click to inspect worst cell {hover.props.worst_cell}</em></> : <><span>{hoverType}{hover.props.gov_name && hoverType === 'Delegation' ? `, ${hover.props.gov_name}` : ''}</span><span>{Number(hover.props.observed_cells || 0)} scoped cells - congestion {Number(hover.props.congestion_rate || 0).toFixed(1)}%</span><span>{metric.label}: {Number(hover.props.metric_value || 0).toFixed(1)}{metric.unit}</span>{hover.props.needs_registry_review ? <span>Needs registry review - ID {hover.props.deleg_id || hover.props.gov_id || 'unknown'}</span> : null}<em>Click to focus</em></>}</div> : null}
     </div>
   )
 }

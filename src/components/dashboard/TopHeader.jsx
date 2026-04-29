@@ -1,4 +1,4 @@
-export default function TopHeader({ metricMode, metricModes, onMetricModeChange, focusMode, onToggleFocus, theme, onToggleTheme, query, onQueryChange, searchResults, onSearchSelect }) {
+export default function TopHeader({ metricMode, metricModes, onMetricModeChange, focusMode, onToggleFocus, theme, onToggleTheme, query, onQueryChange, searchResults, onSearchSelect, dataMode, onSecondaryPanel }) {
   return (
     <header className="top-header">
       <div className="brand-lockup">
@@ -17,11 +17,13 @@ export default function TopHeader({ metricMode, metricModes, onMetricModeChange,
           </div>
         ) : null}
       </div>
+      {dataMode === 'mock' ? <div className="mock-mode-badge"><strong>MOCK DEMO MODE</strong><span>Not official radio measurements</span></div> : null}
       <div className="sr-only" aria-live="polite">{query ? `${searchResults.length} search results` : ''}</div>
       <div className="header-actions">
         <select value={metricMode} onChange={(e) => onMetricModeChange(e.target.value)} aria-label="Map metric">
           {metricModes.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
         </select>
+        <button data-testid="open-data-quality" className="ghost-button" onClick={() => onSecondaryPanel?.('data')}>Data Quality</button><button data-testid="open-system-status" className="ghost-button" onClick={() => onSecondaryPanel?.('system')}>System Status</button>
         <button data-testid="toggle-dark-mode" className="ghost-button" aria-pressed={theme === 'dark'} onClick={onToggleTheme}>{theme === 'dark' ? 'Light Mode' : 'Dark Mode'}</button><button data-testid="toggle-focus-mode" className="ghost-button" aria-pressed={focusMode} onClick={onToggleFocus}>{focusMode ? 'Exit Focus' : 'Focus Mode'}</button>
       </div>
     </header>

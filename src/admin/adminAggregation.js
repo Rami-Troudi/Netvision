@@ -155,10 +155,13 @@ export function diagnoseCell(cell) {
   const highPrb = cell.prb_load >= 85
   const lowThroughput = cell.throughput > 0 && cell.throughput < 15
   const lowCqi = cell.cqi > 0 && cell.cqi < 8
+  const goodThroughput = cell.throughput >= 15
+  const goodCqi = cell.cqi >= 9
   const highTa = cell.ta >= 2.5
   if (highPrb && lowThroughput && lowCqi && highTa) return 'High PRB, low throughput, low CQI and elevated TA indicate edge coverage or interference pressure.'
-  if (highPrb && lowThroughput && !lowCqi) return 'High PRB with acceptable CQI points to structural capacity saturation.'
-  if (highPrb) return 'PRB saturation is present; validate busy-hour recurrence and neighbor/band capacity before action.'
+  if (highPrb && lowThroughput && !lowCqi) return 'High PRB with low throughput and acceptable CQI indicates capacity pressure.'
+  if (highPrb && goodThroughput && goodCqi) return 'The cell is loaded but throughput and CQI remain acceptable in this slice.'
+  if (highPrb) return 'PRB is elevated; compare with recurring busy-hour patterns before treating it as structural congestion.'
   if (lowThroughput && lowCqi) return 'Throughput and CQI degradation suggest radio quality or interference review.'
   return 'No severe multi-KPI fault pattern detected in the selected time slice.'
 }

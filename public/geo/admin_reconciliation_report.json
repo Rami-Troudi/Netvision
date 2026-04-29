@@ -32,5 +32,9 @@
       "point_in_polygon": 50,
       "nearest_delegation_centroid": 0
     }
+  },
+  "missing_display_names": {
+    "governorates": [],
+    "delegations": []
   }
 }
