@@ -70,6 +70,50 @@ function toCsv(rows) {
   return [header, ...lines].join('\n')
 }
 
+function computeHourlyProfile(cellData) {
+  const profile = Array(24).fill(null).map(() => ({ hour: 0, prb: 0, throughput: 0, cqi: 0, users: 0, count: 0 }))
+  if (!cellData || !cellData.hourly) return profile
+  for (const [hour, bucket] of Object.entries(cellData.hourly)) {
+    const h = Number.parseInt(hour, 10)
+    if (h >= 0 && h < 24 && bucket) {
+      profile[h] = {
+        hour: h,
+        prb: Number(bucket.avg_prb) || 0,
+        throughput: Number(bucket.avg_throughput) || 0,
+        cqi: Number(bucket.avg_cqi) || 0,
+        users: Number(bucket.avg_users) || 0,
+        count: Number(bucket.count) || 0,
+      }
+    }
+  }
+  return profile
+}
+
+function computeRecurrenceRatio(cellData) {
+  if (!cellData || !cellData.peak_days || cellData.peak_days.length === 0) return 0
+  if (!cellData.total_days || cellData.total_days === 0) return 0
+  return Math.min(1, cellData.peak_days.length / cellData.total_days)
+}
+
+function normalizeMetricValue(cell, metric) {
+  const val = Number(cell?.[metric]) || 0
+  if (metric === 'prb') return Math.max(0, Math.min(100, val))
+  if (metric === 'active_users') return Math.max(0, val)
+  if (metric === 'traffic') return Math.max(0, val)
+  if (metric === 'congestion_rate') return cell?.prb >= 85 ? 100 : Math.max(0, Math.min(100, (cell?.prb || 0)))
+  if (metric === 'throughput_drop') return cell?.throughput < 15 ? 100 - (cell?.throughput || 0) : 0
+  if (metric === 'cqi_drop') return cell?.cqi < 8 ? 100 - ((cell?.cqi || 0) * 12.5) : 0
+  if (metric === 'qos_degradation') {
+    const factors = [
+      (cell?.prb >= 85 ? 40 : 0),
+      (cell?.throughput < 15 ? 30 : 0),
+      (cell?.cqi < 8 ? 30 : 0),
+    ]
+    return Math.max(0, Math.min(100, factors.reduce((a, b) => a + b, 0)))
+  }
+  return 0
+}
+
 async function computePeakHoursFromTimeData() {
   const paths = getDataPaths()
   const rawIndex = await readFile(paths.timeIndexPath, 'utf8')
@@ -208,12 +252,14 @@ export default async function handler(req, res) {
   }
 
   const refresh = String(req.query?.refresh || '').toLowerCase() === 'true' || String(req.query?.refresh || '') === '1'
+  const groupBy = String(req.query?.group_by || 'cell').trim().toLowerCase()
+  const metric = String(req.query?.metric || 'congestion_rate').trim().toLowerCase()
   const cellFilter = String(req.query?.cell || '').trim().toLowerCase()
   const limit = parseLimit(req.query?.limit)
 
   try {
     const payload = await loadPeakPayload({ refresh })
-    let rows = payload.rows
+    let rows = payload.rows || []
 
     if (cellFilter) {
       rows = rows.filter((row) => row.cell_name.toLowerCase().includes(cellFilter))
@@ -223,10 +269,30 @@ export default async function handler(req, res) {
       rows = rows.slice(0, limit)
     }
 
+    const enrichedRows = rows.map((row) => ({
+      ...row,
+      id: row.cell_name,
+      name: row.cell_name,
+      group_by: 'cell',
+      peak_window: `${row.peak_hour}-${String(Math.min(23, Number.parseInt(row.peak_hour, 10) + 1)).padStart(2, '0')}:00`,
+      peak_value: normalizeMetricValue(row, metric),
+      avg_prb_at_peak: Number(row.peak_avg_prb) || 0,
+      avg_throughput_at_peak: Number(row.throughput || 0),
+      avg_cqi_at_peak: Number(row.cqi || 0),
+      active_users_at_peak: Number(row.active_users || 0),
+      traffic_at_peak: Number(row.traffic || 0),
+      affected_cells_at_peak: 1,
+      recurrence_ratio: computeRecurrenceRatio(row),
+      samples: row.samples || 1,
+      hourly_profile: computeHourlyProfile(row),
+    }))
+
     return res.status(200).json({
       ...payload,
-      total_returned: rows.length,
-      rows,
+      group_by: groupBy,
+      metric,
+      total_returned: enrichedRows.length,
+      rows: enrichedRows,
     })
   } catch (err) {
     console.error('Failed to load peak-hours payload:', err)

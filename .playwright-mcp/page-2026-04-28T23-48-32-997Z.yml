@@ -1,0 +1,56 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - banner [ref=e4]:
+      - generic [ref=e5]:
+        - generic [ref=e6]: NV
+        - generic [ref=e7]:
+          - generic [ref=e8]: NetVision Digital Twin
+          - generic [ref=e9]: Tunisia Regional RAN Command Center
+      - textbox "Search governorate, delegation, site, cell..." [ref=e11]
+      - generic [ref=e12]:
+        - combobox "Map metric" [ref=e13]:
+          - option "Congestion Rate" [selected]
+          - option "Avg PRB Load"
+          - option "Avg Throughput"
+          - option "Avg CQI"
+          - option "Lost Traffic"
+          - option "Recoverable Traffic"
+        - button "Dark Mode" [ref=e14] [cursor=pointer]
+        - button "Focus Mode" [ref=e15] [cursor=pointer]
+    - main [ref=e16]:
+      - navigation "Cockpit sections" [ref=e17]:
+        - button "TR Triage" [ref=e18] [cursor=pointer]:
+          - generic [ref=e19]: TR
+          - emphasis [ref=e20]: Triage
+        - button "OP Operations" [ref=e21] [cursor=pointer]:
+          - generic [ref=e22]: OP
+          - emphasis [ref=e23]: Operations
+        - button "AC Actions" [ref=e24] [cursor=pointer]:
+          - generic [ref=e25]: AC
+          - emphasis [ref=e26]: Actions
+        - button "DA Data" [ref=e27] [cursor=pointer]:
+          - generic [ref=e28]: DA
+          - emphasis [ref=e29]: Data
+        - button "SY System" [ref=e30] [cursor=pointer]:
+          - generic [ref=e31]: SY
+          - emphasis [ref=e32]: System
+      - generic [ref=e33]:
+        - navigation "Scope breadcrumb" [ref=e34]:
+          - button "Tunisia" [ref=e35] [cursor=pointer]
+          - generic [ref=e36]: /
+          - strong [ref=e37]: National View
+        - generic [ref=e38]:
+          - button "Prev" [disabled] [ref=e39]
+          - slider [ref=e40]: "0"
+          - button "Next" [disabled] [ref=e41]
+          - strong [ref=e42]: No time slice
+          - generic [ref=e43]: 0 slices
+        - generic [ref=e45]:
+          - generic [ref=e46]: "Scope: national"
+          - generic [ref=e47]: 0 scoped cells
+          - generic [ref=e48]: No time slice
+          - button "Sites on" [ref=e49] [cursor=pointer]
+          - button "Delegations on" [ref=e50] [cursor=pointer]
+      - complementary [ref=e51]:
+        - generic [ref=e53]: Loading NetVision runtime data and administrative geography...
+  - alert [ref=e54]

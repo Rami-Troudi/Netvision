@@ -165,3 +165,57 @@ export function diagnoseCell(cell) {
   if (lowThroughput && lowCqi) return 'Throughput and CQI degradation suggest radio quality or interference review.'
   return 'No severe multi-KPI fault pattern detected in the selected time slice.'
 }
+
+export function classifyRanIssue(cellOrScope) {
+  if (!cellOrScope) return { issue: 'No data', severity: 'unknown', confidence: 0, evidence: [] }
+  
+  const prb = num(cellOrScope.prb_load || cellOrScope.avg_prb)
+  const throughput = num(cellOrScope.throughput || cellOrScope.avg_throughput)
+  const cqi = num(cellOrScope.cqi || cellOrScope.avg_cqi)
+  const ta = num(cellOrScope.ta || cellOrScope.avg_ta)
+  const recurrence = num(cellOrScope.recurrence_ratio || 0)
+  
+  const evidence = []
+  let issue = 'Normal'
+  let severity = 'low'
+  let confidence = 0.5
+  
+  if (prb >= 85 && throughput < 15 && cqi < 8 && ta >= 2.5) {
+    issue = 'Edge/Interference Pressure'
+    severity = 'critical'
+    confidence = 0.9
+    evidence.push('High PRB', 'Low throughput', 'Low CQI', 'Elevated TA')
+  } else if (prb >= 85 && throughput < 15 && cqi >= 8) {
+    issue = 'Capacity Pressure'
+    severity = 'high'
+    confidence = 0.85
+    evidence.push('High PRB', 'Low throughput', 'CQI acceptable')
+  } else if (prb >= 85 && throughput >= 15 && cqi >= 9) {
+    issue = 'Loaded but Acceptable'
+    severity = 'medium'
+    confidence = 0.7
+    evidence.push('High PRB', 'Good throughput', 'Good CQI')
+  } else if (recurrence > 0.6) {
+    issue = 'Structural Busy-Hour Pattern'
+    severity = 'medium'
+    confidence = 0.75
+    evidence.push(`Recurrent ${Math.round(recurrence * 100)}% of observations`)
+  } else if (prb > 60) {
+    issue = 'Congestion Trend'
+    severity = 'medium'
+    confidence = 0.6
+    evidence.push('Moderate PRB elevation')
+  }
+  
+  return { issue, severity, confidence, evidence }
+}
+
+export function computeRecurrenceMetrics(rows = []) {
+  if (!rows.length) return { recurrence_ratio: 0, peak_days_count: 0, structural_flag: false }
+  const withRecurrence = rows.filter((r) => r.recurrence_ratio > 0.6)
+  return {
+    recurrence_ratio: rows.reduce((sum, r) => sum + (r.recurrence_ratio || 0), 0) / rows.length,
+    peak_days_count: rows.filter((r) => r.samples > 1).length,
+    structural_flag: withRecurrence.length / rows.length > 0.4,
+  }
+}

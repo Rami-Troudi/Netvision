@@ -1,0 +1,180 @@
+[
+  {
+    "state": "national-triage",
+    "totalElements": 243,
+    "interactiveCount": 20,
+    "headings": [
+      "What needs attention?",
+      "Tunisia Network Overview"
+    ],
+    "buttons": [
+      "Dark Mode",
+      "Focus Mode",
+      "TRTriage7",
+      "OPOperations",
+      "ACActions",
+      "DAData",
+      "SYSystem",
+      "Tunisia",
+      "Prev",
+      "Next",
+      "",
+      "",
+      "Sites on",
+      "Delegations on",
+      "Inspect site_0040_hx2",
+      "Inspect highest-impact governorate"
+    ],
+    "hasMapFallback": false,
+    "scopeFooter": "Scope: national\n50 scoped cells\n01-12-2025 00:00\nSites on\nDelegations on"
+  },
+  {
+    "state": "operations",
+    "totalElements": 415,
+    "interactiveCount": 29,
+    "headings": [
+      "National operations"
+    ],
+    "buttons": [
+      "Dark Mode",
+      "Focus Mode",
+      "TRTriage7",
+      "OPOperations",
+      "ACActions",
+      "DAData",
+      "SYSystem",
+      "Tunisia",
+      "Prev",
+      "Next",
+      "",
+      "",
+      "Sites on",
+      "Delegations on"
+    ],
+    "hasMapFallback": false,
+    "scopeFooter": "Scope: national\n50 scoped cells\n01-12-2025 00:00\nSites on\nDelegations on"
+  },
+  {
+    "state": "actions-no-cell",
+    "totalElements": 143,
+    "interactiveCount": 25,
+    "headings": [
+      "Select a cell to act"
+    ],
+    "buttons": [
+      "Dark Mode",
+      "Focus Mode",
+      "TRTriage7",
+      "OPOperations",
+      "ACActions",
+      "DAData",
+      "SYSystem",
+      "Tunisia",
+      "Prev",
+      "Next",
+      "",
+      "",
+      "Sites on",
+      "Delegations on",
+      "site_0040_hx2Critical",
+      "site_0002_f2Critical",
+      "site_0049_h3Critical",
+      "site_0021_f4High load",
+      "site_0011_h2High load",
+      "site_0040_f2High load",
+      "site_0020_f2High load"
+    ],
+    "hasMapFallback": false,
+    "scopeFooter": "Scope: national\n50 scoped cells\n01-12-2025 00:00\nSites on\nDelegations on"
+  },
+  {
+    "state": "actions-cell-selected",
+    "totalElements": 168,
+    "interactiveCount": 22,
+    "headings": [
+      "site_0040_hx2"
+    ],
+    "buttons": [
+      "Dark Mode",
+      "Focus Mode",
+      "TRTriage3",
+      "OPOperations",
+      "ACActions",
+      "DAData",
+      "SYSystem",
+      "Tunisia",
+      "Sousse",
+      "Kalaa Kebira",
+      "Prev",
+      "Next",
+      "",
+      "",
+      "Sites on",
+      "Delegations on",
+      "Queue Add Carrier"
+    ],
+    "hasMapFallback": false,
+    "scopeFooter": "Scope: cell\n7 scoped cells\n01-12-2025 00:00\nSites on\nDelegations on"
+  },
+  {
+    "state": "data",
+    "totalElements": 161,
+    "interactiveCount": 27,
+    "headings": [
+      "Runtime, ingestion and admin data"
+    ],
+    "buttons": [
+      "Dark Mode",
+      "Focus Mode",
+      "TRTriage3",
+      "OPOperations",
+      "ACActions",
+      "DAData",
+      "SYSystem",
+      "Tunisia",
+      "Sousse",
+      "Kalaa Kebira",
+      "Prev",
+      "Next",
+      "",
+      "",
+      "Sites on",
+      "Delegations on",
+      "Restore runtime",
+      "Show details",
+      "Export scoped JSON",
+      "Download report",
+      "Export recommendations CSV"
+    ],
+    "hasMapFallback": false,
+    "scopeFooter": "Scope: cell\n7 scoped cells\n01-12-2025 00:00\nSites on\nDelegations on"
+  },
+  {
+    "state": "system",
+    "totalElements": 184,
+    "interactiveCount": 20,
+    "headings": [
+      "Service health"
+    ],
+    "buttons": [
+      "Dark Mode",
+      "Focus Mode",
+      "TRTriage3",
+      "OPOperations",
+      "ACActions",
+      "DAData",
+      "SYSystem",
+      "Tunisia",
+      "Sousse",
+      "Kalaa Kebira",
+      "Prev",
+      "Next",
+      "",
+      "",
+      "Sites on",
+      "Delegations on"
+    ],
+    "hasMapFallback": false,
+    "scopeFooter": "Scope: cell\n7 scoped cells\n01-12-2025 00:00\nSites on\nDelegations on"
+  }
+]

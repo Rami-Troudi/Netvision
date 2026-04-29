@@ -1,0 +1,265 @@
+{
+  "url": "http://localhost:3001/",
+  "title": "NetVision Digital Twin | Tunisia RAN Command Center",
+  "totalElements": 243,
+  "interactiveCount": 20,
+  "inputCount": 3,
+  "unlabeledInputCount": 1,
+  "missingInteractiveTextCount": 0,
+  "topTags": [
+    [
+      "DIV",
+      53
+    ],
+    [
+      "TD",
+      48
+    ],
+    [
+      "SPAN",
+      38
+    ],
+    [
+      "BUTTON",
+      16
+    ],
+    [
+      "SCRIPT",
+      9
+    ],
+    [
+      "TR",
+      9
+    ],
+    [
+      "LINK",
+      7
+    ],
+    [
+      "OPTION",
+      6
+    ],
+    [
+      "EM",
+      6
+    ],
+    [
+      "I",
+      6
+    ],
+    [
+      "TH",
+      6
+    ],
+    [
+      "STRONG",
+      5
+    ],
+    [
+      "P",
+      4
+    ],
+    [
+      "META",
+      3
+    ],
+    [
+      "SECTION",
+      3
+    ],
+    [
+      "INPUT",
+      2
+    ],
+    [
+      "NAV",
+      2
+    ],
+    [
+      "H1",
+      2
+    ],
+    [
+      "path",
+      2
+    ],
+    [
+      "HTML",
+      1
+    ]
+  ],
+  "roleCounts": {
+    "region": 1,
+    "alert": 1
+  },
+  "sampleInteractive": [
+    {
+      "tag": "INPUT",
+      "role": "",
+      "id": "",
+      "cls": "",
+      "name": "",
+      "text": ""
+    },
+    {
+      "tag": "SELECT",
+      "role": "",
+      "id": "",
+      "cls": "",
+      "name": "Map metric",
+      "text": "Congestion RateAvg PRB LoadAvg ThroughputAvg CQILost TrafficRecoverable Traffic"
+    },
+    {
+      "tag": "BUTTON",
+      "role": "",
+      "id": "",
+      "cls": "ghost-button",
+      "name": "",
+      "text": "Dark Mode"
+    },
+    {
+      "tag": "BUTTON",
+      "role": "",
+      "id": "",
+      "cls": "ghost-button",
+      "name": "",
+      "text": "Focus Mode"
+    },
+    {
+      "tag": "BUTTON",
+      "role": "",
+      "id": "",
+      "cls": "active",
+      "name": "",
+      "text": "TRTriage7"
+    },
+    {
+      "tag": "BUTTON",
+      "role": "",
+      "id": "",
+      "cls": "",
+      "name": "",
+      "text": "OPOperations"
+    },
+    {
+      "tag": "BUTTON",
+      "role": "",
+      "id": "",
+      "cls": "",
+      "name": "",
+      "text": "ACActions"
+    },
+    {
+      "tag": "BUTTON",
+      "role": "",
+      "id": "",
+      "cls": "",
+      "name": "",
+      "text": "DAData"
+    },
+    {
+      "tag": "BUTTON",
+      "role": "",
+      "id": "",
+      "cls": "",
+      "name": "",
+      "text": "SYSystem"
+    },
+    {
+      "tag": "BUTTON",
+      "role": "",
+      "id": "",
+      "cls": "",
+      "name": "",
+      "text": "Tunisia"
+    },
+    {
+      "tag": "BUTTON",
+      "role": "",
+      "id": "",
+      "cls": "",
+      "name": "",
+      "text": "Prev"
+    },
+    {
+      "tag": "INPUT",
+      "role": "",
+      "id": "",
+      "cls": "",
+      "name": "",
+      "text": ""
+    },
+    {
+      "tag": "BUTTON",
+      "role": "",
+      "id": "",
+      "cls": "",
+      "name": "",
+      "text": "Next"
+    },
+    {
+      "tag": "CANVAS",
+      "role": "region",
+      "id": "",
+      "cls": "maplibregl-canvas",
+      "name": "Map",
+      "text": ""
+    },
+    {
+      "tag": "BUTTON",
+      "role": "",
+      "id": "",
+      "cls": "maplibregl-ctrl-zoom-in",
+      "name": "Zoom in",
+      "text": ""
+    },
+    {
+      "tag": "BUTTON",
+      "role": "",
+      "id": "",
+      "cls": "maplibregl-ctrl-zoom-out",
+      "name": "Zoom out",
+      "text": ""
+    },
+    {
+      "tag": "BUTTON",
+      "role": "",
+      "id": "",
+      "cls": "",
+      "name": "",
+      "text": "Sites on"
+    },
+    {
+      "tag": "BUTTON",
+      "role": "",
+      "id": "",
+      "cls": "",
+      "name": "",
+      "text": "Delegations on"
+    },
+    {
+      "tag": "BUTTON",
+      "role": "",
+      "id": "",
+      "cls": "primary-cta",
+      "name": "",
+      "text": "Inspect site_0040_hx2"
+    },
+    {
+      "tag": "BUTTON",
+      "role": "",
+      "id": "",
+      "cls": "primary-cta",
+      "name": "",
+      "text": "Inspect highest-impact governorate"
+    }
+  ],
+  "sampleUnlabeledInputs": [
+    {
+      "tag": "INPUT",
+      "type": "range",
+      "id": "",
+      "cls": ""
+    }
+  ]
+}
