@@ -1,47 +1,32 @@
 import path from 'path'
-import { access, readFile, writeFile } from 'fs/promises'
+import { access, readFile } from 'fs/promises'
 import { ParquetReader } from 'parquetjs-lite'
 import { enforceRateLimit, requireAuthenticatedRequest } from './_lib/security'
 import { getRuntimeDataRoot } from './_lib/dataMode'
 
-const LOAD_COLUMN_CANDIDATES = ['load', 'prb_load', 'ft_physical_resource_blocks_load_dl']
+const GROUPS = new Set(['cell', 'site', 'delegation', 'governorate', 'national'])
+const METRICS = new Set(['prb', 'active_users', 'traffic', 'congestion_rate', 'throughput_drop', 'cqi_drop', 'qos_degradation'])
 
-let cachedPayload = null
+let cachedRaw = null
 let cachedMode = null
 
-function getDataPaths() {
-  const { root: dataDir, mode } = getRuntimeDataRoot()
+export const config = {
+  api: { bodyParser: false, responseLimit: false },
+}
+
+function paths() {
+  const { root, mode } = getRuntimeDataRoot()
   return {
     mode,
-    timeIndexPath: path.resolve(dataDir, 'time_index.json'),
-    timeDataDir: path.resolve(dataDir, 'time_data'),
-    peakJsonPath: path.resolve(dataDir, 'peak_hours.json'),
-    peakCsvPath: path.resolve(dataDir, 'peak_hours.csv'),
+    root,
+    baseline: path.resolve(root, 'baseline.json'),
+    timeIndex: path.resolve(root, 'time_index.json'),
+    timeData: path.resolve(root, 'time_data'),
+    adminIndex: path.resolve(root, 'admin_cell_index.json'),
   }
 }
 
-export const config = {
-  api: {
-    bodyParser: false,
-    responseLimit: false,
-  },
-}
-
-function parseTimestampHour(timestamp) {
-  const text = String(timestamp || '').trim()
-  const match = text.match(/(\d{2}):(\d{2})$/)
-  if (!match) return null
-  const hour = Number.parseInt(match[1], 10)
-  if (!Number.isInteger(hour) || hour < 0 || hour > 23) return null
-  return hour
-}
-
-function formatHour(hour) {
-  const normalized = Math.max(0, Math.min(23, Number(hour) || 0))
-  return `${String(normalized).padStart(2, '0')}:00`
-}
-
-async function fileExists(filePath) {
+async function exists(filePath) {
   try {
     await access(filePath)
     return true
@@ -50,252 +35,321 @@ async function fileExists(filePath) {
   }
 }
 
-function getNumericLoad(record) {
-  for (const key of LOAD_COLUMN_CANDIDATES) {
-    const raw = record?.[key]
-    const value = Number(raw)
-    if (Number.isFinite(value)) {
-      return value
-    }
+function n(value, fallback = 0) {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : fallback
+}
+
+function parseHour(timestamp) {
+  const match = String(timestamp || '').match(/(\d{2}):(\d{2})$/)
+  if (!match) return null
+  const hour = Number.parseInt(match[1], 10)
+  return hour >= 0 && hour <= 23 ? hour : null
+}
+
+function hourLabel(hour) {
+  return `${String(Math.max(0, Math.min(23, hour))).padStart(2, '0')}:00`
+}
+
+function normalizeObs(record = {}) {
+  const prb = n(record.prb_load ?? record.prb ?? record.dl_prb_load ?? record.load ?? record.ft_physical_resource_blocks_load_dl)
+  const throughputRaw = n(record.throughput ?? record.dl_throughput ?? record.user_throughput ?? record.avg_throughput)
+  const throughput = throughputRaw > 1000 ? throughputRaw / 1000 : throughputRaw
+  const cqi = n(record.cqi ?? record.avg_cqi)
+  const activeUsers = n(record.active_users ?? record.rrc_connected_users ?? record.users ?? record.rrc_users)
+  const traffic = n(record.traffic ?? record.data_traffic ?? record.dl_traffic_gb)
+  const ta = n(record.ta ?? record.avg_ta ?? record.timing_advance)
+  return {
+    prb,
+    throughput,
+    cqi,
+    active_users: activeUsers,
+    traffic,
+    ta,
+    congested: Boolean(record.congested) || prb >= 85,
   }
-  return null
 }
 
-function toCsv(rows) {
-  const header = 'cell_name,peak_hour,peak_avg_prb,samples'
-  const lines = rows.map((row) => {
-    const avg = Number.isFinite(row.peak_avg_prb) ? row.peak_avg_prb.toFixed(4) : ''
-    return `${row.cell_name},${row.peak_hour},${avg},${row.samples}`
-  })
-  return [header, ...lines].join('\n')
-}
-
-function computeHourlyProfile(cellData) {
-  const profile = Array(24).fill(null).map(() => ({ hour: 0, prb: 0, throughput: 0, cqi: 0, users: 0, count: 0 }))
-  if (!cellData || !cellData.hourly) return profile
-  for (const [hour, bucket] of Object.entries(cellData.hourly)) {
-    const h = Number.parseInt(hour, 10)
-    if (h >= 0 && h < 24 && bucket) {
-      profile[h] = {
-        hour: h,
-        prb: Number(bucket.avg_prb) || 0,
-        throughput: Number(bucket.avg_throughput) || 0,
-        cqi: Number(bucket.avg_cqi) || 0,
-        users: Number(bucket.avg_users) || 0,
-        count: Number(bucket.count) || 0,
-      }
-    }
-  }
-  return profile
-}
-
-function computeRecurrenceRatio(cellData) {
-  if (!cellData || !cellData.peak_days || cellData.peak_days.length === 0) return 0
-  if (!cellData.total_days || cellData.total_days === 0) return 0
-  return Math.min(1, cellData.peak_days.length / cellData.total_days)
-}
-
-function normalizeMetricValue(cell, metric) {
-  const val = Number(cell?.[metric]) || 0
-  if (metric === 'prb') return Math.max(0, Math.min(100, val))
-  if (metric === 'active_users') return Math.max(0, val)
-  if (metric === 'traffic') return Math.max(0, val)
-  if (metric === 'congestion_rate') return cell?.prb >= 85 ? 100 : Math.max(0, Math.min(100, (cell?.prb || 0)))
-  if (metric === 'throughput_drop') return cell?.throughput < 15 ? 100 - (cell?.throughput || 0) : 0
-  if (metric === 'cqi_drop') return cell?.cqi < 8 ? 100 - ((cell?.cqi || 0) * 12.5) : 0
+function metricValue(bucket, metric) {
+  if (metric === 'prb') return bucket.avg_prb
+  if (metric === 'active_users') return bucket.active_users
+  if (metric === 'traffic') return bucket.traffic
+  if (metric === 'congestion_rate') return bucket.congestion_rate
+  if (metric === 'throughput_drop') return Math.max(0, 25 - bucket.avg_throughput)
+  if (metric === 'cqi_drop') return Math.max(0, 10 - bucket.avg_cqi) * 10
   if (metric === 'qos_degradation') {
-    const factors = [
-      (cell?.prb >= 85 ? 40 : 0),
-      (cell?.throughput < 15 ? 30 : 0),
-      (cell?.cqi < 8 ? 30 : 0),
-    ]
-    return Math.max(0, Math.min(100, factors.reduce((a, b) => a + b, 0)))
+    return Math.min(100, (bucket.avg_prb >= 85 ? 35 : 0) + (bucket.avg_throughput < 15 ? 35 : 0) + (bucket.avg_cqi < 8 ? 30 : 0))
   }
-  return 0
+  return bucket.congestion_rate
 }
 
-async function computePeakHoursFromTimeData() {
-  const paths = getDataPaths()
-  const rawIndex = await readFile(paths.timeIndexPath, 'utf8')
-  const parsed = JSON.parse(rawIndex)
-  const timestamps = Array.isArray(parsed?.timestamps) ? parsed.timestamps : []
-
-  if (!timestamps.length) {
-    throw new Error('time_index.json has no timestamps')
+function emptyPayload(groupBy, metric, reason) {
+  return {
+    available: false,
+    reason,
+    group_by: groupBy,
+    metric,
+    total_returned: 0,
+    summary: null,
+    rows: [],
   }
+}
 
-  const aggregateByCell = new Map()
-
-  for (const entry of timestamps) {
-    const hour = parseTimestampHour(entry?.timestamp)
-    const filename = String(entry?.filename || '').trim()
-    if (hour === null || !filename) continue
-
-    const slicePath = path.resolve(paths.timeDataDir, filename)
-    if (!await fileExists(slicePath)) continue
-
-    const records = []
-    if (path.extname(slicePath).toLowerCase() === '.json') {
-      const payload = JSON.parse(await readFile(slicePath, 'utf8'))
-      for (const [cellName, obs] of Object.entries(payload?.observations || {})) {
-        records.push({ ...obs, cell_name: cellName })
-      }
-    } else {
-      const reader = await ParquetReader.openFile(slicePath)
-      try {
-        const cursor = reader.getCursor()
-        let record = await cursor.next()
-        while (record) {
-          records.push(record)
-          record = await cursor.next()
-        }
-      } finally {
-        await reader.close()
-      }
-    }
-
-    for (const record of records) {
-      const cellName = String(record?.cell_name || '').trim()
-      const load = getNumericLoad(record)
-      if (cellName && load !== null) {
-        let hourMap = aggregateByCell.get(cellName)
-        if (!hourMap) {
-          hourMap = new Map()
-          aggregateByCell.set(cellName, hourMap)
-        }
-        const slot = hourMap.get(hour) || { sum: 0, count: 0 }
-        slot.sum += load
-        slot.count += 1
-        hourMap.set(hour, slot)
-      }
-    }
+async function readSlice(slicePath) {
+  if (path.extname(slicePath).toLowerCase() === '.json') {
+    const payload = JSON.parse(await readFile(slicePath, 'utf8'))
+    return Object.entries(payload?.observations || {}).map(([cellName, obs]) => ({ cell_name: cellName, ...obs }))
   }
 
   const rows = []
-  for (const [cellName, hourMap] of aggregateByCell.entries()) {
-    let bestHour = null
-    let bestAvg = Number.NEGATIVE_INFINITY
-    let bestSamples = 0
-
-    for (const [hour, bucket] of hourMap.entries()) {
-      if (!bucket.count) continue
-      const avg = bucket.sum / bucket.count
-      if (
-        avg > bestAvg ||
-        (avg === bestAvg && bucket.count > bestSamples) ||
-        (avg === bestAvg && bucket.count === bestSamples && (bestHour === null || hour < bestHour))
-      ) {
-        bestHour = hour
-        bestAvg = avg
-        bestSamples = bucket.count
-      }
+  const reader = await ParquetReader.openFile(slicePath)
+  try {
+    const cursor = reader.getCursor()
+    let record = await cursor.next()
+    while (record) {
+      rows.push(record)
+      record = await cursor.next()
     }
+  } finally {
+    await reader.close()
+  }
+  return rows
+}
 
-    if (bestHour !== null && Number.isFinite(bestAvg)) {
-      rows.push({
+async function loadRaw(refresh = false) {
+  const p = paths()
+  if (!refresh && cachedRaw && cachedMode === p.mode) return cachedRaw
+  cachedMode = p.mode
+
+  const [timeIndexRaw, baselineRaw, adminRaw] = await Promise.all([
+    readFile(p.timeIndex, 'utf8'),
+    readFile(p.baseline, 'utf8').catch(() => '{}'),
+    readFile(p.adminIndex, 'utf8').catch(() => '{}'),
+  ])
+  const timeIndex = JSON.parse(timeIndexRaw)
+  const baseline = JSON.parse(baselineRaw)
+  const adminIndex = JSON.parse(adminRaw)
+  const timestamps = Array.isArray(timeIndex?.timestamps) ? timeIndex.timestamps : []
+  const observations = []
+
+  for (const entry of timestamps) {
+    const hour = parseHour(entry.timestamp)
+    const filename = String(entry.filename || '').trim()
+    if (hour === null || !filename) continue
+    const slicePath = path.resolve(p.timeData, filename)
+    if (!await exists(slicePath)) continue
+    const rows = await readSlice(slicePath)
+    for (const row of rows) {
+      const cellName = String(row.cell_name || '').trim()
+      if (!cellName) continue
+      const base = baseline[cellName] || {}
+      const admin = adminIndex[cellName] || base.admin || {}
+      observations.push({
         cell_name: cellName,
-        peak_hour: formatHour(bestHour),
-        peak_avg_prb: Number(bestAvg.toFixed(4)),
-        samples: bestSamples,
+        site_name: base.site_name || base.enodeb_name || row.site_name || cellName,
+        gov_id: admin.gov_id || '',
+        gov_name: admin.gov_name || '',
+        deleg_id: admin.deleg_id || '',
+        deleg_name: admin.deleg_name || '',
+        timestamp: entry.timestamp,
+        hour,
+        ...normalizeObs(row),
       })
     }
   }
 
-  rows.sort((a, b) => a.cell_name.localeCompare(b.cell_name))
-
-  return {
-    generated_at: new Date().toISOString(),
-    source: `${paths.mode} runtime data time_index.json + time_data`,
-    total_cells: rows.length,
-    rows,
-  }
+  cachedRaw = { mode: p.mode, generated_at: new Date().toISOString(), observations }
+  return cachedRaw
 }
 
-async function loadPeakPayload({ refresh = false } = {}) {
-  const paths = getDataPaths()
-  if (cachedMode !== paths.mode) {
-    cachedPayload = null
-    cachedMode = paths.mode
-  }
-  if (!refresh && cachedPayload) {
-    return cachedPayload
-  }
+function passFilters(row, query) {
+  if (query.gov_id && row.gov_id !== query.gov_id) return false
+  if (query.deleg_id && row.deleg_id !== query.deleg_id) return false
+  if (query.site_name && row.site_name !== query.site_name) return false
+  if (query.cell_name && row.cell_name !== query.cell_name) return false
+  return true
+}
 
-  if (!refresh && await fileExists(paths.peakJsonPath)) {
-    const raw = await readFile(paths.peakJsonPath, 'utf8')
-    const payload = JSON.parse(raw)
-    if (Array.isArray(payload?.rows)) {
-      cachedPayload = payload
-      return payload
+function groupIdentity(row, groupBy) {
+  if (groupBy === 'national') return { id: 'TN', name: 'Tunisia' }
+  if (groupBy === 'governorate') return { id: row.gov_id || 'unknown-governorate', name: row.gov_name || row.gov_id || 'Unknown governorate' }
+  if (groupBy === 'delegation') return { id: row.deleg_id || 'unknown-delegation', name: row.deleg_name || row.deleg_id || 'Unknown delegation' }
+  if (groupBy === 'site') return { id: row.site_name || 'unknown-site', name: row.site_name || 'Unknown site' }
+  return { id: row.cell_name, name: row.cell_name }
+}
+
+function makeEmptyHourly() {
+  return Array.from({ length: 24 }, (_, hour) => ({
+    hour,
+    label: hourLabel(hour),
+    samples: 0,
+    avg_prb: 0,
+    avg_throughput: 0,
+    avg_cqi: 0,
+    active_users: 0,
+    traffic: 0,
+    congestion_rate: 0,
+    affected_cells: 0,
+    metric_value: 0,
+  }))
+}
+
+function finalizeBucket(bucket, metric) {
+  const samples = bucket.samples || 0
+  const affected = bucket.affectedCells.size
+  const avgPrb = samples ? bucket.prbSum / samples : 0
+  const avgThroughput = samples ? bucket.throughputSum / samples : 0
+  const avgCqi = samples ? bucket.cqiSum / samples : 0
+  const out = {
+    hour: bucket.hour,
+    label: hourLabel(bucket.hour),
+    samples,
+    avg_prb: avgPrb,
+    avg_throughput: avgThroughput,
+    avg_cqi: avgCqi,
+    active_users: bucket.activeUsers,
+    traffic: bucket.traffic,
+    congestion_rate: bucket.cells.size ? (affected / bucket.cells.size) * 100 : 0,
+    affected_cells: affected,
+  }
+  out.metric_value = metricValue(out, metric)
+  return out
+}
+
+function analyzeGroups(rows, groupBy, metric) {
+  const groups = new Map()
+
+  for (const row of rows) {
+    const identity = groupIdentity(row, groupBy)
+    if (!groups.has(identity.id)) {
+      groups.set(identity.id, {
+        id: identity.id,
+        name: identity.name,
+        group_by: groupBy,
+        buckets: Array.from({ length: 24 }, (_, hour) => ({
+          hour,
+          samples: 0,
+          prbSum: 0,
+          throughputSum: 0,
+          cqiSum: 0,
+          activeUsers: 0,
+          traffic: 0,
+          cells: new Set(),
+          affectedCells: new Set(),
+        })),
+        observedCells: new Set(),
+      })
     }
+    const group = groups.get(identity.id)
+    const bucket = group.buckets[row.hour]
+    bucket.samples += 1
+    bucket.prbSum += row.prb
+    bucket.throughputSum += row.throughput
+    bucket.cqiSum += row.cqi
+    bucket.activeUsers += row.active_users
+    bucket.traffic += row.traffic
+    bucket.cells.add(row.cell_name)
+    group.observedCells.add(row.cell_name)
+    if (row.congested || row.prb >= 85 || row.throughput < 15 || row.cqi < 8) bucket.affectedCells.add(row.cell_name)
   }
 
-  const payload = await computePeakHoursFromTimeData()
-  await writeFile(paths.peakJsonPath, JSON.stringify(payload, null, 2), 'utf8')
-  await writeFile(paths.peakCsvPath, toCsv(payload.rows), 'utf8')
-  cachedPayload = payload
-  return payload
+  return Array.from(groups.values()).map((group) => {
+    const profile = group.buckets.map((bucket) => finalizeBucket(bucket, metric))
+    const populated = profile.filter((bucket) => bucket.samples > 0)
+    if (!populated.length) {
+      return { id: group.id, name: group.name, group_by: groupBy, peak_hour: null, peak_window: null, peak_value: 0, hourly_profile: makeEmptyHourly(), samples: 0 }
+    }
+    const peak = populated.slice().sort((a, b) => b.metric_value - a.metric_value || b.samples - a.samples || a.hour - b.hour)[0]
+    const threshold = Math.max(1, peak.metric_value * 0.8)
+    const recurrentBuckets = populated.filter((bucket) => bucket.metric_value >= threshold && bucket.affected_cells > 0)
+    const recurrenceRatio = populated.length ? recurrentBuckets.length / populated.length : 0
+    const consecutive = longestConsecutive(recurrentBuckets.map((bucket) => bucket.hour))
+    return {
+      id: group.id,
+      name: group.name,
+      group_by: groupBy,
+      peak_hour: peak.label,
+      peak_window: `${peak.label}-${hourLabel(Math.min(23, peak.hour + 1))}`,
+      peak_value: peak.metric_value,
+      avg_prb_at_peak: peak.avg_prb,
+      avg_throughput_at_peak: peak.avg_throughput,
+      avg_cqi_at_peak: peak.avg_cqi,
+      active_users_at_peak: peak.active_users,
+      traffic_at_peak: peak.traffic,
+      affected_cells_at_peak: peak.affected_cells,
+      recurrence_ratio: recurrenceRatio,
+      peak_days_count: recurrentBuckets.length,
+      consecutive_peak_hours: consecutive,
+      structural_busy_hour_flag: recurrenceRatio > 0.6,
+      samples: populated.reduce((sum, bucket) => sum + bucket.samples, 0),
+      hourly_profile: profile,
+    }
+  }).sort((a, b) => b.peak_value - a.peak_value || b.affected_cells_at_peak - a.affected_cells_at_peak)
 }
 
-function parseLimit(rawLimit) {
-  const parsed = Number.parseInt(String(rawLimit || ''), 10)
-  if (!Number.isInteger(parsed) || parsed <= 0) return null
-  return Math.min(parsed, 5000)
+function longestConsecutive(hours) {
+  const set = new Set(hours)
+  let best = 0
+  for (const hour of set) {
+    if (set.has(hour - 1)) continue
+    let length = 1
+    while (set.has(hour + length)) length += 1
+    best = Math.max(best, length)
+  }
+  return best
+}
+
+function summarize(rows, metric) {
+  if (!rows.length) return null
+  const top = rows[0]
+  return {
+    peak_hour: top.peak_hour,
+    peak_window: top.peak_window,
+    peak_value: top.peak_value,
+    avg_prb_at_peak: top.avg_prb_at_peak,
+    peak_congestion_rate: top.hourly_profile?.find((h) => h.label === top.peak_hour)?.congestion_rate || 0,
+    active_users_at_peak: top.active_users_at_peak,
+    affected_cells_at_peak: top.affected_cells_at_peak,
+    recurrence_ratio: rows.reduce((sum, row) => sum + (row.recurrence_ratio || 0), 0) / rows.length,
+    structural_busy_hour_count: rows.filter((row) => row.structural_busy_hour_flag).length,
+    metric,
+  }
 }
 
 export default async function handler(req, res) {
   if (!requireAuthenticatedRequest(req, res)) return
-  if (!enforceRateLimit(req, res, { keyPrefix: 'peak-hours', maxRequests: 20, windowMs: 60_000 })) return
+  if (!enforceRateLimit(req, res, { keyPrefix: 'peak-hours', maxRequests: 60, windowMs: 60_000 })) return
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' })
 
-  if (req.method !== 'GET') {
-    return res.status(405).json({ error: 'Method not allowed' })
+  const groupBy = GROUPS.has(String(req.query.group_by || '').toLowerCase()) ? String(req.query.group_by).toLowerCase() : 'cell'
+  const metric = METRICS.has(String(req.query.metric || '').toLowerCase()) ? String(req.query.metric).toLowerCase() : 'congestion_rate'
+  const limit = Math.min(5000, Math.max(1, Number.parseInt(String(req.query.limit || '100'), 10) || 100))
+  const refresh = ['true', '1'].includes(String(req.query.refresh || '').toLowerCase())
+  const query = {
+    gov_id: String(req.query.gov_id || '').trim(),
+    deleg_id: String(req.query.deleg_id || '').trim(),
+    site_name: String(req.query.site_name || '').trim(),
+    cell_name: String(req.query.cell_name || req.query.cell || '').trim(),
   }
 
-  const refresh = String(req.query?.refresh || '').toLowerCase() === 'true' || String(req.query?.refresh || '') === '1'
-  const groupBy = String(req.query?.group_by || 'cell').trim().toLowerCase()
-  const metric = String(req.query?.metric || 'congestion_rate').trim().toLowerCase()
-  const cellFilter = String(req.query?.cell || '').trim().toLowerCase()
-  const limit = parseLimit(req.query?.limit)
-
   try {
-    const payload = await loadPeakPayload({ refresh })
-    let rows = payload.rows || []
-
-    if (cellFilter) {
-      rows = rows.filter((row) => row.cell_name.toLowerCase().includes(cellFilter))
-    }
-
-    if (limit) {
-      rows = rows.slice(0, limit)
-    }
-
-    const enrichedRows = rows.map((row) => ({
-      ...row,
-      id: row.cell_name,
-      name: row.cell_name,
-      group_by: 'cell',
-      peak_window: `${row.peak_hour}-${String(Math.min(23, Number.parseInt(row.peak_hour, 10) + 1)).padStart(2, '0')}:00`,
-      peak_value: normalizeMetricValue(row, metric),
-      avg_prb_at_peak: Number(row.peak_avg_prb) || 0,
-      avg_throughput_at_peak: Number(row.throughput || 0),
-      avg_cqi_at_peak: Number(row.cqi || 0),
-      active_users_at_peak: Number(row.active_users || 0),
-      traffic_at_peak: Number(row.traffic || 0),
-      affected_cells_at_peak: 1,
-      recurrence_ratio: computeRecurrenceRatio(row),
-      samples: row.samples || 1,
-      hourly_profile: computeHourlyProfile(row),
-    }))
-
+    const raw = await loadRaw(refresh)
+    const scoped = raw.observations.filter((row) => passFilters(row, query))
+    if (!scoped.length) return res.status(200).json(emptyPayload(groupBy, metric, 'No peak-hour samples match the selected scope.'))
+    const rows = analyzeGroups(scoped, groupBy, metric).slice(0, limit)
     return res.status(200).json({
-      ...payload,
+      available: true,
+      generated_at: raw.generated_at,
+      source: `${raw.mode} runtime data time_index.json + time_data`,
       group_by: groupBy,
       metric,
-      total_returned: enrichedRows.length,
-      rows: enrichedRows,
+      filters: query,
+      total_returned: rows.length,
+      summary: summarize(rows, metric),
+      rows,
     })
   } catch (err) {
     console.error('Failed to load peak-hours payload:', err)
-    return res.status(500).json({ error: 'Failed to load peak-hours data' })
+    return res.status(200).json(emptyPayload(groupBy, metric, err.message || 'Failed to load peak-hours data.'))
   }
 }

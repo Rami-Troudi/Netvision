@@ -26,6 +26,8 @@ export default function NetVisionDashboard() {
   const [timeIndex, setTimeIndex] = useState(0)
   const [drift, setDrift] = useState({ status: { available: null, reason: '' }, alerts: [] })
   const [peakRows, setPeakRows] = useState([])
+  const [peakPayload, setPeakPayload] = useState({ available: false, rows: [], summary: null, reason: '' })
+  const [busyMetric, setBusyMetric] = useState('congestion_rate')
   const [backendHealth, setBackendHealth] = useState(null)
   const [workerState, setWorkerState] = useState('ready')
   const [theme, setTheme] = useState('light')
@@ -89,6 +91,20 @@ export default function NetVisionDashboard() {
       setDriftUi({ acknowledgedUnavailable: true, collapsed: true })
     }
   }, [drift.status.available, driftUi.acknowledgedUnavailable])
+
+  useEffect(() => {
+    if (!data) return
+    let cancelled = false
+    const params = new URLSearchParams({ metric: busyMetric, limit: '80' })
+    if (scope.level === 'national') params.set('group_by', 'governorate')
+    else if (scope.level === 'governorate') { params.set('group_by', 'delegation'); params.set('gov_id', scope.governorateId || '') }
+    else if (scope.level === 'delegation') { params.set('group_by', 'site'); params.set('deleg_id', scope.delegationId || '') }
+    else if (scope.level === 'cell') { params.set('group_by', 'cell'); params.set('cell_name', scope.selectedCellName || '') }
+    fetchJson(`/api/peak-hours?${params.toString()}`)
+      .then((payload) => { if (!cancelled) { setPeakPayload(payload); setPeakRows(payload.rows || []) } })
+      .catch((err) => { if (!cancelled) setPeakPayload({ available: false, rows: [], summary: null, reason: err.message || String(err) }) })
+    return () => { cancelled = true }
+  }, [data, scope.level, scope.governorateId, scope.delegationId, scope.selectedCellName, busyMetric, dataMode])
 
   async function reloadRuntimeData() {
     const payload = await loadDashboardData()
@@ -157,28 +173,30 @@ export default function NetVisionDashboard() {
   const governorateSummary = useMemo(() => aggregateGovernorateScope(filteredCells, scope.governorateId), [filteredCells, scope.governorateId])
   const delegationSummary = useMemo(() => aggregateDelegationScope(filteredCells, scope.delegationId), [filteredCells, scope.delegationId])
   const currentSummary = scope.level === 'delegation' || scope.level === 'cell' ? delegationSummary : scope.level === 'governorate' ? governorateSummary : nationalSummary
-  const scopedPeakRows = useMemo(() => peakRows.filter((row) => scopedCellsRaw.some((cell) => cell.cell_name === row.cell_name)), [peakRows, scopedCellsRaw])
 
-  function selectGovernorate(raw) {
+  function selectGovernorate(raw, options = {}) {
     const gov = raw.gov_id ? raw : data?.registry?.governorates?.find((item) => item.gov_id === raw.id || item.gov_name === raw.name || item.gov_name === raw.gov_name)
     if (!gov) return
-    setActiveTab('overview')
+    if (options.activeTab) setActiveTab(options.activeTab)
+    else setActiveTab('overview')
     setScope({ ...initialAdminScope, level: 'governorate', governorateId: gov.gov_id, governorateName: gov.gov_name, transitionState: 'focusing-governorate' })
     window.setTimeout(() => setScope((prev) => prev.governorateId === gov.gov_id ? { ...prev, transitionState: 'idle' } : prev), 900)
   }
 
-  function selectDelegation(raw) {
+  function selectDelegation(raw, options = {}) {
     const deleg = raw.deleg_id ? raw : data?.registry?.delegations?.find((item) => item.deleg_id === raw.id || item.deleg_name === raw.name || item.deleg_name === raw.deleg_name)
     if (!deleg) return
-    setActiveTab('qos')
+    if (options.activeTab) setActiveTab(options.activeTab)
+    else setActiveTab('qos')
     setScope({ ...initialAdminScope, level: 'delegation', governorateId: deleg.gov_id, governorateName: deleg.gov_name, delegationId: deleg.deleg_id, delegationName: deleg.deleg_name, transitionState: 'focusing-delegation' })
     window.setTimeout(() => setScope((prev) => prev.delegationId === deleg.deleg_id ? { ...prev, transitionState: 'idle' } : prev), 900)
   }
 
-  function selectCell(cellName) {
+  function selectCell(cellName, options = {}) {
     const cell = cells.find((item) => item.cell_name === cellName)
     if (!cell?.admin) return
-    setActiveTab('qos')
+    if (options.activeTab) setActiveTab(options.activeTab)
+    else setActiveTab('qos')
     setScope({ ...initialAdminScope, level: 'cell', governorateId: cell.admin.gov_id, governorateName: cell.admin.gov_name, delegationId: cell.admin.deleg_id, delegationName: cell.admin.deleg_name, selectedSite: cell.site_name, selectedCellName: cell.cell_name, transitionState: 'idle' })
   }
 
@@ -187,6 +205,22 @@ export default function NetVisionDashboard() {
     if (item.type === 'governorate') selectGovernorate(item.gov)
     if (item.type === 'delegation') selectDelegation(item.deleg)
     if (item.type === 'site' || item.type === 'cell') selectCell(item.cell.cell_name)
+  }
+
+  function selectPeakRow(row) {
+    if (!row) return
+    if (row.group_by === 'governorate') {
+      const gov = data?.registry?.governorates?.find((item) => item.gov_id === row.id)
+      if (gov) selectGovernorate(gov, { activeTab: 'peak-hours' })
+    } else if (row.group_by === 'delegation') {
+      const deleg = data?.registry?.delegations?.find((item) => item.deleg_id === row.id)
+      if (deleg) selectDelegation(deleg, { activeTab: 'peak-hours' })
+    } else if (row.group_by === 'site') {
+      const cell = cells.find((item) => item.site_name === row.id && item.admin?.deleg_id === scope.delegationId)
+      if (cell) selectCell(cell.cell_name, { activeTab: 'peak-hours' })
+    } else if (row.group_by === 'cell') {
+      selectCell(row.id, { activeTab: 'peak-hours' })
+    }
   }
 
   function updateFilters(patch) {
@@ -296,7 +330,7 @@ export default function NetVisionDashboard() {
   let panel = null
   if (!data && !loadError) panel = <div className="panel-shell"><div className="loading-block">Loading NetVision runtime data and administrative geography...</div></div>
   else if (loadError) panel = <div className="panel-shell"><div className="empty-state warning">{loadError}. If admin boundary files are missing, run scripts/prepare_admin_boundaries.py.</div></div>
-  else panel = <CockpitPanel activeTab={activeTab} scope={scope} data={data} dataMode={dataMode} onDataModeChange={changeDataMode} nationalSummary={nationalSummary} governorateSummary={governorateSummary} delegationSummary={delegationSummary} summary={currentSummary} governorateRows={governorateRows} delegationRows={delegationRows} selectedGovernorate={selectedGovernorate} selectedDelegation={selectedDelegation} selectedCell={selectedCell} siteRows={siteRows} scopedCells={scopedCells} alerts={alerts} metric={metric} currentTime={data.currentTimeEntry} filters={filters} onFilterChange={updateFilters} bands={bands} onSelectGovernorate={selectGovernorate} onSelectDelegation={selectDelegation} onSelectCell={selectCell} reconciliation={data.reconciliation} driftStatus={drift.status} driftAlerts={drift.alerts} driftUi={driftUi} onExpandDrift={() => setDriftUi((prev) => ({ ...prev, collapsed: false }))} peakRows={scopedPeakRows} backendHealth={backendHealth} workerState={workerState} importState={importState} exportRecommendationsState={exportRecommendationsState} endpointCoverage={endpointCoverage} onImportFile={handleImportFile} onImportTypeChange={(importType) => setImportState((prev) => ({ ...prev, importType }))} onRestoreRuntime={restoreRuntimeData} onExportJson={exportScopedJson} onExportReport={exportReport} onExportRecommendationsCsv={exportRecommendationsCsv} />
+  else panel = <CockpitPanel activeTab={activeTab} scope={scope} data={data} dataMode={dataMode} onDataModeChange={changeDataMode} nationalSummary={nationalSummary} governorateSummary={governorateSummary} delegationSummary={delegationSummary} summary={currentSummary} governorateRows={governorateRows} delegationRows={delegationRows} selectedGovernorate={selectedGovernorate} selectedDelegation={selectedDelegation} selectedCell={selectedCell} siteRows={siteRows} scopedCells={scopedCells} alerts={alerts} metric={metric} currentTime={data.currentTimeEntry} filters={filters} onFilterChange={updateFilters} bands={bands} onSelectGovernorate={selectGovernorate} onSelectDelegation={selectDelegation} onSelectCell={selectCell} reconciliation={data.reconciliation} driftStatus={drift.status} driftAlerts={drift.alerts} driftUi={driftUi} onExpandDrift={() => setDriftUi((prev) => ({ ...prev, collapsed: false }))} peakRows={peakRows} peakPayload={peakPayload} busyMetric={busyMetric} onBusyMetricChange={setBusyMetric} onPeakRowSelect={selectPeakRow} backendHealth={backendHealth} workerState={workerState} importState={importState} exportRecommendationsState={exportRecommendationsState} endpointCoverage={endpointCoverage} onImportFile={handleImportFile} onImportTypeChange={(importType) => setImportState((prev) => ({ ...prev, importType }))} onRestoreRuntime={restoreRuntimeData} onExportJson={exportScopedJson} onExportReport={exportReport} onExportRecommendationsCsv={exportRecommendationsCsv} />
 
   return (
     <div className={`app-shell ${focusMode ? 'focus-mode' : ''} ${theme === 'dark' ? 'theme-dark' : ''}`}>

@@ -21,78 +21,98 @@ function OverviewPanel(props) {
   return <section className="panel-shell cockpit-panel"><div className="panel-heading"><div><p>Overview</p><h1>{scope.level === 'national' ? 'Tunisia Network Overview' : scope.delegationName || scope.governorateName}</h1></div><StatusBadge status={summary.status} /></div>{scope.level === 'national' ? <NationalPanel compact summary={nationalSummary} governorates={governorateRows} metric={metric} onSelectGovernorate={onSelectGovernorate} reconciliation={reconciliation} /> : null}{scope.level === 'governorate' ? <GovernoratePanel governorate={selectedGovernorate} summary={governorateSummary} delegations={delegationRows} metric={metric} currentTime={props.currentTime} onSelectDelegation={onSelectDelegation} /> : null}{(scope.level === 'delegation' || scope.level === 'cell') ? <DelegationPanel delegation={selectedDelegation} summary={delegationSummary} sites={props.siteRows} onSelectCell={props.onSelectCell} /> : null}</section>
 }
 
-function PeakHoursPanel({ scope, currentTime, summary, peakRows, onSelectCell }) {
-  const showCellRows = scope.level === 'delegation' || scope.level === 'cell'
+const BUSY_METRICS = [
+  { id: 'congestion_rate', label: 'Congestion Pressure' },
+  { id: 'prb', label: 'PRB' },
+  { id: 'active_users', label: 'Active Users' },
+  { id: 'throughput_drop', label: 'Throughput Drop' },
+  { id: 'cqi_drop', label: 'CQI Drop' },
+]
+
+function PeakHoursPanel({ scope, currentTime, summary, peakRows, peakPayload, busyMetric, onBusyMetricChange, onPeakRowSelect }) {
   const recurrence = computeRecurrenceMetrics(peakRows)
-  
+  const peakSummary = peakPayload?.summary || {}
   return <section className="panel-shell cockpit-panel">
     <div className="panel-heading">
       <div>
         <p>Peak Hours</p>
-        <h1>{scope.delegationName || scope.governorateName || 'Busy-hour view'}</h1>
+        <h1>{scope.delegationName || scope.governorateName || 'When does it happen?'}</h1>
       </div>
       <span className="time-chip">{currentTime?.timestamp || 'No time slice'}</span>
     </div>
+    <div className="metric-selector"><label htmlFor="busy-metric">Busy metric</label><select id="busy-metric" value={busyMetric} onChange={(event) => onBusyMetricChange(event.target.value)}>{BUSY_METRICS.map((metric) => <option key={metric.id} value={metric.id}>{metric.label}</option>)}</select></div>
     
     <div className="kpi-grid compact">
-      <KpiCard label="Peak hour" value={peakRows[0]?.peak_hour || '—'} />
-      <KpiCard label="Congested cells" value={summary.congested_cells} />
+      <KpiCard label="Peak hour" value={peakSummary.peak_hour || 'N/A'} />
+      <KpiCard label="Peak window" value={peakSummary.peak_window || 'N/A'} />
+      <KpiCard label="Peak PRB" value={peakSummary.avg_prb_at_peak ? `${peakSummary.avg_prb_at_peak.toFixed(0)}%` : 'N/A'} />
+      <KpiCard label="Peak congestion" value={peakSummary.peak_congestion_rate || 0} unit="%" />
+      <KpiCard label="Peak users" value={peakSummary.active_users_at_peak || 0} />
+      <KpiCard label="Affected cells" value={peakSummary.affected_cells_at_peak || summary.congested_cells} />
       <KpiCard label="Recurrence" value={`${(recurrence.recurrence_ratio * 100).toFixed(0)}%`} />
-      <KpiCard label="Peak PRB" value={peakRows[0]?.avg_prb_at_peak ? `${peakRows[0].avg_prb_at_peak.toFixed(0)}%` : '—'} />
       <KpiCard label="Structural flag" value={recurrence.structural_flag ? 'Yes' : 'No'} />
     </div>
 
-    {!showCellRows ? (
-      <div className="empty-state" role="note">Peak-hour detail is scoped to delegation and cell review in this phase.</div>
-    ) : (
+    {peakPayload?.available === false ? <div className="empty-state" role="note">{peakPayload.reason || 'No busy-hour samples for this scope.'}</div> : null}
+    {peakRows?.length ? <BusyHourHeatmap rows={peakRows} /> : null}
+    {peakRows?.length ? (
       <div className="site-table-card">
-        <div className="section-title">Peak-hour cells</div>
-        {peakRows?.length ? (
-          <table>
-            <caption className="sr-only">Peak hours table</caption>
-            <thead>
-              <tr>
-                <th scope="col">Cell</th>
-                <th scope="col">Peak hour</th>
-                <th scope="col">Peak PRB</th>
-                <th scope="col">Recurrence</th>
-                <th scope="col">Impact</th>
-              </tr>
-            </thead>
-            <tbody>
-              {peakRows.slice(0, 10).map((row) => {
-                const issue = classifyRanIssue(row)
-                return (
-                  <tr key={row.cell_name} onClick={() => onSelectCell?.(row.cell_name)}>
-                    <td>{row.cell_name}</td>
-                    <td>{row.peak_hour || 'N/A'}</td>
-                    <td>{formatMetric(row.avg_prb_at_peak)}%</td>
-                    <td>{(row.recurrence_ratio * 100).toFixed(0)}%</td>
-                    <td className={`severity-${issue.severity}`}>{issue.issue}</td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        ) : (
-          <div className="empty-state" role="note">Peak-hour data unavailable or empty for this scope.</div>
-        )}
+        <div className="section-title">Peak offenders</div>
+        <table>
+          <caption className="sr-only">Peak offenders table</caption>
+          <thead><tr><th scope="col">Scope</th><th scope="col">Peak Hour</th><th scope="col">Peak Window</th><th scope="col">Peak PRB</th><th scope="col">Peak Throughput</th><th scope="col">Peak CQI</th><th scope="col">Active Users</th><th scope="col">Affected Cells</th><th scope="col">Recurrence</th><th scope="col">QoS Impact</th></tr></thead>
+          <tbody>{peakRows.slice(0, 12).map((row) => {
+            const issue = classifyRanIssue({ ...row, avg_prb: row.avg_prb_at_peak, avg_throughput: row.avg_throughput_at_peak, avg_cqi: row.avg_cqi_at_peak })
+            return <tr key={`${row.group_by}:${row.id}`} onClick={() => onPeakRowSelect?.(row)}><td>{row.name}</td><td>{row.peak_hour || 'N/A'}</td><td>{row.peak_window || 'N/A'}</td><td>{formatMetric(row.avg_prb_at_peak)}%</td><td>{formatMetric(row.avg_throughput_at_peak)} Mbps</td><td>{formatMetric(row.avg_cqi_at_peak)}</td><td>{formatMetric(row.active_users_at_peak, 0)}</td><td>{row.affected_cells_at_peak || 0}</td><td>{formatMetric((row.recurrence_ratio || 0) * 100, 0)}%</td><td className={`severity-${issue.severity}`}>{issue.issue}</td></tr>
+          })}</tbody>
+        </table>
       </div>
-    )}
+    ) : null}
   </section>
 }
 
-function QosPanel({ scope, summary, selectedCell, siteRows, filters, onFilterChange, bands, onSelectCell }) {
+function BusyHourHeatmap({ rows }) {
+  const max = Math.max(1, ...rows.flatMap((row) => (row.hourly_profile || []).map((bucket) => Number(bucket.metric_value) || 0)))
+  return <div className="heatmap-card"><div className="section-title">24h pressure profile</div><div className="heatmap-grid"><div className="heatmap-hours">{Array.from({ length: 24 }, (_, hour) => <span key={hour}>{String(hour).padStart(2, '0')}</span>)}</div>{rows.slice(0, 10).map((row) => <div key={`${row.group_by}:${row.id}`} className="heatmap-row"><strong title={row.name}>{row.name}</strong><div>{(row.hourly_profile || []).map((bucket) => <span key={bucket.hour} title={`${row.name} ${bucket.label}: ${formatMetric(bucket.metric_value)}`} style={{ opacity: 0.18 + Math.min(0.82, (Number(bucket.metric_value) || 0) / max) }} />)}</div></div>)}</div></div>
+}
+
+function QosPanel({ scope, summary, selectedCell, siteRows, scopedCells, filters, onFilterChange, bands, onSelectCell, peakRows }) {
+  const issue = classifyRanIssue({ ...summary, recurrence_ratio: computeRecurrenceMetrics(peakRows).recurrence_ratio })
+  const compliance = computeCompliance(scopedCells)
   if (scope.level === 'national') {
-    return <section className="panel-shell cockpit-panel"><div className="panel-heading"><div><p>QoS Analysis</p><h1>National QoS summary</h1></div><StatusBadge status={summary.status} /></div><ScopeKpis summary={summary} /><div className="empty-state" role="note">Select a governorate, then a delegation, to inspect radio assets.</div></section>
+    return <ScopeQosPanel title="National QoS summary" summary={summary} issue={issue} compliance={compliance} note="Select a governorate, then a delegation, to inspect radio assets." />
   }
   if (scope.level === 'governorate') {
-    return <section className="panel-shell cockpit-panel"><div className="panel-heading"><div><p>QoS Analysis</p><h1>{scope.governorateName}</h1></div><StatusBadge status={summary.status} /></div><ScopeKpis summary={summary} /><div className="empty-state" role="note">Sites and cells are intentionally hidden until a delegation is selected.</div></section>
+    return <ScopeQosPanel title={scope.governorateName} summary={summary} issue={issue} compliance={compliance} note="Sites and cells are intentionally hidden until a delegation is selected." />
   }
   if (selectedCell) {
     return <CellQosPanel cell={selectedCell} />
   }
-  return <section className="panel-shell cockpit-panel"><div className="panel-heading"><div><p>QoS Analysis</p><h1>{scope.delegationName || 'Delegation'}</h1></div><StatusBadge status={summary.status} /></div><ScopeKpis summary={summary} /><FilterBox filters={filters} onFilterChange={onFilterChange} bands={bands} /><div className="site-table-card"><div className="section-title">Delegation sites <span>{siteRows.length}</span></div>{siteRows.length ? <table><caption className="sr-only">Delegation site health table</caption><thead><tr><th scope="col">State</th><th scope="col">Site</th><th scope="col">Worst cell</th><th scope="col">Cells</th><th scope="col">PRB</th><th scope="col">QoS</th></tr></thead><tbody>{siteRows.map((site) => <tr key={site.site_name} onClick={() => onSelectCell(site.worst_cell)}><td><span className="state-dot" style={{ background: site.state_color }} />{site.state_label}</td><td>{site.site_name}</td><td>{site.worst_cell}</td><td>{site.cells.length}</td><td>{formatMetric(site.avg_prb)}%</td><td>{formatMetric(site.avg_throughput)} Mbps / CQI {formatMetric(site.avg_cqi)}</td></tr>)}</tbody></table> : <div className="empty-state" role="note">No matched radio assets in this delegation.</div>}</div></section>
+  return <section className="panel-shell cockpit-panel"><div className="panel-heading"><div><p>QoS Analysis</p><h1>{scope.delegationName || 'Delegation'}</h1></div><StatusBadge status={summary.status} /></div><ScopeKpis summary={summary} /><RanIssueBox issue={issue} /><ComplianceCards compliance={compliance} /><FilterBox filters={filters} onFilterChange={onFilterChange} bands={bands} /><div className="site-table-card"><div className="section-title">Delegation sites <span>{siteRows.length}</span></div>{siteRows.length ? <table><caption className="sr-only">Delegation site health table</caption><thead><tr><th scope="col">State</th><th scope="col">Site</th><th scope="col">Worst cell</th><th scope="col">Cells</th><th scope="col">PRB</th><th scope="col">QoS</th></tr></thead><tbody>{siteRows.map((site) => <tr key={site.site_name} onClick={() => onSelectCell(site.worst_cell)}><td><span className="state-dot" style={{ background: site.state_color }} />{site.state_label}</td><td>{site.site_name}</td><td>{site.worst_cell}</td><td>{site.cells.length}</td><td>{formatMetric(site.avg_prb)}%</td><td>{formatMetric(site.avg_throughput)} Mbps / CQI {formatMetric(site.avg_cqi)}</td></tr>)}</tbody></table> : <div className="empty-state" role="note">No matched radio assets in this delegation.</div>}</div></section>
+}
+
+function ScopeQosPanel({ title, summary, issue, compliance, note }) {
+  return <section className="panel-shell cockpit-panel"><div className="panel-heading"><div><p>QoS Analysis</p><h1>{title}</h1></div><StatusBadge status={summary.status} /></div><ScopeKpis summary={summary} /><RanIssueBox issue={issue} /><ComplianceCards compliance={compliance} /><div className="comparison-card"><div className="section-title">Peak vs normal</div><span>Peak load is represented by current busy-hour recurrence and congestion pressure. Normal baseline uses the active time slice until more history is available.</span></div><div className="empty-state" role="note">{note}</div></section>
+}
+
+function RanIssueBox({ issue }) {
+  return <div className="diagnosis-box"><strong>Likely RAN cause:</strong> {issue.issue} <span className={`severity-${issue.severity}`}>({issue.severity}, {formatMetric(issue.confidence * 100, 0)}% confidence)</span><div className="diagnosis-evidence">{issue.evidence?.length ? issue.evidence.join(' - ') : 'Evidence is limited for this scope.'}</div></div>
+}
+
+function ComplianceCards({ compliance }) {
+  return <div className="kpi-grid compact"><KpiCard label="Below throughput target" value={compliance.lowThroughputPct} unit="%" /><KpiCard label="Above PRB target" value={compliance.highPrbPct} unit="%" /><KpiCard label="Below CQI target" value={compliance.lowCqiPct} unit="%" /><KpiCard label="Recurrently congested" value={compliance.recurrentPct} unit="%" /><KpiCard label="Affected delegations" value={compliance.affectedDelegationPct} unit="%" /><KpiCard label="QoS score" value={compliance.qosScore} /></div>
+}
+
+function computeCompliance(cells = []) {
+  const total = Math.max(1, cells.length)
+  const delegations = new Set(cells.map((cell) => cell.admin?.deleg_id).filter(Boolean))
+  const affectedDelegations = new Set(cells.filter((cell) => cell.prb_load >= 85 || cell.throughput < 15 || cell.cqi < 8).map((cell) => cell.admin?.deleg_id).filter(Boolean))
+  const lowThroughputPct = cells.filter((cell) => cell.throughput > 0 && cell.throughput < 15).length / total * 100
+  const highPrbPct = cells.filter((cell) => cell.prb_load >= 85).length / total * 100
+  const lowCqiPct = cells.filter((cell) => cell.cqi > 0 && cell.cqi < 8).length / total * 100
+  const affectedDelegationPct = delegations.size ? affectedDelegations.size / delegations.size * 100 : 0
+  const qosScore = Math.max(0, 100 - (lowThroughputPct * 0.35 + highPrbPct * 0.35 + lowCqiPct * 0.3))
+  return { lowThroughputPct, highPrbPct, lowCqiPct, recurrentPct: highPrbPct, affectedDelegationPct, qosScore }
 }
 
 function ScopeKpis({ summary }) {
@@ -123,7 +143,7 @@ function CellQosPanel({ cell }) {
     
     <div className="diagnosis-box">
       <strong>RAN Classification:</strong> {issue.issue} (Severity: {issue.severity}, Confidence: {(issue.confidence * 100).toFixed(0)}%)
-      <div className="diagnosis-evidence">{issue.evidence.join(' • ')}</div>
+      <div className="diagnosis-evidence">{issue.evidence.join(' - ')}</div>
       <strong>Multi-KPI Diagnosis:</strong> {diagnoseCell(cell)}
     </div>
     

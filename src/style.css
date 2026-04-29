@@ -100,6 +100,21 @@ a:focus-visible { outline: 3px solid rgba(255,121,0,.55); outline-offset: 2px; }
 .section-title { display: flex; justify-content: space-between; align-items: center; margin: 0 0 10px; color: var(--ink); font-size: 13px; font-weight: 850; }
 .section-title span { color: var(--muted); font-size: 11px; font-weight: 700; }
 .system-optional-title { margin-top: 18px; }
+.metric-selector { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; color: var(--muted); font-size: 12px; font-weight: 800; }
+.metric-selector select { height: 38px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--ink); padding: 0 10px; }
+.heatmap-card, .comparison-card { margin-top: 12px; padding: 14px; border: 1px solid var(--line); border-radius: 18px; background: #fff; }
+.heatmap-grid { display: grid; gap: 8px; overflow-x: auto; }
+.heatmap-hours { display: grid; grid-template-columns: 150px repeat(24, minmax(18px, 1fr)); gap: 3px; padding-left: 150px; color: var(--muted); font-size: 9px; }
+.heatmap-row { display: grid; grid-template-columns: 150px 1fr; gap: 8px; align-items: center; }
+.heatmap-row strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--ink); }
+.heatmap-row div { display: grid; grid-template-columns: repeat(24, minmax(18px, 1fr)); gap: 3px; }
+.heatmap-row span { display: block; height: 18px; border-radius: 5px; background: linear-gradient(145deg, #ff7900, #c94d12); }
+.severity-critical { color: var(--danger); font-weight: 850; }
+.severity-high { color: var(--danger); font-weight: 800; }
+.severity-medium { color: var(--warning); font-weight: 800; }
+.severity-low { color: var(--success); font-weight: 800; }
+.severity-unknown { color: var(--muted); font-weight: 800; }
+.diagnosis-evidence { margin-top: 6px; color: var(--muted); font-size: 12px; }
 .trend-card, .ranking-card, .site-table-card, .simulation-impact, .diagnosis-box, .geo-status { margin-top: 12px; padding: 14px; border: 1px solid var(--line); border-radius: 18px; background: #fff; }
 .trend-card svg { width: 100%; height: 150px; }
 .trend-line { fill: none; stroke: var(--orange); stroke-width: 2.8; vector-effect: non-scaling-stroke; }
@@ -253,6 +268,8 @@ tbody tr:hover { background: var(--orange-soft); }
 .app-shell.theme-dark .diagnosis-box,
 .app-shell.theme-dark .geo-status,
 .app-shell.theme-dark .filter-box,
+.app-shell.theme-dark .heatmap-card,
+.app-shell.theme-dark .comparison-card,
 .app-shell.theme-dark .ingestion-card,
 .app-shell.theme-dark .service-card,
 .app-shell.theme-dark .recommendation-card {

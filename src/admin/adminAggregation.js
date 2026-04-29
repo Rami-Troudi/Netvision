@@ -180,11 +180,21 @@ export function classifyRanIssue(cellOrScope) {
   let severity = 'low'
   let confidence = 0.5
   
-  if (prb >= 85 && throughput < 15 && cqi < 8 && ta >= 2.5) {
+  if (!prb && !throughput && !cqi && !num(cellOrScope.active_users || cellOrScope.active_users_at_peak)) {
+    issue = 'Telemetry/Data Gap'
+    severity = 'unknown'
+    confidence = 0.8
+    evidence.push('Missing PRB, throughput, CQI or user samples')
+  } else if (prb >= 85 && throughput < 15 && cqi < 8 && ta >= 2.5) {
     issue = 'Edge/Interference Pressure'
     severity = 'critical'
     confidence = 0.9
     evidence.push('High PRB', 'Low throughput', 'Low CQI', 'Elevated TA')
+  } else if (recurrence > 0.6 && prb >= 70) {
+    issue = 'Structural Busy-Hour Pattern'
+    severity = 'high'
+    confidence = 0.82
+    evidence.push(`Recurrent ${Math.round(recurrence * 100)}% of observations`, 'Busy-hour pressure repeats')
   } else if (prb >= 85 && throughput < 15 && cqi >= 8) {
     issue = 'Capacity Pressure'
     severity = 'high'
@@ -195,11 +205,11 @@ export function classifyRanIssue(cellOrScope) {
     severity = 'medium'
     confidence = 0.7
     evidence.push('High PRB', 'Good throughput', 'Good CQI')
-  } else if (recurrence > 0.6) {
-    issue = 'Structural Busy-Hour Pattern'
+  } else if (recurrence < 0.2 && prb >= 85) {
+    issue = 'Temporary Spike / Anomaly'
     severity = 'medium'
-    confidence = 0.75
-    evidence.push(`Recurrent ${Math.round(recurrence * 100)}% of observations`)
+    confidence = 0.65
+    evidence.push(`Low recurrence ${Math.round(recurrence * 100)}%`, 'High load is not persistent')
   } else if (prb > 60) {
     issue = 'Congestion Trend'
     severity = 'medium'
