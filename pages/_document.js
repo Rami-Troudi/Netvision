@@ -10,7 +10,7 @@ export default function Document() {
         <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=optional" rel="stylesheet" />
         <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&display=optional" rel="stylesheet" />
       </Head>
-      <body className="theme-dark">
+      <body>
         <Main />
         <NextScript />
       </body>

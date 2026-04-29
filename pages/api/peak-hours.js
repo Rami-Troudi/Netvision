@@ -2,16 +2,23 @@ import path from 'path'
 import { access, readFile, writeFile } from 'fs/promises'
 import { ParquetReader } from 'parquetjs-lite'
 import { enforceRateLimit, requireAuthenticatedRequest } from './_lib/security'
-
-const DATA_DIR = path.resolve(process.cwd(), 'runtime_data')
-const TIME_INDEX_PATH = path.resolve(DATA_DIR, 'time_index.json')
-const TIME_DATA_DIR = path.resolve(DATA_DIR, 'time_data')
-const PEAK_JSON_PATH = path.resolve(DATA_DIR, 'peak_hours.json')
-const PEAK_CSV_PATH = path.resolve(DATA_DIR, 'peak_hours.csv')
+import { getRuntimeDataRoot } from './_lib/dataMode'
 
 const LOAD_COLUMN_CANDIDATES = ['load', 'prb_load', 'ft_physical_resource_blocks_load_dl']
 
 let cachedPayload = null
+let cachedMode = null
+
+function getDataPaths() {
+  const { root: dataDir, mode } = getRuntimeDataRoot()
+  return {
+    mode,
+    timeIndexPath: path.resolve(dataDir, 'time_index.json'),
+    timeDataDir: path.resolve(dataDir, 'time_data'),
+    peakJsonPath: path.resolve(dataDir, 'peak_hours.json'),
+    peakCsvPath: path.resolve(dataDir, 'peak_hours.csv'),
+  }
+}
 
 export const config = {
   api: {
@@ -64,7 +71,8 @@ function toCsv(rows) {
 }
 
 async function computePeakHoursFromTimeData() {
-  const rawIndex = await readFile(TIME_INDEX_PATH, 'utf8')
+  const paths = getDataPaths()
+  const rawIndex = await readFile(paths.timeIndexPath, 'utf8')
   const parsed = JSON.parse(rawIndex)
   const timestamps = Array.isArray(parsed?.timestamps) ? parsed.timestamps : []
 
@@ -79,31 +87,43 @@ async function computePeakHoursFromTimeData() {
     const filename = String(entry?.filename || '').trim()
     if (hour === null || !filename) continue
 
-    const parquetPath = path.resolve(TIME_DATA_DIR, filename)
-    if (!await fileExists(parquetPath)) continue
+    const slicePath = path.resolve(paths.timeDataDir, filename)
+    if (!await fileExists(slicePath)) continue
 
-    const reader = await ParquetReader.openFile(parquetPath)
-    try {
-      const cursor = reader.getCursor()
-      let record = await cursor.next()
-      while (record) {
-        const cellName = String(record?.cell_name || '').trim()
-        const load = getNumericLoad(record)
-        if (cellName && load !== null) {
-          let hourMap = aggregateByCell.get(cellName)
-          if (!hourMap) {
-            hourMap = new Map()
-            aggregateByCell.set(cellName, hourMap)
-          }
-          const slot = hourMap.get(hour) || { sum: 0, count: 0 }
-          slot.sum += load
-          slot.count += 1
-          hourMap.set(hour, slot)
-        }
-        record = await cursor.next()
+    const records = []
+    if (path.extname(slicePath).toLowerCase() === '.json') {
+      const payload = JSON.parse(await readFile(slicePath, 'utf8'))
+      for (const [cellName, obs] of Object.entries(payload?.observations || {})) {
+        records.push({ ...obs, cell_name: cellName })
       }
-    } finally {
-      await reader.close()
+    } else {
+      const reader = await ParquetReader.openFile(slicePath)
+      try {
+        const cursor = reader.getCursor()
+        let record = await cursor.next()
+        while (record) {
+          records.push(record)
+          record = await cursor.next()
+        }
+      } finally {
+        await reader.close()
+      }
+    }
+
+    for (const record of records) {
+      const cellName = String(record?.cell_name || '').trim()
+      const load = getNumericLoad(record)
+      if (cellName && load !== null) {
+        let hourMap = aggregateByCell.get(cellName)
+        if (!hourMap) {
+          hourMap = new Map()
+          aggregateByCell.set(cellName, hourMap)
+        }
+        const slot = hourMap.get(hour) || { sum: 0, count: 0 }
+        slot.sum += load
+        slot.count += 1
+        hourMap.set(hour, slot)
+      }
     }
   }
 
@@ -141,19 +161,24 @@ async function computePeakHoursFromTimeData() {
 
   return {
     generated_at: new Date().toISOString(),
-    source: 'runtime_data/time_index.json + runtime_data/time_data/*.parquet',
+    source: `${paths.mode} runtime data time_index.json + time_data`,
     total_cells: rows.length,
     rows,
   }
 }
 
 async function loadPeakPayload({ refresh = false } = {}) {
+  const paths = getDataPaths()
+  if (cachedMode !== paths.mode) {
+    cachedPayload = null
+    cachedMode = paths.mode
+  }
   if (!refresh && cachedPayload) {
     return cachedPayload
   }
 
-  if (!refresh && await fileExists(PEAK_JSON_PATH)) {
-    const raw = await readFile(PEAK_JSON_PATH, 'utf8')
+  if (!refresh && await fileExists(paths.peakJsonPath)) {
+    const raw = await readFile(paths.peakJsonPath, 'utf8')
     const payload = JSON.parse(raw)
     if (Array.isArray(payload?.rows)) {
       cachedPayload = payload
@@ -162,8 +187,8 @@ async function loadPeakPayload({ refresh = false } = {}) {
   }
 
   const payload = await computePeakHoursFromTimeData()
-  await writeFile(PEAK_JSON_PATH, JSON.stringify(payload, null, 2), 'utf8')
-  await writeFile(PEAK_CSV_PATH, toCsv(payload.rows), 'utf8')
+  await writeFile(paths.peakJsonPath, JSON.stringify(payload, null, 2), 'utf8')
+  await writeFile(paths.peakCsvPath, toCsv(payload.rows), 'utf8')
   cachedPayload = payload
   return payload
 }

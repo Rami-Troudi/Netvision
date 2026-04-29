@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import KpiCard from '../dashboard/KpiCard'
 import RecommendationCard from './RecommendationCard'
 import SimulationImpactCard from './SimulationImpactCard'
@@ -26,12 +26,73 @@ const ACTION_LABEL_TO_ID = {
   'Add Site': 'add_site',
 }
 
-export default function CellOperationalPanel({ cell, currentTime }) {
+const TERMINAL_JOB_STATES = new Set(['done', 'failed'])
+
+function wait(ms) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms)
+  })
+}
+
+export default function CellOperationalPanel({ cell, currentTime, queueReady = false, queueDetail = '' }) {
   const [recommendations, setRecommendations] = useState([])
   const [recState, setRecState] = useState('idle')
   const [action, setAction] = useState('add_carrier')
   const [simulation, setSimulation] = useState(null)
   const [simState, setSimState] = useState('idle')
+  const [jobs, setJobs] = useState([])
+  const [activeJobId, setActiveJobId] = useState('')
+  const mountedRef = useRef(true)
+
+  function upsertJob(jobPatch) {
+    setJobs((prev) => {
+      const idx = prev.findIndex((item) => item.jobId === jobPatch.jobId)
+      if (idx === -1) return [{ ...jobPatch }, ...prev].slice(0, 8)
+      const next = [...prev]
+      next[idx] = { ...next[idx], ...jobPatch }
+      return next
+    })
+  }
+
+  function buildParams(nextAction) {
+    if (nextAction === 'tilt') return { degrees: 2 }
+    if (nextAction === 'redistribute') return { ratio: 0.15 }
+    if (nextAction === 'add_carrier') return { band: cell?.frequency_band || 3 }
+    return {}
+  }
+
+  function buildSimulationPayload(nextAction) {
+    return {
+      cell_name: cell?.cell_name,
+      action: nextAction,
+      params: buildParams(nextAction),
+      time_entry: currentTime || {},
+      mode: 'fast',
+    }
+  }
+
+  async function pollJobUntilTerminal(jobId) {
+    const started = Date.now()
+    const timeoutMs = 60_000
+    while (Date.now() - started < timeoutMs) {
+      const res = await fetch(`/api/jobs/${encodeURIComponent(jobId)}`)
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(payload?.error || `jobs status returned ${res.status}`)
+      }
+      if (!mountedRef.current) return null
+      upsertJob({
+        jobId,
+        status: payload.status || 'pending',
+        updated_at: payload.updated_at || '',
+        error: payload.error || '',
+        result: payload.result || null,
+      })
+      if (TERMINAL_JOB_STATES.has(payload.status)) return payload
+      await wait(1500)
+    }
+    throw new Error('Job polling timed out')
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -60,32 +121,59 @@ export default function CellOperationalPanel({ cell, currentTime }) {
     }
     loadRecommendation()
     return () => { cancelled = true }
-  }, [cell?.cell_name, currentTime?.timestamp])
+  }, [cell?.cell_name, cell?.prb_load, cell?.throughput, cell?.active_users, cell?.cqi, currentTime?.timestamp])
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => { mountedRef.current = false }
+  }, [])
 
   const selectedAction = useMemo(() => SUPPORTED_ACTIONS.find((item) => item.id === action), [action])
 
-  async function runSimulation(nextAction = action) {
+  async function runQueuedSimulation(nextAction = action) {
     if (!cell?.cell_name) return
-    setSimState('running')
+    if (!queueReady) {
+      setSimState(queueDetail || 'Queue unavailable. Redis/worker must be running.')
+      return
+    }
+    setSimState('queued')
     setSimulation(null)
     try {
-      const params = nextAction === 'tilt' ? { degrees: 2 } : nextAction === 'redistribute' ? { ratio: 0.15 } : nextAction === 'add_carrier' ? { band: cell.frequency_band || 3 } : {}
-      const res = await fetch('/api/simulate', {
+      const res = await fetch('/api/jobs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cell_name: cell.cell_name, action: nextAction, params, time_entry: currentTime || {}, mode: 'fast' }),
+        body: JSON.stringify(buildSimulationPayload(nextAction)),
       })
-      const payload = await res.json()
-      if (!res.ok) throw new Error(payload?.error || `simulate returned ${res.status}`)
-      setSimulation(payload)
+      const queued = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(queued?.error || `jobs returned ${res.status}`)
+      const jobId = String(queued?.jobId || '').trim()
+      if (!jobId) throw new Error('Job id missing from queue response')
+      setActiveJobId(jobId)
+      upsertJob({
+        jobId,
+        action: nextAction,
+        status: queued?.status || 'pending',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        error: '',
+        result: null,
+      })
+      setSimState('running')
+      const finalJob = await pollJobUntilTerminal(jobId)
+      if (!mountedRef.current || !finalJob) return
+      if (finalJob.status === 'failed') {
+        throw new Error(finalJob.error || 'Queued simulation failed')
+      }
+      setSimulation(finalJob.result || null)
       setSimState('complete')
     } catch (err) {
-      setSimState(err.message || 'Simulation failed')
+      if (!mountedRef.current) return
+      setSimState(err.message || 'Queued simulation failed')
     }
   }
 
   return (
-    <section className="panel-shell cell-panel">
+    <section className="panel-shell cell-panel" aria-busy={recState === 'loading' || simState === 'queued' || simState === 'running'}>
       <div className="panel-heading"><div><p>Cell operational view</p><h1>{cell?.cell_name || 'Select Cell'}</h1></div><span className="live-pill">Recommendation enabled</span></div>
       <div className="kpi-grid compact">
         <KpiCard label="PRB Load" value={cell?.prb_load || 0} unit="%" />
@@ -99,10 +187,19 @@ export default function CellOperationalPanel({ cell, currentTime }) {
       <div className="section-title">Backend Recommendations</div>
       {recState === 'loading' ? <div className="empty-state">Requesting FastAPI recommendation...</div> : null}
       {typeof recState === 'string' && !['idle', 'loading', 'ready'].includes(recState) ? <div className="empty-state warning">{recState}</div> : null}
-      <div className="recommendation-list">{recommendations.length ? recommendations.map((rec, idx) => <RecommendationCard key={idx} recommendation={rec} onSimulate={(simAction) => { setAction(simAction); runSimulation(simAction) }} />) : recState === 'ready' ? <div className="empty-state">No simulator-supported backend action was returned for this cell.</div> : null}</div>
-      <div className="simulation-control"><select value={action} onChange={(e) => setAction(e.target.value)}>{SUPPORTED_ACTIONS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select><button className="primary-cta" onClick={() => runSimulation(action)}>Run {selectedAction?.label || action}</button></div>
-      {simState !== 'idle' && simState !== 'complete' && simState !== 'running' ? <div className="empty-state warning">{simState}</div> : null}
-      {simState === 'running' ? <div className="empty-state">Running fast simulator...</div> : <SimulationImpactCard result={simulation} />}
+      <div className="recommendation-list">{recommendations.length ? recommendations.map((rec, idx) => <RecommendationCard key={idx} recommendation={rec} onSimulate={(simAction) => { setAction(simAction); runQueuedSimulation(simAction) }} />) : recState === 'ready' ? <div className="empty-state" role="note">No simulator-supported backend action was returned for this cell.</div> : null}</div>
+      <div className="simulation-control">
+        <label htmlFor="sim-action" className="sr-only">Simulation action</label>
+        <select id="sim-action" value={action} onChange={(e) => setAction(e.target.value)}>{SUPPORTED_ACTIONS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select>
+        <button data-testid="queue-simulation" aria-describedby={!queueReady ? 'queue-unavailable-reason' : undefined} className="primary-cta" disabled={!queueReady} onClick={() => runQueuedSimulation(action)}>Queue {selectedAction?.label || action}</button>
+      </div>
+      {!queueReady ? <div id="queue-unavailable-reason" className="empty-state warning" role="status">Queue-only mode is enabled. {queueDetail || 'Redis and job worker are required.'}</div> : null}
+      {simState === 'queued' ? <div className="empty-state" role="status">Submitting queued simulation job...</div> : null}
+      {simState === 'running' ? <div className="empty-state" role="status">Polling job {activeJobId || '...'}...</div> : null}
+      {simState !== 'idle' && simState !== 'complete' && simState !== 'queued' && simState !== 'running' ? <div className="empty-state warning">{simState}</div> : null}
+      <div className="section-title">Job Queue</div>
+      {jobs.length ? <div className="job-queue" role="status" aria-live="polite">{jobs.map((job) => <div key={job.jobId} className="job-row"><strong>{job.action || 'simulate'}</strong><span>{job.status}</span><em>{job.jobId.slice(0, 8)}{job.error ? ` · ${job.error}` : ''}</em></div>)}</div> : <div className="empty-state" role="note">No simulation jobs queued yet.</div>}
+      {simState === 'complete' ? <SimulationImpactCard result={simulation} /> : null}
     </section>
   )
 }

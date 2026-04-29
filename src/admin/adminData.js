@@ -11,9 +11,9 @@ export async function loadDashboardData() {
     fetchJson('/api/data/stats.json').catch(() => ({})),
     fetchJson('/geo/tunisia_governorates.geojson'),
     fetchJson('/geo/tunisia_delegations.geojson'),
-    fetchJson('/geo/admin_registry.json'),
-    fetchJson('/geo/admin_cell_index.json'),
-    fetchJson('/geo/admin_reconciliation_report.json').catch(() => null),
+    fetchJson('/api/data/admin_registry.json').catch(() => fetchJson('/geo/admin_registry.json')),
+    fetchJson('/api/data/admin_cell_index.json').catch(() => fetchJson('/geo/admin_cell_index.json')),
+    fetchJson('/api/data/admin_reconciliation_report.json').catch(() => fetchJson('/geo/admin_reconciliation_report.json').catch(() => null)),
   ])
   const timestamps = Array.isArray(timeIndexPayload?.timestamps) ? timeIndexPayload.timestamps : []
   const first = timestamps[0]

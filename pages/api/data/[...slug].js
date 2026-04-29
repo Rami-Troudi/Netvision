@@ -2,6 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import { readFile, stat } from 'fs/promises'
 import { requireAuthenticatedRequest } from '../_lib/security'
+import { getRuntimeDataRoot } from '../_lib/dataMode'
 
 if (!BigInt.prototype.toJSON) {
   BigInt.prototype.toJSON = function () { return Number(this) }
@@ -11,6 +12,9 @@ const ALLOWED_ROOT_FILES = new Set([
   'baseline.json',
   'time_index.json',
   'stats.json',
+  'admin_registry.json',
+  'admin_cell_index.json',
+  'admin_reconciliation_report.json',
 ])
 
 const ALLOWED_DATA_DIRS = new Set([
@@ -31,7 +35,7 @@ function sanitizeSlugParts(rawParts) {
 }
 
 function resolveDataPath(projectRoot, slugParts) {
-  const dataRoot = path.resolve(projectRoot, 'runtime_data')
+  const { root: dataRoot } = getRuntimeDataRoot()
   const [head, ...tail] = slugParts
 
   if (!tail.length) {
@@ -124,7 +128,7 @@ const _metadataCache = {
 }
 
 async function loadSliceMetadata(projectRoot, dataDir, filename) {
-  const dataRoot = path.resolve(projectRoot, 'runtime_data')
+  const { root: dataRoot } = getRuntimeDataRoot()
   if (dataDir === 'time_data') {
     const indexFileName = 'time_index.json'
     const indexPath = path.resolve(dataRoot, indexFileName)

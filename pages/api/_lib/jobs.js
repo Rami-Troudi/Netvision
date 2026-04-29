@@ -17,6 +17,7 @@ export const JOB_STATUSES = Object.freeze({
 
 export const JOB_QUEUE_NAME = process.env.JOB_QUEUE_NAME?.trim() || 'netvision-jobs'
 const REDIS_URL = process.env.REDIS_URL?.trim() || 'redis://127.0.0.1:6379'
+const JOB_QUEUE_READY_TIMEOUT_MS = Math.max(500, Number.parseInt(process.env.JOB_QUEUE_READY_TIMEOUT_MS || '3500', 10))
 const DB_DIR = path.resolve(process.cwd(), '.runtime')
 const DB_PATH = path.resolve(DB_DIR, 'jobs.sqlite')
 const JOB_RESULTS_DIR = path.resolve(DB_DIR, 'job-results')
@@ -179,6 +180,11 @@ export async function getJobsQueue() {
       },
     })
   }
-  await queue.waitUntilReady()
+  await Promise.race([
+    queue.waitUntilReady(),
+    new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Queue readiness timeout')), JOB_QUEUE_READY_TIMEOUT_MS)
+    }),
+  ])
   return queue
 }
