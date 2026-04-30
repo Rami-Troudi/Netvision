@@ -1,6 +1,9 @@
 import { getDataMode, setDataMode, DATA_MODES } from './_lib/dataMode'
+import { enforceRateLimit, requireAuthenticatedRequest } from './_lib/security'
 
 export default async function handler(req, res) {
+  if (!requireAuthenticatedRequest(req, res)) return
+  if (!enforceRateLimit(req, res, { keyPrefix: 'data-mode', maxRequests: 60, windowMs: 60_000 })) return
   if (req.method === 'GET') {
     return res.status(200).json({ mode: getDataMode(), allowed: DATA_MODES })
   }

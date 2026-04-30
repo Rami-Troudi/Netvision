@@ -10,7 +10,9 @@
     "worker": "node job-workers/jobWorker.js",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "backend": "python run_backend.py",
+    "redis:ping": "redis-cli -h 127.0.0.1 -p 6379 ping"
   },
   "dependencies": {
     "@turf/turf": "^7.3.1",

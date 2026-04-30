@@ -1,8 +1,12 @@
 import fs from 'fs'
 import path from 'path'
+import { createRequire } from 'module'
 import { DatabaseSync } from 'node:sqlite'
 import { Queue } from 'bullmq'
 import IORedis from 'ioredis'
+
+const require = createRequire(import.meta.url)
+const { getRedisUrl, getRedisConnectionTimeoutMs, getRedisConnectionOptions } = require('../../../job-workers/redisConfig.cjs')
 
 export const JOB_TYPES = Object.freeze({
   SIMULATE: 'simulate',
@@ -16,8 +20,8 @@ export const JOB_STATUSES = Object.freeze({
 })
 
 export const JOB_QUEUE_NAME = process.env.JOB_QUEUE_NAME?.trim() || 'netvision-jobs'
-const REDIS_URL = process.env.REDIS_URL?.trim() || 'redis://127.0.0.1:6379'
-const JOB_QUEUE_READY_TIMEOUT_MS = Math.max(500, Number.parseInt(process.env.JOB_QUEUE_READY_TIMEOUT_MS || '3500', 10))
+export const REDIS_URL = getRedisUrl()
+const JOB_QUEUE_READY_TIMEOUT_MS = getRedisConnectionTimeoutMs()
 const DB_DIR = path.resolve(process.cwd(), '.runtime')
 const DB_PATH = path.resolve(DB_DIR, 'jobs.sqlite')
 const JOB_RESULTS_DIR = path.resolve(DB_DIR, 'job-results')
@@ -162,11 +166,33 @@ export function formatJobApiResponse(jobRow) {
 
 function createQueueConnection() {
   if (queueConnection) return queueConnection
-  queueConnection = new IORedis(REDIS_URL, {
-    maxRetriesPerRequest: null,
-    enableReadyCheck: false,
+  queueConnection = new IORedis(REDIS_URL, getRedisConnectionOptions({ healthCheck: true }))
+  queueConnection.on('error', () => {
+    // Health routes report Redis status explicitly; avoid noisy ECONNREFUSED logs.
   })
   return queueConnection
+}
+
+export async function checkRedisConnection() {
+  const connection = new IORedis(REDIS_URL, getRedisConnectionOptions({ healthCheck: true }))
+  connection.on('error', () => {
+    // The caller converts connection failures into optional degraded health.
+  })
+  try {
+    await Promise.race([
+      connection.ping(),
+      new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Redis health check timeout')), JOB_QUEUE_READY_TIMEOUT_MS)
+      }),
+    ])
+    return true
+  } finally {
+    try {
+      await connection.quit()
+    } catch {
+      connection.disconnect()
+    }
+  }
 }
 
 export async function getJobsQueue() {

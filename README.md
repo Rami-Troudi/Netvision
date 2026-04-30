@@ -31,9 +31,44 @@ Real-time radio network monitoring, KPI analytics, rule-based congestion recomme
 
 ## Manual Run
 - Frontend: `npm run dev` (http://localhost:3000)
-- Worker: `npm run worker`
-- Backend: `python run_backend.py`
+- Worker: `npm run worker` (optional Redis-backed queued jobs)
+- Backend: `npm run backend` or `python run_backend.py` (optional FastAPI recommendation service)
+- Redis check: `npm run redis:ping`
 - Production build: `npm run build` then `npm start`
+
+## Local Linux Services (No Docker)
+Redis and FastAPI are optional for the current dashboard scope. Overview, Peak Hours, QoS Analysis, the admin map, and Data Quality must work when both are offline. Redis is needed only for queued jobs/simulation/recommendation export. FastAPI is needed only for recommendation-related backend routes.
+
+Redis local service setup:
+
+```bash
+sudo apt update
+sudo apt install redis-server
+sudo systemctl enable redis-server
+sudo systemctl start redis-server
+redis-cli ping
+```
+
+Expected Redis output: `PONG`.
+
+FastAPI setup:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python run_backend.py
+```
+
+Health checks:
+
+```bash
+curl http://127.0.0.1:8000/health
+curl http://127.0.0.1:3000/api/backend-health
+curl http://127.0.0.1:3000/api/jobs-health
+```
+
+See `docs/dev-backend.md` for full local service notes.
 
 ## API Surface
 ### Next.js API routes
@@ -68,7 +103,7 @@ src/             # frontend app logic + styles
 
 ## Notes
 - Heavy routes require auth token unless `AUTH_BYPASS=true` is set for local use.
-- `start.ps1` starts Redis (Docker), backend, worker, and frontend for local testing.
+- Linux development uses local `redis-server`; Docker Redis is not required. `start.ps1` is Windows-specific legacy convenience tooling.
 - Keep generated runtime artifacts out of git when working with large datasets.
 
 ## License

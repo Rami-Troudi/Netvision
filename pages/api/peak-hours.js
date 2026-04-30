@@ -121,6 +121,11 @@ async function loadRaw(refresh = false) {
   if (!refresh && cachedRaw && cachedMode === p.mode) return cachedRaw
   cachedMode = p.mode
 
+  if (!await exists(p.timeIndex)) {
+    cachedRaw = { mode: p.mode, generated_at: new Date().toISOString(), observations: [], unavailable_reason: `time_index.json is missing in ${p.root}. Run the runtime data processing pipeline or switch data mode.` }
+    return cachedRaw
+  }
+
   const [timeIndexRaw, baselineRaw, adminRaw] = await Promise.all([
     readFile(p.timeIndex, 'utf8'),
     readFile(p.baseline, 'utf8').catch(() => '{}'),
@@ -130,6 +135,10 @@ async function loadRaw(refresh = false) {
   const baseline = JSON.parse(baselineRaw)
   const adminIndex = JSON.parse(adminRaw)
   const timestamps = Array.isArray(timeIndex?.timestamps) ? timeIndex.timestamps : []
+  if (!timestamps.length) {
+    cachedRaw = { mode: p.mode, generated_at: new Date().toISOString(), observations: [], unavailable_reason: `time_index.json has no timestamps in ${p.root}.` }
+    return cachedRaw
+  }
   const observations = []
 
   for (const entry of timestamps) {
@@ -158,7 +167,7 @@ async function loadRaw(refresh = false) {
     }
   }
 
-  cachedRaw = { mode: p.mode, generated_at: new Date().toISOString(), observations }
+  cachedRaw = { mode: p.mode, generated_at: new Date().toISOString(), observations, unavailable_reason: observations.length ? '' : `No readable time_data slices were found from ${p.timeData}.` }
   return cachedRaw
 }
 
@@ -334,6 +343,7 @@ export default async function handler(req, res) {
 
   try {
     const raw = await loadRaw(refresh)
+    if (!raw.observations.length) return res.status(200).json(emptyPayload(groupBy, metric, raw.unavailable_reason || 'No peak-hour samples are available.'))
     const scoped = raw.observations.filter((row) => passFilters(row, query))
     if (!scoped.length) return res.status(200).json(emptyPayload(groupBy, metric, 'No peak-hour samples match the selected scope.'))
     const rows = analyzeGroups(scoped, groupBy, metric).slice(0, limit)

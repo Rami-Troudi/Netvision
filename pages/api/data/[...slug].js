@@ -35,39 +35,45 @@ function sanitizeSlugParts(rawParts) {
 }
 
 function resolveDataPath(projectRoot, slugParts) {
-  const { root: dataRoot } = getRuntimeDataRoot()
+  const { root: dataRoot, mode } = getRuntimeDataRoot()
   const [head, ...tail] = slugParts
 
   if (!tail.length) {
     if (!ALLOWED_ROOT_FILES.has(head)) {
-      throw new Error('File is not allowed')
+      throw new Error(`Data file "${head}" is not allowed. Allowed files: ${Array.from(ALLOWED_ROOT_FILES).join(', ')}`)
     }
     return {
       filePath: path.resolve(dataRoot, head),
       kind: 'json',
       dataDir: null,
+      dataRoot,
+      mode,
+      requestPath: head,
     }
   }
 
   if (!ALLOWED_DATA_DIRS.has(head)) {
-    throw new Error('Directory is not allowed')
+    throw new Error(`Data directory "${head}" is not allowed. Allowed directories: ${Array.from(ALLOWED_DATA_DIRS).join(', ')}`)
   }
 
   const baseDir = path.resolve(dataRoot, head)
   const targetPath = path.resolve(baseDir, ...tail)
   if (!isPathInsideDirectory(targetPath, baseDir)) {
-    throw new Error('Invalid path')
+    throw new Error('Invalid data path. Path traversal is not allowed.')
   }
 
   const ext = path.extname(targetPath).toLowerCase()
   if (ext !== '.json' && ext !== '.parquet') {
-    throw new Error('Only JSON and Parquet files are allowed')
+    throw new Error('Only JSON and Parquet time_data files are allowed.')
   }
 
   return {
     filePath: targetPath,
     kind: ext === '.parquet' ? 'parquet' : 'json',
     dataDir: head,
+    dataRoot,
+    mode,
+    requestPath: [head, ...tail].join('/'),
   }
 }
 
@@ -178,19 +184,33 @@ export default async function handler(req, res) {
   let resolvedPath
   try {
     resolvedPath = resolveDataPath(projectRoot, slugParts)
-  } catch {
-    return res.status(400).json({ error: 'Invalid data path' })
+  } catch (err) {
+    return res.status(400).json({ error: 'Invalid data path', detail: err instanceof Error ? err.message : String(err) })
   }
 
-  const { filePath, kind, dataDir } = resolvedPath
+  const { filePath, kind, dataDir, dataRoot, mode, requestPath } = resolvedPath
 
   try {
     const info = await stat(filePath)
     if (!info.isFile()) {
-      return res.status(404).json({ error: 'Data file not found (not a file)' })
+      return res.status(404).json({
+        error: 'Data file not found',
+        detail: `${requestPath} exists but is not a file in ${mode} runtime data.`,
+        mode,
+        data_root: dataRoot,
+        action: 'Verify runtime_data generation or run the relevant data preparation script.',
+      })
     }
   } catch (err) {
-    return res.status(404).json({ error: 'Data file not found on disk' })
+    return res.status(404).json({
+      error: 'Data file not found',
+      detail: `${requestPath} was not found in ${mode} runtime data.`,
+      mode,
+      data_root: dataRoot,
+      action: requestPath.startsWith('admin_')
+        ? 'Run scripts/prepare_admin_boundaries.py and scripts/build_admin_cell_index.py.'
+        : 'Run the runtime data processing pipeline or check the selected data mode.',
+    })
   }
 
   res.setHeader('Content-Type', 'application/json; charset=utf-8')
@@ -216,7 +236,7 @@ export default async function handler(req, res) {
       return res.status(200).json(payload)
     } catch (err) {
       console.error('Failed to read parquet data file:', err)
-      return res.status(500).json({ error: 'Failed to read data file' })
+      return res.status(500).json({ error: 'Failed to read data file', detail: err instanceof Error ? err.message : String(err), mode, data_root: dataRoot })
     }
   }
 
@@ -224,7 +244,7 @@ export default async function handler(req, res) {
   stream.on('error', (err) => {
     console.error('Failed to stream data file:', err)
     if (!res.headersSent) {
-      res.status(500).json({ error: 'Failed to read data file' })
+      res.status(500).json({ error: 'Failed to read data file', detail: err instanceof Error ? err.message : String(err), mode, data_root: dataRoot })
     } else {
       res.destroy(err)
     }

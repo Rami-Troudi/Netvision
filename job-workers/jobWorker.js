@@ -5,9 +5,10 @@ const path = require('path')
 const { DatabaseSync } = require('node:sqlite')
 const IORedis = require('ioredis')
 const { Worker } = require('bullmq')
+const { getRedisUrl, getRedisConnectionOptions } = require('./redisConfig.cjs')
 
 const JOB_QUEUE_NAME = (process.env.JOB_QUEUE_NAME || 'netvision-jobs').trim()
-const REDIS_URL = (process.env.REDIS_URL || 'redis://127.0.0.1:6379').trim()
+const REDIS_URL = getRedisUrl()
 const PYTHON_BIN = (process.env.PYTHON_BIN || 'python').trim() || 'python'
 
 const JOB_STATUSES = {
@@ -259,8 +260,7 @@ async function executeJobByType(type, payload) {
 }
 
 const connection = new IORedis(REDIS_URL, {
-  maxRetriesPerRequest: null,
-  enableReadyCheck: false,
+  ...getRedisConnectionOptions({ healthCheck: false }),
 })
 
 const worker = new Worker(
