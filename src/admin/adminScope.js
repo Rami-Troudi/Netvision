@@ -58,10 +58,10 @@ export function backToDelegation(scope) {
 }
 
 export function getCurrentScopeLabel(scope) {
-  if (scope.level === 'cell') return scope.selectedCellName || 'Selected cell'
+  if (scope.level === 'cell') return scope.selectedCellName || 'Cellule selectionnee'
   if (scope.level === 'delegation') return scope.delegationName || 'Delegation'
-  if (scope.level === 'governorate') return scope.governorateName || 'Governorate'
-  return 'Tunisia national view'
+  if (scope.level === 'governorate') return scope.governorateName || 'Gouvernorat'
+  return 'Vue nationale Tunisie'
 }
 
 export function getScopedCellNames(scope, adminCellIndex) {

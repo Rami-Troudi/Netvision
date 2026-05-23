@@ -1,10 +1,8 @@
 import { aggregateCells, formatMetric } from './adminAggregation'
+import { OPERATOR_TABS, ADMIN_TABS, stateLabelFr } from '../utils/uiPolicy.mjs'
 
-export const COCKPIT_TABS = [
-  { id: 'overview', label: 'Overview', short: 'OV' },
-  { id: 'peak-hours', label: 'Peak Hours', short: 'PH' },
-  { id: 'qos', label: 'QoS Analysis', short: 'QS' },
-]
+export const COCKPIT_TABS = OPERATOR_TABS
+export const ADMIN_COCKPIT_TABS = ADMIN_TABS
 
 export const DEFAULT_FILTERS = {
   critical: true,
@@ -33,14 +31,7 @@ export function stateRank(state) {
 }
 
 export function stateLabel(state) {
-  return {
-    critical: 'Critical',
-    watch: 'High load',
-    degraded: 'QoS degraded',
-    healthy: 'Healthy',
-    no_data: 'No KPI data',
-    unmatched: 'Unmatched',
-  }[state] || 'Unknown'
+  return stateLabelFr(state)
 }
 
 export function stateColor(state) {
@@ -104,8 +95,8 @@ export function summarizeAlerts(cells = []) {
 }
 
 export function buildActionNarrative(scope, summary, alerts) {
-  if (!summary?.observed_cells) return 'No matched radio assets in the current scope. Review data quality and admin reconciliation.'
-  if (alerts?.length) return `${alerts.length} cells need QoS review. Start with ${alerts[0].cell_name} (${stateLabel(getCellState(alerts[0]))}, PRB ${formatMetric(alerts[0].prb_load)}%).`
-  if (scope.level === 'cell') return 'Cell is selected. Review QoS evidence before deciding an operational action outside this dashboard phase.'
-  return 'No severe QoS issue in this slice. Use timeline or filters to inspect other operating conditions.'
+  if (!summary?.observed_cells) return 'Aucun actif radio associe dans ce perimetre. Verifiez la qualite des donnees et le rapprochement administratif.'
+  if (alerts?.length) return `${alerts.length} cellules exigent une revue QoS. Commencez par ${alerts[0].cell_name} (${stateLabel(getCellState(alerts[0]))}, PRB ${formatMetric(alerts[0].prb_load)}%).`
+  if (scope.level === 'cell') return 'Cellule selectionnee. Verifiez les preuves QoS avant toute action operationnelle.'
+  return 'Aucun incident QoS majeur sur cette tranche. Utilisez la timeline ou les filtres pour explorer d autres conditions.'
 }

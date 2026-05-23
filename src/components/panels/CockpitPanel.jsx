@@ -1,72 +1,71 @@
 import NationalPanel from './NationalPanel'
 import GovernoratePanel from './GovernoratePanel'
 import DelegationPanel from './DelegationPanel'
+import CellOperationalPanel from './CellOperationalPanel'
 import KpiCard from '../dashboard/KpiCard'
 import StatusBadge from '../dashboard/StatusBadge'
 import { diagnoseCell, formatMetric, classifyRanIssue, computeRecurrenceMetrics } from '../../admin/adminAggregation'
 import { stateLabel, getCellState } from '../../admin/adminOps'
+import { downloadRecommendationsCsv } from '../../services/operationalApi.mjs'
+import { diagnosisLabelFr } from '../../utils/uiPolicy.mjs'
 
 export default function CockpitPanel(props) {
-  const { activeTab } = props
+  const { activeTab, adminToolsEnabled } = props
   if (activeTab === 'peak-hours') return <PeakHoursPanel {...props} />
   if (activeTab === 'qos') return <QosPanel {...props} />
-  if (activeTab === 'data') return <DataPanel {...props} />
-  if (activeTab === 'system') return <SystemPanel {...props} />
+  if (activeTab === 'operations') return <OperationsPanel {...props} />
+  if (adminToolsEnabled && activeTab === 'data') return <DataPanel {...props} />
+  if (adminToolsEnabled && activeTab === 'system') return <SystemPanel {...props} />
   return <OverviewPanel {...props} />
 }
 
 function OverviewPanel(props) {
-  const { scope, nationalSummary, governorateRows, delegationRows, metric, selectedGovernorate, selectedDelegation, delegationSummary, governorateSummary, onSelectGovernorate, onSelectDelegation, reconciliation, whyCritical, confidence, sliceDelta, watchlist, savedViews, onPinScope, onSaveView, onRestoreWatch, onRemoveWatch, onRestoreSavedView, onRemoveSavedView, onRunDemo, onExportReport } = props
+  const { scope, nationalSummary, governorateRows, delegationRows, delegationVariationRows, metric, selectedGovernorate, selectedDelegation, delegationSummary, governorateSummary, onSelectGovernorate, onSelectDelegation, reconciliation, sliceDelta } = props
   const summary = scope.level === 'delegation' || scope.level === 'cell' ? delegationSummary : scope.level === 'governorate' ? governorateSummary : nationalSummary
-  return <section className="panel-shell cockpit-panel"><div className="panel-heading"><div><p>Overview</p><h1>{scope.level === 'national' ? 'Tunisia Network Overview' : scope.delegationName || scope.governorateName}</h1></div><StatusBadge status={summary.status} /></div><TrustToolbar onPinScope={onPinScope} onSaveView={onSaveView} onExportReport={onExportReport} onRunDemo={onRunDemo} /><WhyCriticalPanel items={whyCritical} confidence={confidence} /><SincePreviousCard delta={sliceDelta} />{scope.level === 'national' ? <NationalPanel compact summary={nationalSummary} governorates={governorateRows} metric={metric} onSelectGovernorate={onSelectGovernorate} reconciliation={reconciliation} /> : null}{scope.level === 'governorate' ? <GovernoratePanel governorate={selectedGovernorate} summary={governorateSummary} delegations={delegationRows} metric={metric} currentTime={props.currentTime} onSelectDelegation={onSelectDelegation} /> : null}{(scope.level === 'delegation' || scope.level === 'cell') ? <DelegationPanel delegation={selectedDelegation} summary={delegationSummary} sites={props.siteRows} onSelectCell={props.onSelectCell} /> : null}<SavedWorkPanel watchlist={watchlist} savedViews={savedViews} onRestoreWatch={onRestoreWatch} onRemoveWatch={onRemoveWatch} onRestoreSavedView={onRestoreSavedView} onRemoveSavedView={onRemoveSavedView} /></section>
+  return <section className="panel-shell cockpit-panel"><div className="panel-heading"><div><p>Vue reseau</p><h1>{scope.level === 'national' ? 'Reseau mobile Tunisie' : scope.delegationName || scope.governorateName}</h1></div><StatusBadge status={summary.status} /></div><SincePreviousCard delta={sliceDelta} compact />{scope.level === 'national' ? <NationalPanel compact summary={nationalSummary} governorates={governorateRows} delegationVariations={delegationVariationRows} metric={metric} onSelectGovernorate={onSelectGovernorate} reconciliation={reconciliation} /> : null}{scope.level === 'governorate' ? <GovernoratePanel governorate={selectedGovernorate} summary={governorateSummary} delegations={delegationRows} metric={metric} currentTime={props.currentTime} onSelectDelegation={onSelectDelegation} /> : null}{(scope.level === 'delegation' || scope.level === 'cell') ? <DelegationPanel delegation={selectedDelegation} summary={delegationSummary} sites={props.siteRows} onSelectCell={props.onSelectCell} /> : null}</section>
 }
 
 const BUSY_METRICS = [
-  { id: 'congestion_rate', label: 'Congestion Pressure' },
+  { id: 'congestion_rate', label: 'Indice de congestion' },
   { id: 'prb', label: 'PRB' },
-  { id: 'active_users', label: 'Active Users' },
-  { id: 'throughput_drop', label: 'Throughput Drop' },
-  { id: 'cqi_drop', label: 'CQI Drop' },
+  { id: 'active_users', label: 'Utilisateurs actifs' },
+  { id: 'throughput_drop', label: 'Baisse debit' },
+  { id: 'cqi_drop', label: 'Baisse CQI' },
 ]
 
-function PeakHoursPanel({ scope, currentTime, summary, peakRows, peakPayload, busyMetric, onBusyMetricChange, onPeakRowSelect, whyCritical, confidence, sliceDelta, onPinScope, onSaveView, onExportReport }) {
+function PeakHoursPanel({ scope, currentTime, summary, peakRows, peakPayload, busyMetric, onBusyMetricChange, onPeakRowSelect, sliceDelta }) {
   const recurrence = computeRecurrenceMetrics(peakRows)
   const peakSummary = peakPayload?.summary || {}
   return <section className="panel-shell cockpit-panel">
     <div className="panel-heading">
       <div>
-        <p>Peak Hours</p>
-        <h1>{scope.delegationName || scope.governorateName || 'When does it happen?'}</h1>
+        <p>Heures critiques</p>
+        <h1>{scope.delegationName || scope.governorateName || 'Quand le reseau sature'}</h1>
       </div>
-      <span className="time-chip">{currentTime?.timestamp || 'No time slice'}</span>
+      <span className="time-chip">{currentTime?.timestamp || 'Aucune tranche'}</span>
     </div>
-    <div className="metric-selector"><label htmlFor="busy-metric">Busy metric</label><select id="busy-metric" value={busyMetric} onChange={(event) => onBusyMetricChange(event.target.value)}>{BUSY_METRICS.map((metric) => <option key={metric.id} value={metric.id}>{metric.label}</option>)}</select></div>
-    <TrustToolbar onPinScope={onPinScope} onSaveView={onSaveView} onExportReport={onExportReport} />
-    <WhyCriticalPanel items={whyCritical} confidence={confidence} />
-    <SincePreviousCard delta={sliceDelta} />
-    
+    <div className="metric-selector"><label htmlFor="busy-metric">Mesure analysee</label><select id="busy-metric" value={busyMetric} onChange={(event) => onBusyMetricChange(event.target.value)}>{BUSY_METRICS.map((metric) => <option key={metric.id} value={metric.id}>{metric.label}</option>)}</select></div>
+    <SincePreviousCard delta={sliceDelta} compact />
     <div className="kpi-grid compact">
-      <KpiCard label="Peak hour" value={peakSummary.peak_hour || 'N/A'} />
-      <KpiCard label="Peak window" value={peakSummary.peak_window || 'N/A'} />
-      <KpiCard label="Peak PRB" value={peakSummary.avg_prb_at_peak ? `${peakSummary.avg_prb_at_peak.toFixed(0)}%` : 'N/A'} />
-      <KpiCard label="Peak congestion" value={peakSummary.peak_congestion_rate || 0} unit="%" />
-      <KpiCard label="Peak users" value={peakSummary.active_users_at_peak || 0} />
-      <KpiCard label="Affected cells" value={peakSummary.affected_cells_at_peak || summary.congested_cells} />
+      <KpiCard label="Heure pic" value={peakSummary.peak_hour || '-'} />
+      <KpiCard label="Fenetre critique" value={peakSummary.peak_window || '-'} />
+      <KpiCard label="PRB au pic" value={peakSummary.avg_prb_at_peak ? `${peakSummary.avg_prb_at_peak.toFixed(0)}%` : '-'} />
+      <KpiCard label="Congestion pic" value={peakSummary.peak_congestion_rate || 0} unit="%" />
+      <KpiCard label="Utilisateurs pic" value={peakSummary.active_users_at_peak || 0} />
+      <KpiCard label="Cellules touchees" value={peakSummary.affected_cells_at_peak || summary.congested_cells} />
       <KpiCard label="Recurrence" value={`${(recurrence.recurrence_ratio * 100).toFixed(0)}%`} />
-      <KpiCard label="Structural flag" value={recurrence.structural_flag ? 'Yes' : 'No'} />
     </div>
-
-    {peakPayload?.available === false ? <div className="empty-state" role="note">{peakPayload.reason || 'No busy-hour samples for this scope.'}</div> : null}
+    {peakPayload?.available === false ? <div className="empty-state" role="note">{peakPayload.reason || 'Aucun echantillon critique pour ce perimetre.'}</div> : null}
     {peakRows?.length ? <BusyHourHeatmap rows={peakRows} /> : null}
     {peakRows?.length ? (
       <div className="site-table-card">
-        <div className="section-title">Peak offenders</div>
+        <div className="section-title">Zones a traiter</div>
         <table>
-          <caption className="sr-only">Peak offenders table</caption>
-          <thead><tr><th scope="col">Scope</th><th scope="col">Peak Hour</th><th scope="col">Peak Window</th><th scope="col">Peak PRB</th><th scope="col">Peak Throughput</th><th scope="col">Peak CQI</th><th scope="col">Active Users</th><th scope="col">Affected Cells</th><th scope="col">Recurrence</th><th scope="col">QoS Impact</th></tr></thead>
+          <caption className="sr-only">Zones en heure critique</caption>
+          <thead><tr><th scope="col">Perimetre</th><th scope="col">Heure pic</th><th scope="col">Fenetre</th><th scope="col">PRB</th><th scope="col">Debit</th><th scope="col">CQI</th><th scope="col">Utilisateurs</th><th scope="col">Cellules</th><th scope="col">Recurrence</th><th scope="col">Diagnostic</th></tr></thead>
           <tbody>{peakRows.slice(0, 12).map((row) => {
             const issue = classifyRanIssue({ ...row, avg_prb: row.avg_prb_at_peak, avg_throughput: row.avg_throughput_at_peak, avg_cqi: row.avg_cqi_at_peak })
-            return <tr key={`${row.group_by}:${row.id}`} onClick={() => onPeakRowSelect?.(row)}><td>{row.name}</td><td>{row.peak_hour || 'N/A'}</td><td>{row.peak_window || 'N/A'}</td><td>{formatMetric(row.avg_prb_at_peak)}%</td><td>{formatMetric(row.avg_throughput_at_peak)} Mbps</td><td>{formatMetric(row.avg_cqi_at_peak)}</td><td>{formatMetric(row.active_users_at_peak, 0)}</td><td>{row.affected_cells_at_peak || 0}</td><td>{formatMetric((row.recurrence_ratio || 0) * 100, 0)}%</td><td className={`severity-${issue.severity}`}>{issue.issue}</td></tr>
+            return <tr key={`${row.group_by}:${row.id}`} onClick={() => onPeakRowSelect?.(row)}><td>{row.name}</td><td>{row.peak_hour || '-'}</td><td>{row.peak_window || '-'}</td><td>{formatMetric(row.avg_prb_at_peak)}%</td><td>{formatMetric(row.avg_throughput_at_peak)} Mbps</td><td>{formatMetric(row.avg_cqi_at_peak)}</td><td>{formatMetric(row.active_users_at_peak, 0)}</td><td>{row.affected_cells_at_peak || 0}</td><td>{formatMetric((row.recurrence_ratio || 0) * 100, 0)}%</td><td className={`severity-${issue.severity}`}>{diagnosisLabelFr(issue)}</td></tr>
           })}</tbody>
         </table>
       </div>
@@ -76,57 +75,40 @@ function PeakHoursPanel({ scope, currentTime, summary, peakRows, peakPayload, bu
 
 function BusyHourHeatmap({ rows }) {
   const max = Math.max(1, ...rows.flatMap((row) => (row.hourly_profile || []).map((bucket) => Number(bucket.metric_value) || 0)))
-  return <div className="heatmap-card"><div className="section-title">24h pressure profile</div><div className="heatmap-grid"><div className="heatmap-hours">{Array.from({ length: 24 }, (_, hour) => <span key={hour}>{String(hour).padStart(2, '0')}</span>)}</div>{rows.slice(0, 10).map((row) => <div key={`${row.group_by}:${row.id}`} className="heatmap-row"><strong title={row.name}>{row.name}</strong><div>{(row.hourly_profile || []).map((bucket) => <span key={bucket.hour} title={`${row.name} ${bucket.label}: ${formatMetric(bucket.metric_value)}`} style={{ opacity: 0.18 + Math.min(0.82, (Number(bucket.metric_value) || 0) / max) }} />)}</div></div>)}</div></div>
+  return <div className="heatmap-card"><div className="section-title">Profil 24h</div><div className="heatmap-grid"><div className="heatmap-hours">{Array.from({ length: 24 }, (_, hour) => <span key={hour}>{String(hour).padStart(2, '0')}</span>)}</div>{rows.slice(0, 8).map((row) => <div key={`${row.group_by}:${row.id}`} className="heatmap-row"><strong title={row.name}>{row.name}</strong><div>{(row.hourly_profile || []).map((bucket) => <span key={bucket.hour} title={`${row.name} ${bucket.label}: ${formatMetric(bucket.metric_value)}`} style={{ opacity: 0.18 + Math.min(0.82, (Number(bucket.metric_value) || 0) / max) }} />)}</div></div>)}</div></div>
 }
 
-function QosPanel({ scope, summary, selectedCell, siteRows, scopedCells, filters, onFilterChange, bands, onSelectCell, peakRows, whyCritical, confidence, sliceDelta, onPinScope, onSaveView, onExportReport }) {
+function QosPanel({ scope, summary, selectedCell, siteRows, scopedCells, filters, onFilterChange, bands, onSelectCell, peakRows, sliceDelta, workerState, currentTime }) {
   const issue = classifyRanIssue({ ...summary, recurrence_ratio: computeRecurrenceMetrics(peakRows).recurrence_ratio })
   const compliance = computeCompliance(scopedCells)
   if (scope.level === 'national') {
-    return <ScopeQosPanel title="National QoS summary" summary={summary} issue={issue} compliance={compliance} note="Select a governorate, then a delegation, to inspect radio assets." whyCritical={whyCritical} confidence={confidence} sliceDelta={sliceDelta} onPinScope={onPinScope} onSaveView={onSaveView} onExportReport={onExportReport} />
+    return <ScopeQosPanel title="Synthese radio nationale" summary={summary} issue={issue} compliance={compliance} note="Choisissez un gouvernorat puis une delegation pour inspecter les actifs radio." sliceDelta={sliceDelta} />
   }
   if (scope.level === 'governorate') {
-    return <ScopeQosPanel title={scope.governorateName} summary={summary} issue={issue} compliance={compliance} note="Sites and cells are intentionally hidden until a delegation is selected." whyCritical={whyCritical} confidence={confidence} sliceDelta={sliceDelta} onPinScope={onPinScope} onSaveView={onSaveView} onExportReport={onExportReport} />
+    return <ScopeQosPanel title={scope.governorateName} summary={summary} issue={issue} compliance={compliance} note="Selectionnez une delegation pour afficher les sites et les cellules." sliceDelta={sliceDelta} />
   }
   if (selectedCell) {
-    return <CellQosPanel cell={selectedCell} whyCritical={whyCritical} confidence={confidence} sliceDelta={sliceDelta} onPinScope={onPinScope} onSaveView={onSaveView} onExportReport={onExportReport} />
+    return <CellQosPanel cell={selectedCell} currentTime={currentTime} workerState={workerState} sliceDelta={sliceDelta} />
   }
-  return <section className="panel-shell cockpit-panel"><div className="panel-heading"><div><p>QoS Analysis</p><h1>{scope.delegationName || 'Delegation'}</h1></div><StatusBadge status={summary.status} /></div><TrustToolbar onPinScope={onPinScope} onSaveView={onSaveView} onExportReport={onExportReport} /><WhyCriticalPanel items={whyCritical} confidence={confidence} /><SincePreviousCard delta={sliceDelta} /><ScopeKpis summary={summary} /><RanIssueBox issue={issue} /><ComplianceCards compliance={compliance} /><FilterBox filters={filters} onFilterChange={onFilterChange} bands={bands} /><div className="site-table-card"><div className="section-title">Delegation sites <span>{siteRows.length}</span></div>{siteRows.length ? <table><caption className="sr-only">Delegation site health table</caption><thead><tr><th scope="col">State</th><th scope="col">Site</th><th scope="col">Worst cell</th><th scope="col">Cells</th><th scope="col">PRB</th><th scope="col">QoS</th></tr></thead><tbody>{siteRows.map((site) => <tr key={site.site_name} onClick={() => onSelectCell(site.worst_cell)}><td><span className="state-dot" style={{ background: site.state_color }} />{site.state_label}</td><td>{site.site_name}</td><td>{site.worst_cell}</td><td>{site.cells.length}</td><td>{formatMetric(site.avg_prb)}%</td><td>{formatMetric(site.avg_throughput)} Mbps / CQI {formatMetric(site.avg_cqi)}</td></tr>)}</tbody></table> : <div className="empty-state" role="note">No matched radio assets in this delegation.</div>}</div></section>
+  return <section className="panel-shell cockpit-panel"><div className="panel-heading"><div><p>Qualite radio</p><h1>{scope.delegationName || 'Delegation'}</h1></div><StatusBadge status={summary.status} /></div><SincePreviousCard delta={sliceDelta} compact /><ScopeKpis summary={summary} /><RanIssueBox issue={issue} /><ComplianceCards compliance={compliance} /><FilterBox filters={filters} onFilterChange={onFilterChange} bands={bands} /><div className="site-table-card"><div className="section-title">Sites de la delegation <span>{siteRows.length}</span></div>{siteRows.length ? <table><caption className="sr-only">Etat radio des sites</caption><thead><tr><th scope="col">Etat</th><th scope="col">Site</th><th scope="col">Cellule prioritaire</th><th scope="col">Cellules</th><th scope="col">PRB</th><th scope="col">Qualite</th></tr></thead><tbody>{siteRows.map((site) => <tr key={site.site_name} onClick={() => onSelectCell(site.worst_cell)}><td><span className="state-dot" style={{ background: site.state_color }} />{site.state_label}</td><td>{site.site_name}</td><td>{site.worst_cell}</td><td>{site.cells.length}</td><td>{formatMetric(site.avg_prb)}%</td><td>{formatMetric(site.avg_throughput)} Mbps / CQI {formatMetric(site.avg_cqi)}</td></tr>)}</tbody></table> : <div className="empty-state" role="note">Aucun actif radio rapproche dans cette delegation.</div>}</div></section>
 }
 
-function ScopeQosPanel({ title, summary, issue, compliance, note, whyCritical, confidence, sliceDelta, onPinScope, onSaveView, onExportReport }) {
-  return <section className="panel-shell cockpit-panel"><div className="panel-heading"><div><p>QoS Analysis</p><h1>{title}</h1></div><StatusBadge status={summary.status} /></div><TrustToolbar onPinScope={onPinScope} onSaveView={onSaveView} onExportReport={onExportReport} /><WhyCriticalPanel items={whyCritical} confidence={confidence} /><SincePreviousCard delta={sliceDelta} /><ScopeKpis summary={summary} /><RanIssueBox issue={issue} /><ComplianceCards compliance={compliance} /><div className="comparison-card"><div className="section-title">Peak vs normal</div><span>Peak load is represented by current busy-hour recurrence and congestion pressure. Normal baseline uses the active time slice until more history is available.</span></div><div className="empty-state" role="note">{note}</div></section>
+function ScopeQosPanel({ title, summary, issue, compliance, note, sliceDelta }) {
+  return <section className="panel-shell cockpit-panel"><div className="panel-heading"><div><p>Qualite radio</p><h1>{title}</h1></div><StatusBadge status={summary.status} /></div><SincePreviousCard delta={sliceDelta} compact /><ScopeKpis summary={summary} /><RanIssueBox issue={issue} /><ComplianceCards compliance={compliance} /><div className="empty-state" role="note">{note}</div></section>
 }
 
 function RanIssueBox({ issue }) {
-  return <div className="diagnosis-box"><strong>Likely RAN cause:</strong> {issue.issue} <span className={`severity-${issue.severity}`}>({issue.severity}, {formatMetric(issue.confidence * 100, 0)}% confidence)</span><div className="diagnosis-evidence">{issue.evidence?.length ? issue.evidence.join(' - ') : 'Evidence is limited for this scope.'}</div></div>
+  return <div className="diagnosis-box"><strong>Diagnostic radio :</strong> {diagnosisLabelFr(issue)}<div className="diagnosis-evidence">{issue.evidence?.length ? issue.evidence.join(' - ') : 'Preuves limitees sur ce perimetre.'}</div></div>
 }
 
 function ComplianceCards({ compliance }) {
-  return <div className="kpi-grid compact"><KpiCard label="Below throughput target" value={compliance.lowThroughputPct} unit="%" /><KpiCard label="Above PRB target" value={compliance.highPrbPct} unit="%" /><KpiCard label="Below CQI target" value={compliance.lowCqiPct} unit="%" /><KpiCard label="Recurrently congested" value={compliance.recurrentPct} unit="%" /><KpiCard label="Affected delegations" value={compliance.affectedDelegationPct} unit="%" /><KpiCard label="QoS score" value={compliance.qosScore} /></div>
+  return <div className="kpi-grid compact"><KpiCard label="Debit faible" value={compliance.lowThroughputPct} unit="%" /><KpiCard label="PRB eleve" value={compliance.highPrbPct} unit="%" /><KpiCard label="CQI faible" value={compliance.lowCqiPct} unit="%" /><KpiCard label="Congestion recurrente" value={compliance.recurrentPct} unit="%" /><KpiCard label="Delegations touchees" value={compliance.affectedDelegationPct} unit="%" /><KpiCard label="Score qualite" value={compliance.qosScore} /></div>
 }
 
-function TrustToolbar({ onPinScope, onSaveView, onExportReport, onRunDemo }) {
-  return <div className="trust-toolbar"><button className="ghost-button" onClick={onPinScope}>Pin scope</button><button className="ghost-button" onClick={onSaveView}>Save view</button><button className="primary-cta" onClick={onExportReport}>Export report</button>{onRunDemo ? <button className="ghost-button" onClick={onRunDemo}>Guided demo</button> : null}</div>
-}
-
-function WhyCriticalPanel({ items = [], confidence }) {
-  return <div className="trust-card"><div className="section-title">Why critical <span className={`confidence-pill ${confidence?.label?.toLowerCase()}`}>Confidence: {confidence?.label || 'N/A'} ({formatMetric(confidence?.score || 0, 0)}%)</span></div><ul>{items.map((item) => <li key={item}>{item}</li>)}</ul><ConfidencePanel confidence={confidence} compact /></div>
-}
-
-function ConfidencePanel({ confidence, compact = false }) {
-  if (!confidence) return null
-  return <div className={compact ? 'confidence-reasons compact' : 'confidence-reasons'}>{confidence.reasons?.slice(0, compact ? 3 : 8).map((reason) => <span key={reason}>{reason}</span>)}</div>
-}
-
-function SincePreviousCard({ delta }) {
-  if (!delta?.available) return <div className="comparison-card"><div className="section-title">Since previous slice</div><span>{delta?.reason || 'No previous slice comparison available.'}</span></div>
-  return <div className="comparison-card"><div className="section-title">Since previous slice</div><div className="delta-grid"><span>New congested <strong>{delta.newCongested}</strong></span><span>Recovered <strong>{delta.recovered}</strong></span><span>Worsened <strong>{delta.worsened}</strong></span><span>Improved <strong>{delta.improved}</strong></span><span>PRB jump <strong>{delta.biggestPrbIncrease?.cell || 'N/A'} {delta.biggestPrbIncrease ? `+${formatMetric(delta.biggestPrbIncrease.value)}%` : ''}</strong></span><span>Throughput drop <strong>{delta.biggestThroughputDrop?.cell || 'N/A'} {delta.biggestThroughputDrop ? `-${formatMetric(delta.biggestThroughputDrop.value)} Mbps` : ''}</strong></span><span>CQI drop <strong>{delta.biggestCqiDrop?.cell || 'N/A'} {delta.biggestCqiDrop ? `-${formatMetric(delta.biggestCqiDrop.value)}` : ''}</strong></span></div></div>
-}
-
-function SavedWorkPanel({ watchlist = [], savedViews = [], onRestoreWatch, onRemoveWatch, onRestoreSavedView, onRemoveSavedView }) {
-  if (!watchlist.length && !savedViews.length) return null
-  return <div className="saved-work"><div className="section-title">Saved work</div>{watchlist.length ? <div><strong>Watchlist</strong>{watchlist.map((item) => <div className="saved-row" key={item.id}><button className="link-button" onClick={() => onRestoreWatch?.(item)}>{item.label}</button><button className="ghost-button inline" onClick={() => onRemoveWatch?.(item.id)}>Remove</button></div>)}</div> : null}{savedViews.length ? <div><strong>Saved views</strong>{savedViews.map((view) => <div className="saved-row" key={view.id}><button className="link-button" onClick={() => onRestoreSavedView?.(view)}>{view.name}</button><button className="ghost-button inline" onClick={() => onRemoveSavedView?.(view.id)}>Remove</button></div>)}</div> : null}</div>
+function SincePreviousCard({ delta, compact = false }) {
+  if (!delta?.available) return null
+  if (compact && !delta.newCongested && !delta.recovered && !delta.worsened && !delta.improved) return null
+  return <div className="comparison-card"><div className="section-title">Evolution tranche precedente</div><div className="delta-grid"><span>Nouvelles congestions <strong>{delta.newCongested}</strong></span><span>Recuperees <strong>{delta.recovered}</strong></span><span>Aggravees <strong>{delta.worsened}</strong></span><span>Ameliorees <strong>{delta.improved}</strong></span></div></div>
 }
 
 function computeCompliance(cells = []) {
@@ -142,71 +124,66 @@ function computeCompliance(cells = []) {
 }
 
 function ScopeKpis({ summary }) {
-  return <div className="kpi-grid compact"><KpiCard label="Cells" value={summary.observed_cells} /><KpiCard label="Avg PRB" value={summary.avg_prb} unit="%" /><KpiCard label="Throughput" value={summary.avg_throughput} unit="Mbps" /><KpiCard label="CQI" value={summary.avg_cqi} /><KpiCard label="Users" value={summary.active_users} /><KpiCard label="Congestion" value={summary.congestion_rate} unit="%" /></div>
+  return <div className="kpi-grid compact"><KpiCard label="Cellules" value={summary.observed_cells} /><KpiCard label="PRB moyen" value={summary.avg_prb} unit="%" /><KpiCard label="Debit" value={summary.avg_throughput} unit="Mbps" /><KpiCard label="CQI" value={summary.avg_cqi} /><KpiCard label="Utilisateurs" value={summary.active_users} /><KpiCard label="Congestion" value={summary.congestion_rate} unit="%" /></div>
 }
 
-function CellQosPanel({ cell, whyCritical, confidence, sliceDelta, onPinScope, onSaveView, onExportReport }) {
+function CellQosPanel({ cell, currentTime, workerState, sliceDelta }) {
   const state = getCellState(cell)
   const issue = classifyRanIssue(cell)
-  
   return <section className="panel-shell cockpit-panel">
     <div className="panel-heading">
       <div>
-        <p>QoS Analysis</p>
+        <p>Qualite radio</p>
         <h1>{cell.cell_name}</h1>
       </div>
       <StatusBadge status={state === 'critical' ? 'critical' : state === 'watch' ? 'watch' : 'stable'} />
     </div>
-    <TrustToolbar onPinScope={onPinScope} onSaveView={onSaveView} onExportReport={onExportReport} />
-    <WhyCriticalPanel items={whyCritical} confidence={confidence} />
-    <SincePreviousCard delta={sliceDelta} />
-    
+    <SincePreviousCard delta={sliceDelta} compact />
     <div className="kpi-grid compact">
-      <KpiCard label="PRB load" value={cell.prb_load} unit="%" />
-      <KpiCard label="Throughput" value={cell.throughput} unit="Mbps" />
+      <KpiCard label="Charge PRB" value={cell.prb_load} unit="%" />
+      <KpiCard label="Debit" value={cell.throughput} unit="Mbps" />
       <KpiCard label="CQI" value={cell.cqi} />
-      <KpiCard label="Active users" value={cell.active_users} />
+      <KpiCard label="Utilisateurs actifs" value={cell.active_users} />
       <KpiCard label="TA" value={cell.ta} />
-      <KpiCard label="Health" value={cell.health} />
+      <KpiCard label="Sante" value={cell.health} />
     </div>
-    
     <div className="diagnosis-box">
-      <strong>RAN Classification:</strong> {issue.issue} (Severity: {issue.severity}, Confidence: {(issue.confidence * 100).toFixed(0)}%)
+      <strong>Diagnostic radio :</strong> {diagnosisLabelFr(issue)}
       <div className="diagnosis-evidence">{issue.evidence.join(' - ')}</div>
-      <strong>Multi-KPI Diagnosis:</strong> {diagnoseCell(cell)}
+      <strong>Lecture KPI :</strong> {diagnoseCell(cell)}
     </div>
-    
+    <div className="next-action-card">
+      <strong>Action cellule prete</strong>
+      <p>Ouvrez Action cellule pour simuler une correction sur {cell.cell_name} a {currentTime?.timestamp || 'la tranche courante'}.</p>
+      <span className={workerState === 'ready' ? 'severity-low' : 'severity-medium'}>{workerState === 'ready' ? 'Simulation disponible' : 'Simulation indisponible'}</span>
+    </div>
     <div className="site-table-card">
       <div className="section-title">Cell context</div>
       <table>
         <caption className="sr-only">Selected cell details</caption>
         <tbody>
-          <tr>
-            <th scope="row">Site</th>
-            <td>{cell.site_name || 'Unknown site'}</td>
-          </tr>
-          <tr>
-            <th scope="row">Delegation</th>
-            <td>{cell.admin?.deleg_name || 'Unmatched'}</td>
-          </tr>
-          <tr>
-            <th scope="row">Governorate</th>
-            <td>{cell.admin?.gov_name || 'Unmatched'}</td>
-          </tr>
-          <tr>
-            <th scope="row">State</th>
-            <td>{stateLabel(state)}</td>
-          </tr>
+          <tr><th scope="row">Site</th><td>{cell.site_name || 'Site inconnu'}</td></tr>
+          <tr><th scope="row">Delegation</th><td>{cell.admin?.deleg_name || 'Non rapprochee'}</td></tr>
+          <tr><th scope="row">Gouvernorat</th><td>{cell.admin?.gov_name || 'Non rapproche'}</td></tr>
+          <tr><th scope="row">Etat</th><td>{stateLabel(state)}</td></tr>
         </tbody>
       </table>
     </div>
   </section>
 }
 
-function DataPanel({ data, reconciliation, driftStatus, driftAlerts, driftUi, onExpandDrift, importState, onImportFile, onImportTypeChange, onRestoreRuntime, onExportJson, onExportReport, dataMode, onDataModeChange, dataQuality, confidence }) {
+function OperationsPanel({ selectedCell, currentTime, workerState, backendHealth, onSelectCell, alerts }) {
+  const queueReady = workerState === 'ready'
+  if (!selectedCell) {
+    return <section className="panel-shell cockpit-panel"><div className="panel-heading"><div><p>Action cellule</p><h1>Selectionner une cellule</h1></div><StatusBadge status="watch" /></div><div className="empty-state" role="note">Recherchez une cellule ou cliquez un site dans Qualite radio pour ouvrir les recommandations et les simulations.</div>{alerts?.length ? <div className="site-table-card"><div className="section-title">Cellules prioritaires</div><table><caption className="sr-only">Cellules a traiter</caption><tbody>{alerts.slice(0, 8).map((cell) => <tr key={cell.cell_name} onClick={() => onSelectCell?.(cell.cell_name)}><td>{cell.cell_name}</td><td>{stateLabel(getCellState(cell))}</td><td>{formatMetric(cell.prb_load)}%</td></tr>)}</tbody></table></div> : null}</section>
+  }
+  return <CellOperationalPanel cell={selectedCell} currentTime={currentTime} queueReady={queueReady} queueDetail={queueReady ? 'Simulation disponible' : 'Service de simulation indisponible'} backendHealth={backendHealth} />
+}
+
+function DataPanel({ data, reconciliation, driftStatus, driftAlerts, driftUi, onExpandDrift, importState, onImportFile, onImportTypeChange, onRestoreRuntime, onExportJson, onExportReport, dataMode, onDataModeChange, dataQuality, currentTime }) {
   const warnings = reconciliation?.warnings || []
   const showDriftCollapsedNotice = driftStatus?.available === false && driftUi?.collapsed
-  return <section className="panel-shell cockpit-panel" aria-busy={importState.status === 'parsing'}><div className="panel-heading"><div><p>Data Quality</p><h1>Runtime and admin data</h1></div><span className={`confidence-pill ${confidence?.label?.toLowerCase()}`}>Confidence {confidence?.label || 'N/A'}</span></div><div className="kpi-grid"><KpiCard label="Runtime cells" value={dataQuality?.baselineCount ?? Object.keys(data?.baseline || {}).length} /><KpiCard label="Matched cells" value={dataQuality?.matched ?? reconciliation?.cell_spatial_join?.matched_cells ?? 'N/A'} /><KpiCard label="Unmatched cells" value={dataQuality?.unmatched ?? 'N/A'} /><KpiCard label="Low spatial confidence" value={dataQuality?.lowSpatial ?? 'N/A'} /><KpiCard label="Missing KPI ratio" value={formatMetric((dataQuality?.missingKpiRatio || 0) * 100, 0)} unit="%" /><KpiCard label="Time slices" value={dataQuality?.timeSlices ?? 0} /><KpiCard label="No observations" value={dataQuality?.withoutObs ?? 0} /><KpiCard label="Last peak-hours" value={dataQuality?.lastPeakComputation || 'N/A'} /></div><ConfidencePanel confidence={confidence} /><div className="ingestion-card"><div className="section-title">Data ingestion</div><div className="ingestion-row"><label htmlFor="data-mode">Mode</label><select id="data-mode" value={dataMode || 'real'} onChange={(e) => onDataModeChange?.(e.target.value)}><option value="real">Real mode</option><option value="mock">Mock demo mode</option></select><label htmlFor="import-type" className="sr-only">Import type</label><select id="import-type" value={importState.importType} onChange={(e) => onImportTypeChange(e.target.value)}><option value="reference">Reference Data CSV</option><option value="kpi">KPI Hourly Data CSV</option></select><label className="file-pill">Choose CSV<input aria-label="Choose CSV file for import" type="file" accept=".csv,text/csv" onChange={(e) => onImportFile(e.target.files?.[0], importState.importType)} /></label><button data-testid="restore-runtime" className="ghost-button" onClick={onRestoreRuntime}>Restore runtime</button></div>{importState.status !== 'idle' ? <div className={`empty-state ${importState.status === 'error' ? 'warning' : ''}`} role="status">{importState.status === 'error' ? importState.error : `${importState.fileName} - ${importState.result?.imported_cells ?? importState.preview?.totalRows ?? 0} rows/cells processed`}</div> : <div className="empty-state" role="note">Import reference CSV first for geometry, then KPI CSV to update timeline/session data.</div>}{importState.result?.warnings?.map((w) => <div key={w} className="empty-state warning" role="note">{w}</div>)}</div>{showDriftCollapsedNotice ? <div className="empty-state warning" role="status">Drift artifacts are unavailable. <button className="ghost-button inline" aria-expanded="false" onClick={onExpandDrift}>Show details</button></div> : <div className="diagnosis-box"><strong>Drift:</strong> {driftStatus?.available === false ? driftStatus.reason : `${driftAlerts.length} alerts above threshold.`}</div>}{warnings.map((w) => <div key={w} className="empty-state warning" role="note">{w}</div>)}<div className="export-actions"><button data-testid="export-json" className="primary-cta" onClick={onExportJson}>Export report JSON</button><button data-testid="export-report" className="ghost-button" onClick={onExportReport}>Download report TXT</button></div></section>
+  return <section className="panel-shell cockpit-panel" aria-busy={importState.status === 'parsing'}><div className="panel-heading"><div><p>Data Quality</p><h1>Runtime and admin data</h1></div></div><div className="kpi-grid"><KpiCard label="Runtime cells" value={dataQuality?.baselineCount ?? Object.keys(data?.baseline || {}).length} /><KpiCard label="Matched cells" value={dataQuality?.matched ?? reconciliation?.cell_spatial_join?.matched_cells ?? 'N/A'} /><KpiCard label="Unmatched cells" value={dataQuality?.unmatched ?? 'N/A'} /><KpiCard label="Low spatial confidence" value={dataQuality?.lowSpatial ?? 'N/A'} /><KpiCard label="Missing KPI ratio" value={formatMetric((dataQuality?.missingKpiRatio || 0) * 100, 0)} unit="%" /><KpiCard label="Time slices" value={dataQuality?.timeSlices ?? 0} /><KpiCard label="No observations" value={dataQuality?.withoutObs ?? 0} /><KpiCard label="Last peak-hours" value={dataQuality?.lastPeakComputation || 'N/A'} /></div><div className="ingestion-card"><div className="section-title">Data ingestion</div><div className="ingestion-row"><label htmlFor="data-mode">Mode</label><select id="data-mode" value={dataMode || 'real'} onChange={(e) => onDataModeChange?.(e.target.value)}><option value="real">Real mode</option><option value="mock">Mock demo mode</option></select><label htmlFor="import-type" className="sr-only">Import type</label><select id="import-type" value={importState.importType} onChange={(e) => onImportTypeChange(e.target.value)}><option value="reference">Reference Data CSV</option><option value="kpi">KPI Hourly Data CSV</option></select><label className="file-pill">Choose CSV<input aria-label="Choose CSV file for import" type="file" accept=".csv,text/csv" onChange={(e) => onImportFile(e.target.files?.[0], importState.importType)} /></label><button data-testid="restore-runtime" className="ghost-button" onClick={onRestoreRuntime}>Restore runtime</button></div>{importState.status !== 'idle' ? <div className={`empty-state ${importState.status === 'error' ? 'warning' : ''}`} role="status">{importState.status === 'error' ? importState.error : `${importState.fileName} - ${importState.result?.imported_cells ?? importState.preview?.totalRows ?? 0} rows/cells processed`}</div> : <div className="empty-state" role="note">Import reference CSV first for geometry, then KPI CSV to update timeline/session data. Strict congestion mode activates when a Congestion Flag column is mapped.</div>}{importState.result?.warnings?.map((w) => <div key={w} className="empty-state warning" role="note">{w}</div>)}</div>{showDriftCollapsedNotice ? <div className="empty-state warning" role="status">Drift artifacts are unavailable. <button className="ghost-button inline" aria-expanded="false" onClick={onExpandDrift}>Show details</button></div> : <div className="diagnosis-box"><strong>Drift:</strong> {driftStatus?.available === false ? driftStatus.reason : `${driftAlerts.length} alerts above threshold.`}</div>}{warnings.map((w) => <div key={w} className="empty-state warning" role="note">{w}</div>)}<div className="export-actions"><button data-testid="export-json" className="primary-cta" onClick={onExportJson}>Export report JSON</button><button data-testid="export-report" className="ghost-button" onClick={onExportReport}>Download report TXT</button><button data-testid="export-recommendations-csv" className="ghost-button" onClick={() => downloadRecommendationsCsv(currentTime?.timestamp)}>Full recommendations CSV</button><button data-testid="export-congested-csv" className="ghost-button" onClick={() => downloadRecommendationsCsv(currentTime?.timestamp)}>Congested recommendations CSV</button></div></section>
 }
 
 function SystemPanel({ backendHealth, workerState, data, endpointCoverage }) {
@@ -218,5 +195,5 @@ function SystemPanel({ backendHealth, workerState, data, endpointCoverage }) {
 function Service({ name, ok, detail }) { return <div className="service-card"><span className={ok ? 'ok' : 'bad'} /> <strong>{name}</strong><em>{detail}</em></div> }
 
 function FilterBox({ filters, onFilterChange, bands }) {
-  return <div className="filter-box"><div className="section-title">Filters</div><div className="filter-pills">{['critical', 'watch', 'degraded', 'healthy', 'no_data', 'unmatched'].map((key) => <label key={key}><input type="checkbox" checked={Boolean(filters[key])} onChange={(e) => onFilterChange({ [key]: e.target.checked })} />{stateLabel(key)}</label>)}</div><div className="filter-ranges"><label>PRB min <input type="range" min="0" max="100" value={filters.minPrb} onChange={(e) => onFilterChange({ minPrb: Number(e.target.value) })} /> {filters.minPrb}%</label><label>PRB max <input type="range" min="0" max="100" value={filters.maxPrb} onChange={(e) => onFilterChange({ maxPrb: Number(e.target.value) })} /> {filters.maxPrb}%</label></div><div className="filter-pills band-pills">{bands.map((band) => <label key={band}><input type="checkbox" checked={Boolean(filters.bands?.[band])} onChange={(e) => onFilterChange({ bands: { ...filters.bands, [band]: e.target.checked } })} />Band {band}</label>)}</div></div>
+  return <div className="filter-box"><div className="section-title">Filtres</div><div className="filter-pills">{['critical', 'watch', 'degraded', 'healthy', 'no_data', 'unmatched'].map((key) => <label key={key}><input type="checkbox" checked={Boolean(filters[key])} onChange={(e) => onFilterChange({ [key]: e.target.checked })} />{stateLabel(key)}</label>)}</div><div className="filter-ranges"><label>PRB min <input type="range" min="0" max="100" value={filters.minPrb} onChange={(e) => onFilterChange({ minPrb: Number(e.target.value) })} /> {filters.minPrb}%</label><label>PRB max <input type="range" min="0" max="100" value={filters.maxPrb} onChange={(e) => onFilterChange({ maxPrb: Number(e.target.value) })} /> {filters.maxPrb}%</label></div><div className="filter-pills band-pills">{bands.map((band) => <label key={band}><input type="checkbox" checked={Boolean(filters.bands?.[band])} onChange={(e) => onFilterChange({ bands: { ...filters.bands, [band]: e.target.checked } })} />Bande {band}</label>)}</div></div>
 }

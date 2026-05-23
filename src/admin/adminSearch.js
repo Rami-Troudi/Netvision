@@ -1,23 +1,25 @@
+import { normalizeDelegationName, normalizeGovernorateName } from './adminNaming'
+
 export function buildSearchIndex(registry, cells, watchlist = [], savedViews = []) {
   const items = []
   for (const gov of registry?.governorates || []) {
-    const name = gov.display_name || gov.gov_name || gov.gov_id || 'Unknown governorate'
-    items.push({ type: 'governorate', label: `${name} — Governorate`, searchName: name, id: gov.gov_id, gov })
+    const name = normalizeGovernorateName(gov.display_name || gov.gov_name || gov.gov_id, 'Gouvernorat inconnu')
+    items.push({ type: 'governorate', label: `${name} - Gouvernorat`, searchName: name, id: gov.gov_id, gov })
   }
   for (const deleg of registry?.delegations || []) {
-    const name = deleg.display_name || deleg.deleg_name || 'Unknown delegation'
-    const gov = deleg.gov_name || deleg.gov_id || 'Unknown governorate'
-    items.push({ type: 'delegation', label: `${name} — Delegation, ${gov}`, searchName: name, id: deleg.deleg_id, deleg })
+    const name = normalizeDelegationName(deleg.display_name || deleg.deleg_name, 'Delegation inconnue')
+    const gov = normalizeGovernorateName(deleg.gov_name || deleg.gov_id, 'Gouvernorat inconnu')
+    items.push({ type: 'delegation', label: `${name} - Delegation, ${gov}`, searchName: name, id: deleg.deleg_id, deleg })
   }
   for (const cell of cells || []) {
-    if (cell.site_name) items.push({ type: 'site', label: `${cell.site_name} — Site, ${cell.admin?.deleg_name || 'Unmatched'}`, searchName: cell.site_name, id: cell.site_name, cell })
-    items.push({ type: 'cell', label: `${cell.cell_name} — Cell`, searchName: cell.cell_name, id: cell.cell_name, cell })
+    if (cell.site_name) items.push({ type: 'site', label: `${cell.site_name} - Site, ${normalizeDelegationName(cell.admin?.deleg_name, 'Non associee')}`, searchName: cell.site_name, id: cell.site_name, cell })
+    items.push({ type: 'cell', label: `${cell.cell_name} - Cellule`, searchName: cell.cell_name, id: cell.cell_name, cell })
   }
   for (const item of watchlist || []) {
-    items.push({ type: 'watch', label: `${item.label} — Watchlist ${item.type}`, searchName: item.label, id: item.id, item })
+    items.push({ type: 'watch', label: `${item.label} - Favori ${item.type}`, searchName: item.label, id: item.id, item })
   }
   for (const view of savedViews || []) {
-    items.push({ type: 'saved_view', label: `${view.name} — Saved view`, searchName: view.name, id: view.id, view })
+    items.push({ type: 'saved_view', label: `${view.name} - Vue enregistree`, searchName: view.name, id: view.id, view })
   }
   return items
 }

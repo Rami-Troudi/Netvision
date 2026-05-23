@@ -3,45 +3,96 @@ import maplibregl from 'maplibre-gl'
 import { metricColor, boundsForFeature, featureCenter } from '../../admin/adminMapLayers'
 import { metricValue } from '../../admin/adminAggregation'
 import { buildSiteSummaries, stateColor } from '../../admin/adminOps'
+import { DEFAULT_MAP_CONTROLS } from '../../utils/v2Contracts.mjs'
+import { normalizeDelegationName, normalizeGovernorateName } from '../../admin/adminNaming'
+import { stateLabelFr } from '../../utils/uiPolicy.mjs'
 
 function decorateFeatures(fc, rows, idKey, metricMode) {
   const byId = new Map(rows.map((row) => [row.id, row]))
-  return { ...fc, features: (fc?.features || []).map((feature) => {
-    const id = feature.properties?.[idKey]
-    const row = byId.get(id)
-    const value = metricValue(row, metricMode)
-    const props = feature.properties || {}
-    const isDelegation = idKey === 'deleg_id'
-    const fallbackName = isDelegation ? 'Unknown delegation' : 'Unknown governorate'
-    const sourceName = props.display_name || props.deleg_name || props.gov_name || row?.name || row?.deleg_name || row?.gov_name || ''
-    const displayName = String(sourceName || fallbackName).trim() || fallbackName
-    const displayLabel = props.display_label || (isDelegation ? `${displayName} — Delegation, ${props.gov_name || row?.gov_name || 'Unknown governorate'}` : `${displayName} — Governorate`)
-    return { ...feature, properties: { ...props, display_name: displayName, display_label: displayLabel, needs_registry_review: !sourceName, metric_value: value, fill_color: metricColor(value, metricMode), observed_cells: row?.observed_cells || 0, congestion_rate: row?.congestion_rate || 0, avg_prb: row?.avg_prb || 0, avg_throughput: row?.avg_throughput || 0, status: row?.status || 'stable' } }
-  }) }
+  return {
+    ...fc,
+    features: (fc?.features || []).map((feature) => {
+      const id = feature.properties?.[idKey]
+      const row = byId.get(id)
+      const value = metricValue(row, metricMode)
+      const props = feature.properties || {}
+      const isDelegation = idKey === 'deleg_id'
+      const fallbackName = isDelegation ? 'Delegation inconnue' : 'Gouvernorat inconnu'
+      const sourceName = props.display_name || props.deleg_name || props.gov_name || row?.name || row?.deleg_name || row?.gov_name || ''
+      const displayName = isDelegation ? normalizeDelegationName(sourceName, fallbackName) : normalizeGovernorateName(sourceName, fallbackName)
+      const govName = normalizeGovernorateName(props.gov_name || row?.gov_name || 'Gouvernorat inconnu')
+      const displayLabel = props.display_label || (isDelegation ? `${displayName} - Delegation, ${govName}` : `${displayName} - Gouvernorat`)
+      return {
+        ...feature,
+        properties: {
+          ...props,
+          display_name: displayName,
+          display_label: displayLabel,
+          needs_registry_review: !sourceName,
+          metric_value: value,
+          fill_color: metricColor(value, metricMode),
+          observed_cells: row?.observed_cells || 0,
+          congestion_rate: row?.congestion_rate || 0,
+          avg_prb: row?.avg_prb || 0,
+          avg_throughput: row?.avg_throughput || 0,
+          status: row?.status || 'stable',
+        },
+      }
+    }),
+  }
 }
 
 function siteFeatureCollection(sites = []) {
-  return { type: 'FeatureCollection', features: sites.filter((site) => Number.isFinite(site.longitude) && Number.isFinite(site.latitude)).map((site) => ({
-    type: 'Feature',
-    properties: {
-      site_name: site.site_name,
-      worst_cell: site.worst_cell,
-      state: site.state,
-      state_label: site.state_label,
-      state_color: site.state_color,
-      avg_prb: site.avg_prb,
-      avg_throughput: site.avg_throughput,
-      avg_cqi: site.avg_cqi,
-      active_users: site.active_users,
-      cell_count: site.cells.length,
-      gov_id: site.admin?.gov_id || '',
-      deleg_id: site.admin?.deleg_id || '',
-    },
-    geometry: { type: 'Point', coordinates: [site.longitude, site.latitude] },
-  })) }
+  return {
+    type: 'FeatureCollection',
+    features: sites
+      .filter((site) => Number.isFinite(site.longitude) && Number.isFinite(site.latitude))
+      .map((site) => ({
+        type: 'Feature',
+        properties: {
+          site_name: site.site_name,
+          worst_cell: site.worst_cell,
+          state: site.state,
+          state_label: site.state_label,
+          state_color: site.state_color,
+          avg_prb: site.avg_prb,
+          avg_throughput: site.avg_throughput,
+          avg_cqi: site.avg_cqi,
+          active_users: site.active_users,
+          cell_count: site.cells.length,
+          gov_id: site.admin?.gov_id || '',
+          deleg_id: site.admin?.deleg_id || '',
+        },
+        geometry: { type: 'Point', coordinates: [site.longitude, site.latitude] },
+      })),
+  }
 }
 
-export default function TunisiaMap({ governoratesGeo, delegationsGeo, governorateRows, delegationRows, cells, filteredCells, scope, metricMode, metric, layerVisibility, onGovernorateClick, onDelegationClick, onCellClick }) {
+function hasSource(map, id) {
+  return Boolean(map?.getSource(id))
+}
+
+function hasLayer(map, id) {
+  return Boolean(map?.getLayer(id))
+}
+
+function safeSetData(map, id, data) {
+  if (hasSource(map, id)) map.getSource(id).setData(data)
+}
+
+function safeSetFilter(map, id, filter) {
+  if (hasLayer(map, id)) map.setFilter(id, filter)
+}
+
+function safeSetPaint(map, id, prop, value) {
+  if (hasLayer(map, id)) map.setPaintProperty(id, prop, value)
+}
+
+function safeSetLayout(map, id, prop, value) {
+  if (hasLayer(map, id)) map.setLayoutProperty(id, prop, value)
+}
+
+export default function TunisiaMap({ governoratesGeo, delegationsGeo, governorateRows, delegationRows, filteredCells, scope, metricMode, metric, mapControls = DEFAULT_MAP_CONTROLS, onGovernorateClick, onDelegationClick, onCellClick }) {
   const mapNode = useRef(null)
   const mapRef = useRef(null)
   const transitionRef = useRef([])
@@ -50,6 +101,7 @@ export default function TunisiaMap({ governoratesGeo, delegationsGeo, governorat
   const lastCameraRef = useRef('')
   const [hover, setHover] = useState(null)
   const [mapError, setMapError] = useState(null)
+  const [mapReady, setMapReady] = useState(false)
 
   const govSource = useMemo(() => decorateFeatures(governoratesGeo, governorateRows, 'gov_id', metricMode), [governoratesGeo, governorateRows, metricMode])
   const delSource = useMemo(() => decorateFeatures(delegationsGeo, delegationRows, 'deleg_id', metricMode), [delegationsGeo, delegationRows, metricMode])
@@ -80,42 +132,51 @@ export default function TunisiaMap({ governoratesGeo, delegationsGeo, governorat
         attributionControl: false,
       })
     } catch (error) {
-      setMapError(error?.message || 'MapLibre could not initialize WebGL.')
+      setMapError(error?.message || 'MapLibre ne peut pas initialiser WebGL.')
       return undefined
     }
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-left')
     mapRef.current = map
     window.__netvisionMap = map
     map.on('load', () => {
+      setMapReady(true)
       map.addSource('admin-governorates', { type: 'geojson', data: sourceRef.current.govSource })
       map.addSource('admin-delegations', { type: 'geojson', data: sourceRef.current.delSource })
       map.addSource('radio-sites', { type: 'geojson', data: sourceRef.current.siteSource })
-      map.addLayer({ id: 'admin-governorates-fill', type: 'fill', source: 'admin-governorates', paint: { 'fill-color': ['get', 'fill_color'], 'fill-opacity': 0.94 } })
+      map.addLayer({ id: 'admin-governorates-fill', type: 'fill', source: 'admin-governorates', paint: { 'fill-color': ['get', 'fill_color'], 'fill-opacity': 0.94, 'fill-color-transition': { duration: 520, delay: 0 }, 'fill-opacity-transition': { duration: 420, delay: 0 } } })
       map.addLayer({ id: 'admin-governorates-line', type: 'line', source: 'admin-governorates', paint: { 'line-color': '#b99b77', 'line-width': 1.25 } })
       map.addLayer({ id: 'admin-governorates-selected', type: 'line', source: 'admin-governorates', filter: ['==', ['get', 'gov_id'], ''], paint: { 'line-color': '#ff7900', 'line-width': 4 } })
-      map.addLayer({ id: 'admin-delegations-fill', type: 'fill', source: 'admin-delegations', paint: { 'fill-color': ['get', 'fill_color'], 'fill-opacity': 0.0 } })
+      map.addLayer({ id: 'admin-delegations-fill', type: 'fill', source: 'admin-delegations', paint: { 'fill-color': ['get', 'fill_color'], 'fill-opacity': 0.0, 'fill-color-transition': { duration: 520, delay: 0 }, 'fill-opacity-transition': { duration: 420, delay: 0 } } })
       map.addLayer({ id: 'admin-delegations-line', type: 'line', source: 'admin-delegations', paint: { 'line-color': '#cc6c18', 'line-width': 1.0, 'line-opacity': 0.0 } })
       map.addLayer({ id: 'admin-delegations-selected', type: 'line', source: 'admin-delegations', filter: ['==', ['get', 'deleg_id'], ''], paint: { 'line-color': '#b13f00', 'line-width': 3, 'line-opacity': 0.0 } })
-      map.addLayer({ id: 'radio-sites', type: 'circle', source: 'radio-sites', paint: { 'circle-radius': ['interpolate', ['linear'], ['get', 'active_users'], 0, 7, 20, 14], 'circle-color': ['get', 'state_color'], 'circle-stroke-color': '#ffffff', 'circle-stroke-width': 2.5, 'circle-opacity': 0.0 } })
+      map.addLayer({ id: 'radio-sites', type: 'circle', source: 'radio-sites', paint: { 'circle-radius': ['interpolate', ['linear'], ['get', 'active_users'], 0, 7, 20, 14], 'circle-color': ['get', 'state_color'], 'circle-stroke-color': '#ffffff', 'circle-stroke-width': 2.5, 'circle-opacity': 0.0, 'circle-color-transition': { duration: 520, delay: 0 }, 'circle-radius-transition': { duration: 520, delay: 0 }, 'circle-opacity-transition': { duration: 420, delay: 0 } } })
+      map.addLayer({ id: 'radio-sites-heatmap', type: 'heatmap', source: 'radio-sites', paint: { 'heatmap-weight': ['interpolate', ['linear'], ['get', 'avg_prb'], 0, 0, 100, 1], 'heatmap-intensity': 0.85, 'heatmap-radius': 34, 'heatmap-opacity': 0.0, 'heatmap-color': ['interpolate', ['linear'], ['heatmap-density'], 0, 'rgba(255,255,255,0)', 0.35, '#ffd08a', 0.7, '#ff7900', 1, '#b13f00'] } })
+      map.addLayer({ id: 'radio-site-labels', type: 'symbol', source: 'radio-sites', layout: { 'text-field': ['get', 'site_name'], 'text-size': 11, 'text-offset': [0, 1.25], 'text-anchor': 'top', 'visibility': 'none' }, paint: { 'text-color': '#18222c', 'text-halo-color': '#ffffff', 'text-halo-width': 1.25 } })
       map.addLayer({ id: 'selected-cell', type: 'circle', source: 'radio-sites', filter: ['==', ['get', 'worst_cell'], ''], paint: { 'circle-radius': 17, 'circle-color': '#ff7900', 'circle-stroke-color': '#ffffff', 'circle-stroke-width': 4, 'circle-opacity': 0.95 } })
       map.on('click', 'admin-governorates-fill', (e) => e.features?.[0] && clickHandlersRef.current.onGovernorateClick(e.features[0].properties))
       map.on('click', 'admin-delegations-fill', (e) => e.features?.[0] && clickHandlersRef.current.onDelegationClick(e.features[0].properties))
       map.on('click', 'radio-sites', (e) => e.features?.[0] && clickHandlersRef.current.onCellClick(e.features[0].properties.worst_cell))
       ;['admin-governorates-fill', 'admin-delegations-fill', 'radio-sites'].forEach((layer) => {
-        map.on('mouseenter', layer, (e) => { map.getCanvas().style.cursor = 'pointer'; setHover({ layer, props: e.features?.[0]?.properties || {} }) })
+        map.on('mouseenter', layer, () => { map.getCanvas().style.cursor = 'pointer' })
+        map.on('mousemove', layer, (e) => setHover({ layer, props: e.features?.[0]?.properties || {} }))
         map.on('mouseleave', layer, () => { map.getCanvas().style.cursor = ''; setHover(null) })
       })
     })
-    return () => { transitionRef.current.forEach(clearTimeout); map.remove(); mapRef.current = null }
+    return () => {
+      transitionRef.current.forEach(clearTimeout)
+      setMapReady(false)
+      map.remove()
+      mapRef.current = null
+    }
   }, [])
 
   useEffect(() => {
     const map = mapRef.current
-    if (!map?.isStyleLoaded()) return
-    map.getSource('admin-governorates')?.setData(govSource)
-    map.getSource('admin-delegations')?.setData(delSource)
-    map.getSource('radio-sites')?.setData(siteSource)
-  }, [govSource, delSource, siteSource])
+    if (!mapReady || !map?.isStyleLoaded()) return
+    safeSetData(map, 'admin-governorates', govSource)
+    safeSetData(map, 'admin-delegations', delSource)
+    safeSetData(map, 'radio-sites', siteSource)
+  }, [govSource, delSource, siteSource, mapReady])
 
   useEffect(() => {
     const map = mapRef.current
@@ -123,36 +184,40 @@ export default function TunisiaMap({ governoratesGeo, delegationsGeo, governorat
     transitionRef.current.forEach(clearTimeout)
     transitionRef.current = []
     const applyScopeRendering = () => {
-      if (!map.getLayer('admin-governorates-fill')) {
+      if (!hasLayer(map, 'admin-governorates-fill')) {
         transitionRef.current.push(window.setTimeout(applyScopeRendering, 100))
         return
       }
       const govFilter = scope.level === 'national' ? null : ['==', ['get', 'gov_id'], scope.governorateId || '']
       const delFilter = scope.level === 'governorate' ? ['==', ['get', 'gov_id'], scope.governorateId || ''] : (scope.level === 'delegation' || scope.level === 'cell') ? ['==', ['get', 'deleg_id'], scope.delegationId || ''] : ['==', ['get', 'deleg_id'], '__none__']
       const showDelegations = scope.level === 'governorate' || scope.level === 'delegation' || scope.level === 'cell'
-      const showSites = (scope.level === 'delegation' || scope.level === 'cell') && layerVisibility?.sites !== false
+      const showSites = (scope.level === 'delegation' || scope.level === 'cell') && mapControls?.sites !== false
       const showSelectedCell = scope.level === 'cell' && showSites && Boolean(scope.selectedCellName)
-      map.setFilter('admin-governorates-fill', govFilter)
-      map.setFilter('admin-governorates-line', govFilter)
-      map.setFilter('admin-governorates-selected', ['==', ['get', 'gov_id'], scope.governorateId || ''])
-      map.setFilter('admin-delegations-fill', delFilter)
-      map.setFilter('admin-delegations-line', delFilter)
-      map.setFilter('admin-delegations-selected', ['==', ['get', 'deleg_id'], scope.delegationId || ''])
-      map.setFilter('selected-cell', showSelectedCell ? ['==', ['get', 'worst_cell'], scope.selectedCellName] : ['==', ['get', 'worst_cell'], '__none__'])
-      map.setPaintProperty('admin-delegations-fill', 'fill-opacity', showDelegations && layerVisibility?.delegations !== false ? 0.62 : 0)
-      map.setPaintProperty('admin-delegations-line', 'line-opacity', showDelegations && layerVisibility?.delegations !== false ? 0.78 : 0)
-      map.setPaintProperty('admin-delegations-selected', 'line-opacity', showDelegations && layerVisibility?.delegations !== false ? 1 : 0)
-      map.setPaintProperty('radio-sites', 'circle-opacity', showSites ? 0.95 : 0)
-      map.setPaintProperty('selected-cell', 'circle-opacity', showSelectedCell ? 0.95 : 0)
-      map.setLayoutProperty('radio-sites', 'visibility', showSites ? 'visible' : 'none')
-      map.setLayoutProperty('selected-cell', 'visibility', showSelectedCell ? 'visible' : 'none')
+      const showHeatmap = showSites && Boolean(mapControls?.heatmap)
+      safeSetFilter(map, 'admin-governorates-fill', govFilter)
+      safeSetFilter(map, 'admin-governorates-line', govFilter)
+      safeSetFilter(map, 'admin-governorates-selected', ['==', ['get', 'gov_id'], scope.governorateId || ''])
+      safeSetFilter(map, 'admin-delegations-fill', delFilter)
+      safeSetFilter(map, 'admin-delegations-line', delFilter)
+      safeSetFilter(map, 'admin-delegations-selected', ['==', ['get', 'deleg_id'], scope.delegationId || ''])
+      safeSetFilter(map, 'selected-cell', showSelectedCell ? ['==', ['get', 'worst_cell'], scope.selectedCellName] : ['==', ['get', 'worst_cell'], '__none__'])
+      safeSetPaint(map, 'admin-delegations-fill', 'fill-opacity', showDelegations && mapControls?.delegations !== false ? 0.62 : 0)
+      safeSetPaint(map, 'admin-delegations-line', 'line-opacity', showDelegations && mapControls?.delegations !== false ? 0.78 : 0)
+      safeSetPaint(map, 'admin-delegations-selected', 'line-opacity', showDelegations && mapControls?.delegations !== false ? 1 : 0)
+      safeSetPaint(map, 'radio-sites', 'circle-opacity', showSites && !showHeatmap ? 0.95 : 0.28)
+      safeSetPaint(map, 'radio-sites-heatmap', 'heatmap-opacity', showHeatmap ? 0.8 : 0)
+      safeSetPaint(map, 'selected-cell', 'circle-opacity', showSelectedCell ? 0.95 : 0)
+      safeSetLayout(map, 'radio-sites', 'visibility', showSites ? 'visible' : 'none')
+      safeSetLayout(map, 'radio-sites-heatmap', 'visibility', showHeatmap ? 'visible' : 'none')
+      safeSetLayout(map, 'radio-site-labels', 'visibility', showSites && mapControls?.labels ? 'visible' : 'none')
+      safeSetLayout(map, 'selected-cell', 'visibility', showSelectedCell ? 'visible' : 'none')
     }
     applyScopeRendering()
-  }, [scope, layerVisibility])
+  }, [scope, mapControls, mapReady])
 
   useEffect(() => {
     const map = mapRef.current
-    if (!map) return
+    if (!mapReady || !map) return
     const cameraKey = `${scope.level}:${scope.governorateId || ''}:${scope.delegationId || ''}`
     if (lastCameraRef.current === cameraKey) return
     lastCameraRef.current = cameraKey
@@ -170,24 +235,33 @@ export default function TunisiaMap({ governoratesGeo, delegationsGeo, governorat
       const feature = delegationsGeo.features.find((f) => f.properties.deleg_id === scope.delegationId)
       if (feature) map.flyTo({ center: featureCenter(feature), zoom: 9.6, duration: 900, essential: true })
     }
-  }, [scope.level, scope.governorateId, scope.delegationId, governoratesGeo, delegationsGeo])
+  }, [scope.level, scope.governorateId, scope.delegationId, governoratesGeo, delegationsGeo, mapReady])
 
-  const hoverTitle = hover?.props?.site_name || hover?.props?.display_name || hover?.props?.gov_name || hover?.props?.deleg_name || 'Unknown area'
-  const hoverType = hover?.layer === 'admin-delegations-fill' ? 'Delegation' : hover?.layer === 'admin-governorates-fill' ? 'Governorate' : 'Site'
+  const hoverTitle = hover?.props?.site_name || hover?.props?.display_name || hover?.props?.gov_name || hover?.props?.deleg_name || 'Zone inconnue'
+  const hoverType = hover?.layer === 'admin-delegations-fill' ? 'Delegation' : hover?.layer === 'admin-governorates-fill' ? 'Gouvernorat' : 'Site'
+  const legendTicks = metric?.id === 'congestion_rate'
+    ? [0, 50, 70, 85, 100]
+    : metric?.id === 'avg_prb'
+      ? [0, 20, 40, 60, 70, 80, 85, 90, 95, 100]
+      : metric?.id === 'avg_throughput'
+        ? [0, 5, 10, 15, 20, 25, 30, 35, 45, 60]
+        : metric?.id === 'avg_cqi'
+          ? [0, 3, 5, 7, 8, 9, 10, 11, 12, 15]
+          : [0, 10, 20, 30, 40, 50, 60, 70, 85, 100]
   return (
     <div className="map-card">
-      <div ref={mapNode} className="netvision-map-container" aria-label={`Map metric ${metric.label}`} />
+      <div ref={mapNode} className="netvision-map-container" aria-label={`Carte ${metric.label}`} />
       {mapError ? <div className="map-fallback">
-        <strong>Map rendering unavailable</strong>
-        <span>MapLibre could not start WebGL in this browser session. Use the regional rankings and search to navigate operational scopes.</span>
+        <strong>Rendu cartographique indisponible</strong>
+        <span>MapLibre ne peut pas demarrer WebGL dans cette session. Utilisez les classements et la recherche pour naviguer.</span>
         <code>{mapError}</code>
       </div> : null}
-      <div className="map-toolbar"><strong>{metric.label}</strong><span>{scope.level === 'delegation' || scope.level === 'cell' ? 'Delegation radio sites visible' : 'Administrative polygons only'}</span></div>
+      <div className="map-toolbar"><strong>{metric.label}</strong><span>{scope.level === 'delegation' || scope.level === 'cell' ? `${mapControls?.heatmap ? 'Chaleur radio' : 'Sites radio'}` : 'Zones administratives'}</span></div>
       <div className="site-state-legend">
-        {['critical','watch','degraded','healthy','no_data','unmatched'].map((state) => <span key={state}><i style={{ background: stateColor(state) }} />{state.replace('_', ' ')}</span>)}
+        {['healthy', 'watch', 'critical', 'degraded', 'no_data'].map((state) => <span key={state}><i style={{ background: stateColor(state) }} />{stateLabelFr(state)}</span>)}
       </div>
-      <div className="map-legend" role="note" aria-label={`${metric.label} legend low to high`}><div /><span>Low</span><span>High</span></div>
-      {hover ? <div className="hover-card"><strong>{hoverTitle}</strong>{hover.props.site_name ? <><span>{hover.props.state_label} - {hover.props.cell_count} cells</span><span>PRB {Number(hover.props.avg_prb || 0).toFixed(1)}% - Throughput {Number(hover.props.avg_throughput || 0).toFixed(1)} Mbps - CQI {Number(hover.props.avg_cqi || 0).toFixed(1)}</span><em>Click to inspect worst cell {hover.props.worst_cell}</em></> : <><span>{hoverType}{hover.props.gov_name && hoverType === 'Delegation' ? `, ${hover.props.gov_name}` : ''}</span><span>{Number(hover.props.observed_cells || 0)} scoped cells - congestion {Number(hover.props.congestion_rate || 0).toFixed(1)}%</span><span>{metric.label}: {Number(hover.props.metric_value || 0).toFixed(1)}{metric.unit}</span>{hover.props.needs_registry_review ? <span>Needs registry review - ID {hover.props.deleg_id || hover.props.gov_id || 'unknown'}</span> : null}<em>Click to focus</em></>}</div> : null}
+      <div className="map-legend numeric-map-legend" role="note" aria-label={`Indice numerique ${metric.label}`}><div /><span>Faible</span><span>Fort</span><div className="legend-ticks">{legendTicks.map((tick) => <b key={tick} style={{ color: metricColor(tick, metric.id) }}>{tick}{metric.unit || ''}</b>)}</div></div>
+      {hover ? <div className="hover-card"><strong>{hoverTitle}</strong>{hover.props.site_name ? <><span>{hover.props.state_label} - {hover.props.cell_count} cellules</span><span>PRB {Number(hover.props.avg_prb || 0).toFixed(1)}% - Debit {Number(hover.props.avg_throughput || 0).toFixed(1)} Mbps - CQI {Number(hover.props.avg_cqi || 0).toFixed(1)}</span><em>Cliquer pour inspecter la cellule {hover.props.worst_cell}</em></> : <><span>{hoverType}{hover.props.gov_name && hoverType === 'Delegation' ? `, ${hover.props.gov_name}` : ''}</span><span>{Number(hover.props.observed_cells || 0)} cellules - congestion {Number(hover.props.congestion_rate || 0).toFixed(1)}%</span><span>{metric.label}: {Number(hover.props.metric_value || 0).toFixed(1)}{metric.unit}</span>{hover.props.needs_registry_review ? <span>Revision registre requise - ID {hover.props.deleg_id || hover.props.gov_id || 'inconnu'}</span> : null}<em>Cliquer pour zoomer</em></>}</div> : null}
     </div>
   )
 }
