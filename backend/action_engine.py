@@ -568,7 +568,8 @@ def _threshold_flags(kpis: dict[str, Any]) -> dict[str, bool]:
     rrc_users = _to_float(kpis.get("rrc_users"), 0.0)
     cqi = _to_float(kpis.get("cqi"), 0.0)
 
-    prb_saturated = prb > ORANGE_THRESHOLDS["PRB_SATURATED"]
+    # Source-of-truth threshold: PRB >= 90 is saturated.
+    prb_saturated = prb >= ORANGE_THRESHOLDS["PRB_SATURATED"]
     throughput_degraded = throughput < ORANGE_THRESHOLDS["THROUGHPUT_DEGRADED"]
     active_queue_critical = active_users > ORANGE_THRESHOLDS["ACTIVE_USERS_CRITICAL"]
     rrc_queue_signal = rrc_users > ORANGE_THRESHOLDS["RRC_USERS_CRITICAL"]
@@ -1227,7 +1228,7 @@ def evaluate_cell(
             ]
         elif (
             busy_hour_flag
-            and prb_load > ORANGE_THRESHOLDS["PRB_SATURATED"]
+            and prb_load >= ORANGE_THRESHOLDS["PRB_SATURATED"]
             and not rebalancing_candidate
             and not carrier_candidate
             and tilt_candidate

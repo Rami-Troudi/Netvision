@@ -1,5 +1,6 @@
 import { getScopedCellNames } from './adminScope'
 import { normalizeOperationalCell } from '../utils/v2Contracts.mjs'
+import { inferCongestedFromKpis } from '../utils/v2Contracts.mjs'
 import { normalizeAdminNames, normalizeDelegationName, normalizeGovernorateName } from './adminNaming'
 
 export const METRIC_MODES = [
@@ -14,6 +15,13 @@ export const METRIC_MODES = [
 function num(value, fallback = 0) {
   const parsed = Number(value)
   return Number.isFinite(parsed) ? parsed : fallback
+}
+
+function isCongestedBySourceRules(cell) {
+  const prbLoad = num(cell?.prb_load)
+  const throughputKbps = num(cell?.throughput_kbps) || (num(cell?.throughput) * 1000)
+  const activeUsers = num(cell?.active_users)
+  return inferCongestedFromKpis({ prbLoad, throughputKbps, activeUsers })
 }
 
 export function normalizeObservation(base = {}, obs = {}) {
@@ -44,7 +52,7 @@ function weightedAverage(cells, key, weightKey = 'active_users') {
 
 export function aggregateCells(cells = [], label = 'Scope') {
   const observed = cells.length
-  const congested = cells.filter((cell) => cell.congested || num(cell.prb_load) >= 85).length
+  const congested = cells.filter((cell) => cell.congested || isCongestedBySourceRules(cell)).length
   const activeUsers = cells.reduce((sum, cell) => sum + num(cell.active_users), 0)
   const traffic = cells.reduce((sum, cell) => sum + num(cell.traffic), 0)
   const sites = new Set(cells.map((cell) => cell.site_name).filter(Boolean)).size
@@ -136,7 +144,7 @@ export function formatMetric(value, digits = 1) {
 
 export function diagnoseCell(cell) {
   if (!cell) return 'Selectionnez une cellule pour calculer le diagnostic multi-KPI.'
-  const highPrb = cell.prb_load >= 85
+  const highPrb = cell.prb_load >= 80
   const lowThroughput = cell.throughput > 0 && cell.throughput < 15
   const lowCqi = cell.cqi > 0 && cell.cqi < 8
   const goodThroughput = cell.throughput >= 15
@@ -151,67 +159,60 @@ export function diagnoseCell(cell) {
 }
 
 export function classifyRanIssue(cellOrScope) {
-  if (!cellOrScope) return { issue: 'No data', severity: 'unknown', confidence: 0, evidence: [] }
+  if (!cellOrScope) return { issue: 'No data', severity: 'unknown', evidence: [] }
   
   const prb = num(cellOrScope.prb_load || cellOrScope.avg_prb)
   const throughput = num(cellOrScope.throughput || cellOrScope.avg_throughput)
+  const throughputKbps = num(cellOrScope.throughput_kbps) || (throughput > 0 ? throughput * 1000 : 0)
   const cqi = num(cellOrScope.cqi || cellOrScope.avg_cqi)
   const ta = num(cellOrScope.ta || cellOrScope.avg_ta)
+  const activeUsers = num(cellOrScope.active_users || cellOrScope.active_users_at_peak)
   const recurrence = num(cellOrScope.recurrence_ratio || 0)
+  const congestedByRules = inferCongestedFromKpis({ prbLoad: prb, throughputKbps, activeUsers })
   
   const evidence = []
   let issue = 'Normal'
   let severity = 'low'
-  let confidence = 0.5
   
-  if (!prb && !throughput && !cqi && !num(cellOrScope.active_users || cellOrScope.active_users_at_peak)) {
+  if (!prb && !throughput && !cqi && !activeUsers) {
     issue = 'Telemetry/Data Gap'
     severity = 'unknown'
-    confidence = 0.8
     evidence.push('Missing PRB, throughput, CQI or user samples')
-  } else if (prb >= 85 && (!throughput || !cqi)) {
+  } else if (prb >= 80 && (!throughput || !cqi)) {
     issue = 'Telemetry/Data Gap'
     severity = 'unknown'
-    confidence = 0.75
     evidence.push('PRB is high but throughput or CQI evidence is missing')
-  } else if (prb >= 85 && throughput < 15 && cqi < 8 && ta >= 2.5) {
+  } else if (congestedByRules && throughput < 15 && cqi < 8 && ta >= 2.5) {
     issue = 'Edge/Interference Pressure'
     severity = 'critical'
-    confidence = 0.9
     evidence.push('High PRB', 'Low throughput', 'Low CQI', 'Elevated TA')
   } else if (recurrence > 0.6 && prb >= 70) {
     issue = 'Structural Busy-Hour Pattern'
     severity = 'high'
-    confidence = 0.82
     evidence.push(`Recurrent ${Math.round(recurrence * 100)}% of observations`, 'Busy-hour pressure repeats')
-  } else if (prb >= 85 && throughput < 15 && cqi >= 8) {
+  } else if (congestedByRules && throughput < 15 && cqi >= 8) {
     issue = 'Capacity Pressure'
     severity = 'high'
-    confidence = 0.85
     evidence.push('High PRB', 'Low throughput', 'CQI acceptable')
-  } else if (prb >= 85 && throughput >= 15 && cqi >= 8) {
+  } else if (congestedByRules && throughput >= 15 && cqi >= 8) {
     issue = 'Loaded but Acceptable'
     severity = 'medium'
-    confidence = 0.7
     evidence.push('High PRB', 'Throughput acceptable', 'CQI acceptable')
-  } else if (recurrence < 0.2 && prb >= 85) {
+  } else if (recurrence < 0.2 && prb >= 80) {
     issue = 'Temporary Spike / Anomaly'
     severity = 'medium'
-    confidence = 0.65
     evidence.push(`Low recurrence ${Math.round(recurrence * 100)}%`, 'High load is not persistent')
   } else if (prb > 60 && throughput < 15 && cqi < 8) {
     issue = 'QoS Degradation Trend'
     severity = 'medium'
-    confidence = 0.68
     evidence.push('Moderate PRB elevation', 'Low throughput', 'Low CQI')
   } else if (prb > 60 && throughput >= 15 && cqi >= 8) {
     issue = 'Loaded but Acceptable'
     severity = 'low'
-    confidence = 0.62
     evidence.push('Moderate PRB elevation', 'Throughput acceptable', 'CQI acceptable')
   }
   
-  return { issue, severity, confidence, evidence }
+  return { issue, severity, evidence }
 }
 
 export function computeRecurrenceMetrics(rows = []) {
@@ -328,7 +329,7 @@ export function computeSliceDelta(currentCells = [], previousCells = []) {
   }
 }
 
-export function buildAnalyticalReport({ scope = {}, timestamp = '', summary = {}, peakPayload = {}, peakRows = [], issue = {}, whyCritical = [], confidence = {}, dataQuality = {}, topRows = [] } = {}) {
+export function buildAnalyticalReport({ scope = {}, timestamp = '', summary = {}, peakPayload = {}, peakRows = [], issue = {}, whyCritical = [], dataQuality = {}, topRows = [] } = {}) {
   return {
     title: 'NetVision analytical scope report',
     generated_at: new Date().toISOString(),
@@ -349,7 +350,6 @@ export function buildAnalyticalReport({ scope = {}, timestamp = '', summary = {}
     },
     qos_diagnosis: issue,
     why_critical: whyCritical,
-    confidence,
     data_quality_warnings: dataQuality?.warnings || [],
     top_affected: topRows.slice(0, 8),
   }

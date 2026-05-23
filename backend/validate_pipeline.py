@@ -22,7 +22,6 @@ if str(PROJECT_ROOT) not in sys.path:
 RUNTIME_DIR = PROJECT_ROOT / "runtime_data"
 TIME_DATA_DIR = RUNTIME_DIR / "time_data"
 REPORT_PATH = RUNTIME_DIR / "validation_report.txt"
-DRIFT_ASSET_PATH = RUNTIME_DIR / "model_assets" / "val_predictions.parquet"
 
 PASS = "PASS"
 WARN = "WARN"
@@ -236,24 +235,6 @@ def check_3_simulator_smoke(results: list[dict[str, str]], state: dict[str, Any]
         _record_result(results, check_name, FAIL, f"Simulator smoke failed: {exc}")
 
 
-def check_4_optional_drift_assets(results: list[dict[str, str]], state: dict[str, Any]) -> None:
-    check_name = "CHECK 4 - Optional drift assets"
-    if not DRIFT_ASSET_PATH.exists():
-        _record_result(results, check_name, SKIP, "Drift validation asset is absent; /api/drift should return an available=false empty payload")
-        return
-
-    try:
-        rows, columns = _read_parquet_schema(DRIFT_ASSET_PATH)
-        required = {"CELLNAME", "DATE_ID", "y_true_prb", "y_pred_prb"}
-        missing = required - columns
-        if missing:
-            _record_result(results, check_name, FAIL, f"Drift asset missing columns: {sorted(missing)}")
-            return
-        _record_result(results, check_name, PASS, f"drift rows={rows}")
-    except Exception as exc:
-        _record_result(results, check_name, FAIL, f"Could not inspect drift asset: {exc}")
-
-
 def check_5_api_smoke_test(results: list[dict[str, str]], state: dict[str, Any]) -> None:
     check_name = "CHECK 5 - API smoke test"
     if requests is None:
@@ -316,7 +297,6 @@ def main() -> None:
     check_1_runtime_data_contract(results, state)
     check_2_action_engine_import_and_sample(results, state)
     check_3_simulator_smoke(results, state)
-    check_4_optional_drift_assets(results, state)
     check_5_api_smoke_test(results, state)
 
     RUNTIME_DIR.mkdir(parents=True, exist_ok=True)

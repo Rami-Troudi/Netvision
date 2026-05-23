@@ -8,6 +8,7 @@ import {
   getJobsQueue,
   updateJobRecord,
 } from '../_lib/jobs'
+import { getRuntimeDataRoot, validateSimulationRequest } from '../_lib/simulationContract'
 
 export const config = {
   api: {
@@ -40,6 +41,7 @@ function normalizeSimulatePayload(rawBody) {
     params: payload.params || {},
     time_entry: payload.time_entry || {},
     mode: 'fast',
+    data_mode: getRuntimeDataRoot().mode,
   }
 }
 
@@ -66,6 +68,10 @@ export default async function handler(req, res) {
 
   let jobDefinition
   try {
+    const validationError = await validateSimulationRequest(req.body)
+    if (validationError) {
+      return res.status(validationError.status).json({ error: validationError.error })
+    }
     jobDefinition = normalizeJobPayload(req.body)
   } catch (err) {
     return res.status(400).json({ error: err.message || 'Invalid job payload' })

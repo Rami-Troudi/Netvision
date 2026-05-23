@@ -13,6 +13,9 @@
     "lint": "next lint",
     "test:contracts": "node --test tests/contracts/*.mjs",
     "smoke:v2": "node scripts/v2-api-smoke.mjs",
+    "smoke:v2:core": "node scripts/v2-api-smoke-core.mjs",
+    "smoke:v2:sim": "node scripts/v2-api-smoke-sim.mjs",
+    "verify:backend": "npm run test:contracts && npm run smoke:v2:core && npm run smoke:v2:sim",
     "data:labelled-compare": "node scripts/generate_labelled_comparison_data.mjs",
     "backend": "python run_backend.py",
     "redis:ping": "redis-cli -h 127.0.0.1 -p 6379 ping"

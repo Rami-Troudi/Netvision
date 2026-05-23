@@ -44,6 +44,14 @@ function bool(value) {
   return Boolean(value)
 }
 
+export function inferCongestedFromKpis({ prbLoad = 0, throughputKbps = 0, activeUsers = 0 }) {
+  if (prbLoad >= 90) return true
+  if (prbLoad >= 80 && throughputKbps > 0 && throughputKbps < 4000) return true
+  if (activeUsers > 4 && prbLoad >= 70) return true
+  if (throughputKbps > 0 && throughputKbps < 4000 && prbLoad >= 70) return true
+  return false
+}
+
 export function normalizeThroughputKbps(value) {
   return num(value, 0)
 }
@@ -68,7 +76,9 @@ export function normalizeOperationalCell(base = {}, obs = {}, admin = null) {
     traffic: num(obs.traffic ?? obs.data_traffic ?? obs.dl_traffic_gb, 0),
     cqi: num(obs.cqi ?? obs.avg_cqi, 0),
     ta: num(obs.ta ?? obs.avg_ta ?? obs.timing_advance, 0),
-    congested: obs.congested === undefined ? prbLoad >= 85 : bool(obs.congested),
+    congested: obs.congested === undefined
+      ? inferCongestedFromKpis({ prbLoad, throughputKbps, activeUsers })
+      : bool(obs.congested),
     health: num(obs.health ?? obs.health_score, Math.max(0, 100 - Math.max(0, prbLoad - 50) * 1.4)),
     lost_traffic: num(obs.lost_traffic ?? obs.lost_gb ?? obs.potential_lost_gb, 0),
     recoverable_traffic: num(obs.recoverable_traffic ?? obs.recoverable_gb, 0),

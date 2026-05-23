@@ -1,4 +1,5 @@
 import { aggregateCells, formatMetric } from './adminAggregation'
+import { inferCongestedFromKpis } from '../utils/v2Contracts.mjs'
 import { OPERATOR_TABS, ADMIN_TABS, stateLabelFr } from '../utils/uiPolicy.mjs'
 
 export const COCKPIT_TABS = OPERATOR_TABS
@@ -20,7 +21,14 @@ export function getCellState(cell) {
   if (!cell?.admin) return 'unmatched'
   const hasKpi = Number(cell.prb_load) > 0 || Number(cell.throughput) > 0 || Number(cell.cqi) > 0 || Number(cell.active_users) > 0
   if (!hasKpi) return 'no_data'
-  if (cell.congested || Number(cell.prb_load) >= 85) return 'critical'
+  if (
+    cell.congested
+    || inferCongestedFromKpis({
+      prbLoad: Number(cell.prb_load) || 0,
+      throughputKbps: Number(cell.throughput_kbps) || (Number(cell.throughput) || 0) * 1000,
+      activeUsers: Number(cell.active_users) || 0,
+    })
+  ) return 'critical'
   if (Number(cell.prb_load) >= 70) return 'watch'
   if ((Number(cell.throughput) > 0 && Number(cell.throughput) < 10) || (Number(cell.cqi) > 0 && Number(cell.cqi) < 8)) return 'degraded'
   return 'healthy'

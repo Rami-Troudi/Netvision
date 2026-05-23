@@ -220,3 +220,40 @@ Living investigation notes for migrating the feature-rich old UI into the new `R
   - Old UI data-contract warnings can hide real feature regressions by making the UI look "empty" while APIs work.
   - Current backend service on port 8000 may be serving the old worktree during this investigation. Before implementation, restore/confirm backend process origin for the current branch.
   - Browser console logs can include earlier same-tab history, so source/timestamps should be considered when interpreting repeated warnings.
+
+## Congestion Logic Alignment (2026-05-23)
+
+Source-of-truth extracted from `DATASET Radio 2.pptx` (slides 2, 10, 11):
+- Saturation threshold: `PRB >= 90%`.
+- Critical queue pressure: waiting/active users `> 4`.
+- Throughput degradation: `THP < 4 Mbps`.
+- Congestion should be inferred from combined KPI evidence, not a single `PRB >= 85` shortcut.
+
+Methods identified in codebase (non-simulation):
+- Backend rule engine: `backend/core_rules.py` (`is_congested`) and `backend/action_engine.py` threshold flags.
+- Frontend normalization and fallback inference: `src/utils/v2Contracts.mjs`.
+- Scope aggregation and status computation: `src/admin/adminAggregation.js`, `src/admin/adminOps.js`, `src/components/panels/CockpitPanel.jsx`.
+- Mock runtime labeling: `scripts/generate_mock_runtime_data.py`.
+
+Fixes applied for alignment:
+- `backend/action_engine.py`
+  - Replaced `PRB > 90` checks with `PRB >= 90` to match source threshold.
+- `src/utils/v2Contracts.mjs`
+  - Added shared `inferCongestedFromKpis({ prbLoad, throughputKbps, activeUsers })`:
+    - `prb >= 90`
+    - `prb >= 80 && throughput < 4000 kbps`
+    - `active_users > 4 && prb >= 70`
+    - `throughput < 4000 kbps && prb >= 70`
+  - Used this when `obs.congested` is missing.
+- `src/admin/adminAggregation.js`
+  - Replaced congestion counting shortcut (`prb >= 85`) with source-rule helper.
+- `src/admin/adminOps.js`
+  - Replaced `critical` shortcut (`prb >= 85`) with source-rule helper.
+- `src/components/panels/CockpitPanel.jsx`
+  - Compliance/affected-delegation congestion proxy now uses source-rule helper instead of raw `prb >= 85`.
+- `scripts/generate_mock_runtime_data.py`
+  - Congested labels are now gated by backend source rule (`backend.core_rules.is_congested`) to avoid logically inconsistent labels.
+
+Verification:
+- `npm run build` passed (Next.js production build successful).
+- Existing unrelated hook-dependency warnings in `src/main.js` remain and were not introduced by this change set.

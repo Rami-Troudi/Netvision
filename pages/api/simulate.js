@@ -2,31 +2,20 @@ import { spawn } from 'child_process'
 import crypto from 'crypto'
 import path from 'path'
 import { createRequire } from 'module'
-import { access, readFile } from 'fs/promises'
+import { access } from 'fs/promises'
 import { enforceRateLimit, requireAuthenticatedRequest } from './_lib/security'
+import { getRuntimeDataRoot, validateSimulationRequest, loadAllowedTimeFiles as loadAllowedTimeFilesFromContract } from './_lib/simulationContract'
 
 const require = createRequire(import.meta.url)
 const { getPythonBin } = require('../../job-workers/pythonConfig.cjs')
 
-const ALLOWED_ACTIONS = new Set([
-  'tilt',
-  'add_carrier',
-  'redistribute',
-  'new_site',
-  'add_sector',
-  'add_site'
-])
-const ALLOWED_MODES = new Set(['fast']) // fast is the only supported mode
 const PYTHON_BIN = getPythonBin()
 
 let allowedTimeFiles = null
 
-function getTimeIndexPath(projectRoot) {
-  return path.resolve(projectRoot, 'runtime_data', 'time_index.json')
-}
-
 function getTimeDataRoot(projectRoot) {
-  return path.resolve(projectRoot, 'runtime_data', 'time_data')
+  const { root } = getRuntimeDataRoot()
+  return path.resolve(projectRoot, path.relative(projectRoot, path.resolve(root, 'time_data')))
 }
 
 function isPathInsideDirectory(targetPath, directoryPath) {
@@ -36,53 +25,14 @@ function isPathInsideDirectory(targetPath, directoryPath) {
 
 async function loadAllowedTimeFiles() {
   if (allowedTimeFiles) return allowedTimeFiles
-
-  const projectRoot = process.cwd()
-  const timeIndexPath = getTimeIndexPath(projectRoot)
-  const raw = await readFile(timeIndexPath, 'utf8')
-  const parsed = JSON.parse(raw)
-  const timestamps = parsed?.timestamps
-  if (!Array.isArray(timestamps)) {
-    throw new Error('time_index.json has invalid schema')
-  }
-
-  const filenames = timestamps
-    .map((entry) => (entry && typeof entry.filename === 'string' ? entry.filename.trim() : ''))
-    .filter(Boolean)
-
-  if (!filenames.length) {
-    throw new Error('time_index.json does not include filenames')
-  }
-
-  allowedTimeFiles = new Set(filenames)
+  allowedTimeFiles = await loadAllowedTimeFilesFromContract()
   return allowedTimeFiles
 }
 
-function isPlainObject(val) {
-  return val !== null && typeof val === 'object' && !Array.isArray(val)
-}
-
 async function validateRequest(body) {
-  const { cell_name, action, params, time_entry, mode } = body || {}
-
-  if (typeof cell_name !== 'string' || !cell_name.trim()) {
-    return { status: 400, error: 'cell_name must be a non-empty string' }
-  }
-  if (!ALLOWED_ACTIONS.has(action)) {
-    return { status: 400, error: `action must be one of: ${Array.from(ALLOWED_ACTIONS).join(', ')}` }
-  }
-  if (mode && !ALLOWED_MODES.has(mode)) {
-    return { status: 400, error: `mode must be one of: ${Array.from(ALLOWED_MODES).join(', ')}` }
-  }
-  if (params !== undefined && !isPlainObject(params)) {
-    return { status: 400, error: 'params must be an object' }
-  }
-  if (time_entry !== undefined && !isPlainObject(time_entry)) {
-    return { status: 400, error: 'time_entry must be an object' }
-  }
-  if (time_entry && time_entry.filename && typeof time_entry.filename !== 'string') {
-    return { status: 400, error: 'time_entry.filename must be a string when provided' }
-  }
+  const baseError = await validateSimulationRequest(body)
+  if (baseError) return baseError
+  const { time_entry } = body || {}
   if (time_entry && time_entry.filename) {
     let allowList
     try {
@@ -132,6 +82,7 @@ export default async function handler(req, res) {
   }
 
   const projectRoot = process.cwd()
+  const { mode: dataMode } = getRuntimeDataRoot()
   const scriptPath = path.join(projectRoot, 'simulation', 'simulator.py')
   const requestedTimeFile = typeof timeEntry.filename === 'string' ? timeEntry.filename.trim() : ''
   const timeDataRoot = getTimeDataRoot(projectRoot)
@@ -185,7 +136,7 @@ export default async function handler(req, res) {
         if (code === 0) {
           try {
             const payload = JSON.parse(stdout.trim())
-            res.status(200).json(payload)
+            res.status(200).json({ ...payload, data_mode: dataMode })
           } catch (err) {
             const ref = crypto.randomUUID()
             console.error('JSON Parse Error:', err)

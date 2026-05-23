@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import { inferCongestedFromKpis } from '../src/utils/v2Contracts.mjs'
 
 const ROOT = process.cwd()
 const SOURCES = ['runtime_data', 'runtime_data_mock']
@@ -11,11 +12,12 @@ function toNumber(value, fallback = 0) {
 }
 
 function classify({ prbLoad, throughputMbps, cqi, activeUsers }) {
-  const highPrb = prbLoad >= 85
+  const throughputKbps = throughputMbps > 1000 ? throughputMbps : throughputMbps * 1000
+  const highPrb = prbLoad >= 80
   const lowThroughput = throughputMbps > 0 && throughputMbps < 15
   const lowCqi = cqi > 0 && cqi < 8
   const highUsers = activeUsers >= 40
-  const congested = highPrb && (lowThroughput || lowCqi || highUsers)
+  const congested = inferCongestedFromKpis({ prbLoad, throughputKbps, activeUsers })
   const severity = congested ? 'critical' : (highPrb || lowThroughput || lowCqi ? 'watch' : 'healthy')
   let issue = 'Normal'
   if (congested) issue = 'Congestion Confirmed'
@@ -93,9 +95,6 @@ async function buildForSource(sourceName) {
         issue_type: label.issue,
         severity: label.severity,
         root_cause: obs.root_cause || label.issue,
-        old_load: prbLoad.toFixed(2),
-        old_traffic: String(activeUsers),
-        old_status_label: label.severity,
       })
     }
   }

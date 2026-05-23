@@ -14,7 +14,7 @@ test('normalizes simulatable backend recommendations for V2 cards', () => {
     priority_rank: 1,
   })
 
-  assert.equal(rec.title, 'Add Sector')
+  assert.equal(rec.title, 'Ajouter un secteur')
   assert.equal(rec.simAction, 'add_sector')
   assert.equal(rec.isSimulatable, true)
   assert.equal(rec.recoveryRate, 85)

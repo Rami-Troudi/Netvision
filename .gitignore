@@ -74,3 +74,6 @@ site_0001_validation_plot.png
 
 # Large official source downloads for admin boundary preparation
 data/admin_boundaries/raw/*.zip
+
+artifacts/labelled-comparison/*.csv
+artifacts/labelled-comparison/*.json

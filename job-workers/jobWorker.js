@@ -7,6 +7,7 @@ const IORedis = require('ioredis')
 const { Worker } = require('bullmq')
 const { getRedisUrl, getRedisConnectionOptions } = require('./redisConfig.cjs')
 const { getPythonBin } = require('./pythonConfig.cjs')
+const { getRuntimeDataRoot } = require('./runtimeDataRoot.cjs')
 
 const JOB_QUEUE_NAME = (process.env.JOB_QUEUE_NAME || 'netvision-jobs').trim()
 const REDIS_URL = getRedisUrl()
@@ -136,7 +137,8 @@ function isPathInsideDirectory(targetPath, directoryPath) {
 async function loadAllowedTimeFiles() {
   if (allowTimeFileSet) return allowTimeFileSet
 
-  const indexPath = path.resolve(PROJECT_ROOT, 'runtime_data', 'time_index.json')
+  const { root } = getRuntimeDataRoot(PROJECT_ROOT)
+  const indexPath = path.resolve(root, 'time_index.json')
   const raw = await fsPromises.readFile(indexPath, 'utf8')
   const parsed = parseJsonString(raw, {})
   const timestamps = Array.isArray(parsed?.timestamps) ? parsed.timestamps : []
@@ -187,7 +189,8 @@ async function resolveSimulationTimeFile(timeEntry) {
     throw new Error('time_entry.filename is not in allowed time_index.json')
   }
 
-  const timeDataRoot = path.resolve(PROJECT_ROOT, 'runtime_data', 'time_data')
+  const { root } = getRuntimeDataRoot(PROJECT_ROOT)
+  const timeDataRoot = path.resolve(root, 'time_data')
   const resolved = path.resolve(timeDataRoot, requestedTimeFile)
   if (!isPathInsideDirectory(resolved, timeDataRoot)) {
     throw new Error('Invalid time_entry.filename path')

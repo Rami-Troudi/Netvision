@@ -3,6 +3,7 @@ import { access, readFile } from 'fs/promises'
 import { ParquetReader } from 'parquetjs-lite'
 import { enforceRateLimit, requireAuthenticatedRequest } from './_lib/security'
 import { getRuntimeDataRoot } from './_lib/dataMode'
+import { inferCongestedFromKpis } from '../../src/utils/v2Contracts.mjs'
 
 const GROUPS = new Set(['cell', 'site', 'delegation', 'governorate', 'national'])
 const METRICS = new Set(['prb', 'active_users', 'traffic', 'congestion_rate', 'throughput_drop', 'cqi_drop', 'qos_degradation'])
@@ -53,20 +54,25 @@ function hourLabel(hour) {
 
 function normalizeObs(record = {}) {
   const prb = n(record.prb_load ?? record.prb ?? record.dl_prb_load ?? record.load ?? record.ft_physical_resource_blocks_load_dl)
-  const throughputRaw = n(record.throughput ?? record.dl_throughput ?? record.user_throughput ?? record.avg_throughput)
-  const throughput = throughputRaw > 1000 ? throughputRaw / 1000 : throughputRaw
+  const throughputRaw = n(record.throughput_kbps ?? record.throughput ?? record.dl_throughput ?? record.user_throughput ?? record.avg_throughput)
+  const throughputKbps = throughputRaw > 1000 ? throughputRaw : throughputRaw * 1000
+  const throughput = throughputKbps / 1000
   const cqi = n(record.cqi ?? record.avg_cqi)
   const activeUsers = n(record.active_users ?? record.rrc_connected_users ?? record.users ?? record.rrc_users)
   const traffic = n(record.traffic ?? record.data_traffic ?? record.dl_traffic_gb)
   const ta = n(record.ta ?? record.avg_ta ?? record.timing_advance)
+  const congested = Boolean(record.congested) || inferCongestedFromKpis({ prbLoad: prb, throughputKbps, activeUsers })
+  const qosDegraded = congested || throughput < 15 || cqi < 8
   return {
     prb,
+    throughput_kbps: throughputKbps,
     throughput,
     cqi,
     active_users: activeUsers,
     traffic,
     ta,
-    congested: Boolean(record.congested) || prb >= 85,
+    congested,
+    qos_degraded: qosDegraded,
   }
 }
 
@@ -259,7 +265,7 @@ function analyzeGroups(rows, groupBy, metric) {
     bucket.traffic += row.traffic
     bucket.cells.add(row.cell_name)
     group.observedCells.add(row.cell_name)
-    if (row.congested || row.prb >= 85 || row.throughput < 15 || row.cqi < 8) bucket.affectedCells.add(row.cell_name)
+    if (row.qos_degraded) bucket.affectedCells.add(row.cell_name)
   }
 
   return Array.from(groups.values()).map((group) => {

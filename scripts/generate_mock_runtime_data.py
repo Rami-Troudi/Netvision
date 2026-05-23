@@ -4,6 +4,7 @@ import random
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from backend.core_rules import is_congested as is_congested_rule
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / 'runtime_data_mock'
@@ -205,13 +206,21 @@ def main():
             stress += max(0.0, (users - 150.0) / 120.0) * 0.20
             base_hit = random.random() < clamp(expected_cong * 0.95, 0.0, 0.5)
             stress_hit = (prb >= 70.0) and (random.random() < clamp(stress * 0.55, 0.0, 0.6))
-            is_cong = base_hit or stress_hit
+            throughput_kbps = round(throughput * 1000, 2)
+            preflag = base_hit or stress_hit
+            # Keep temporal/delegation pressure stochastic, but require
+            # source-of-truth congestion thresholds before labeling a cell
+            # as congested.
+            is_cong = preflag and is_congested_rule(
+                prb_load=prb,
+                throughput=throughput_kbps,
+                active_users=users,
+            )
             severity = 'critical' if is_cong else ('watch' if prb >= 76 or throughput < 16 or cqi < 8.5 else 'healthy')
             issue_type = 'Congestion Confirmed' if is_cong else ('Capacity Pressure' if prb >= 76 else ('Radio Quality' if cqi < 8.5 else 'Normal'))
             health_score = int(round(clamp(100 - (prb - 45) * 0.95 - max(0.0, (8.8 - cqi) * 5.0), 20, 98)))
 
             congested += 1 if is_cong else 0
-            throughput_kbps = round(throughput * 1000, 2)
             traffic = round(max(0.2, throughput * users / 125.0), 3)
             rrc_users = int(round(clamp(users * random.uniform(0.42, 0.87), 2, users)))
             lost_traffic = round(max(0.0, (prb - 75.0) / 18.0) * random.uniform(0.1, 2.4), 3)
