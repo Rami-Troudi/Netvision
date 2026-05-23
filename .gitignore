@@ -7,6 +7,7 @@ __pycache__/
 *.pyd
 .Python
 .next/
+.next-build/
 # Build outputs
 dist/
 
@@ -37,6 +38,8 @@ yarn-error.log*
 public/baseline.json
 /.next-dev
 /.next-dev/
+/.next-build
+/.next-build/
 /.next-temp
 /.next-temp/
 public/stats.json

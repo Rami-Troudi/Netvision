@@ -1,0 +1,49 @@
+export function isAdminToolsEnabled() {
+  if (typeof window === 'undefined') return process.env.NEXT_PUBLIC_NETVISION_ADMIN_TOOLS === 'true'
+  const params = new URLSearchParams(window.location.search)
+  return process.env.NEXT_PUBLIC_NETVISION_ADMIN_TOOLS === 'true' || params.get('admin') === '1'
+}
+
+export const OPERATOR_TABS = Object.freeze([
+  { id: 'overview', label: 'Vue reseau', short: 'VR' },
+  { id: 'peak-hours', label: 'Heures critiques', short: 'HC' },
+  { id: 'qos', label: 'Qualite radio', short: 'QR' },
+  { id: 'operations', label: 'Action cellule', short: 'AC' },
+])
+
+export const ADMIN_TABS = Object.freeze([
+  { id: 'data', label: 'Donnees', short: 'DN' },
+  { id: 'system', label: 'Admin', short: 'AD' },
+])
+
+export const ACTION_LABELS_FR = Object.freeze({
+  tilt: 'Ajuster l inclinaison',
+  redistribute: 'Reequilibrer la charge',
+  add_carrier: 'Ajouter une porteuse',
+  add_sector: 'Ajouter un secteur',
+  new_site: 'Planifier un nouveau site',
+  add_site: 'Ajouter un site',
+})
+
+export const STATE_LABELS_FR = Object.freeze({
+  critical: 'Critique',
+  watch: 'Sous surveillance',
+  degraded: 'Qualite degradee',
+  healthy: 'Normal',
+  no_data: 'Sans KPI',
+  unmatched: 'Non rapproche',
+  stable: 'Normal',
+})
+
+export function stateLabelFr(state) {
+  return STATE_LABELS_FR[state] || 'Inconnu'
+}
+
+export function diagnosisLabelFr(issue = {}) {
+  const key = String(issue.issue || '').toLowerCase()
+  if (key.includes('capacity') || key.includes('congestion') || key.includes('load')) return 'Congestion capacitaire'
+  if (key.includes('radio') || key.includes('interference') || key.includes('edge') || key.includes('cqi')) return 'Qualite radio degradee'
+  if (key.includes('data') || key.includes('telemetry')) return 'Donnees insuffisantes'
+  if (key.includes('normal') || key.includes('acceptable')) return 'Charge elevee mais acceptable'
+  return 'Diagnostic radio a confirmer'
+}

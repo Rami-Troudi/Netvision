@@ -1,0 +1,11 @@
+{
+  "generated_at": "2026-05-23T12:12:23.446Z",
+  "sources": [
+    "runtime_data",
+    "runtime_data_mock"
+  ],
+  "rows": 589248,
+  "cells": 792,
+  "timestamps": 720,
+  "congested_rows": 100210
+}

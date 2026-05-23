@@ -6,10 +6,11 @@ const { DatabaseSync } = require('node:sqlite')
 const IORedis = require('ioredis')
 const { Worker } = require('bullmq')
 const { getRedisUrl, getRedisConnectionOptions } = require('./redisConfig.cjs')
+const { getPythonBin } = require('./pythonConfig.cjs')
 
 const JOB_QUEUE_NAME = (process.env.JOB_QUEUE_NAME || 'netvision-jobs').trim()
 const REDIS_URL = getRedisUrl()
-const PYTHON_BIN = (process.env.PYTHON_BIN || 'python').trim() || 'python'
+const PYTHON_BIN = getPythonBin()
 
 const JOB_STATUSES = {
   PENDING: 'pending',

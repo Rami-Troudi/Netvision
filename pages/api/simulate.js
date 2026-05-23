@@ -1,8 +1,12 @@
 import { spawn } from 'child_process'
 import crypto from 'crypto'
 import path from 'path'
+import { createRequire } from 'module'
 import { access, readFile } from 'fs/promises'
 import { enforceRateLimit, requireAuthenticatedRequest } from './_lib/security'
+
+const require = createRequire(import.meta.url)
+const { getPythonBin } = require('../../job-workers/pythonConfig.cjs')
 
 const ALLOWED_ACTIONS = new Set([
   'tilt',
@@ -13,7 +17,7 @@ const ALLOWED_ACTIONS = new Set([
   'add_site'
 ])
 const ALLOWED_MODES = new Set(['fast']) // fast is the only supported mode
-const PYTHON_BIN = (process.env.PYTHON_BIN || 'python').trim() || 'python'
+const PYTHON_BIN = getPythonBin()
 
 let allowedTimeFiles = null
 

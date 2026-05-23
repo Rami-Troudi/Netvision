@@ -9,11 +9,19 @@ export function metricColor(value, metricMode) {
   } else {
     t = Math.min(1, v / 100)
   }
-  if (t < 0.18) return '#ead8bc'
-  if (t < 0.38) return '#f6ca85'
-  if (t < 0.62) return '#f4aa4e'
-  if (t < 0.82) return '#ee7b22'
-  return '#c94d12'
+  // Continuous yellow->orange->red gradient for finer congestion readability.
+  const clamped = Math.max(0, Math.min(1, t))
+  const start = [238, 224, 198]
+  const mid = [244, 171, 78]
+  const end = [185, 58, 18]
+  const blend = (a, b, ratio) => Math.round(a + (b - a) * ratio)
+  const ratio = clamped <= 0.65 ? clamped / 0.65 : (clamped - 0.65) / 0.35
+  const from = clamped <= 0.65 ? start : mid
+  const to = clamped <= 0.65 ? mid : end
+  const r = blend(from[0], to[0], ratio)
+  const g = blend(from[1], to[1], ratio)
+  const b = blend(from[2], to[2], ratio)
+  return `rgb(${r}, ${g}, ${b})`
 }
 
 export function boundsForFeature(feature) {

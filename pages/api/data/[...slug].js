@@ -202,6 +202,14 @@ export default async function handler(req, res) {
       })
     }
   } catch (err) {
+    if (requestPath === 'stats.json') {
+      return res.status(200).json({
+        available: false,
+        reason: `${requestPath} was not found in ${mode} runtime data.`,
+        mode,
+        data_root: dataRoot,
+      })
+    }
     return res.status(404).json({
       error: 'Data file not found',
       detail: `${requestPath} was not found in ${mode} runtime data.`,

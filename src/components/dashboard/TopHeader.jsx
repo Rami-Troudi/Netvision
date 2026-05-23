@@ -1,30 +1,30 @@
-export default function TopHeader({ metricMode, metricModes, onMetricModeChange, focusMode, onToggleFocus, theme, onToggleTheme, query, onQueryChange, searchResults, onSearchSelect, dataMode, onSecondaryPanel }) {
+export default function TopHeader({ metricMode, metricModes, onMetricModeChange, query, onQueryChange, searchResults, onSearchSelect, dataMode, onSecondaryPanel, adminToolsEnabled = false }) {
   return (
     <header className="top-header">
       <div className="brand-lockup">
         <div className="brand-mark">NV</div>
         <div>
-          <div className="brand-title">NetVision Digital Twin</div>
-          <div className="brand-subtitle">Tunisia Regional RAN Command Center</div>
+          <div className="brand-title">NetVision Jumeau Numerique</div>
+          <div className="brand-subtitle">Centre regional RAN Tunisie</div>
         </div>
       </div>
       <div className="global-search">
-        <label htmlFor="global-search-input" className="sr-only">Global search</label>
-        <input id="global-search-input" data-testid="global-search-input" aria-label="Search governorate, delegation, site, or cell" value={query} onChange={(e) => onQueryChange(e.target.value)} placeholder="Search governorate, delegation, site, cell..." />
+        <label htmlFor="global-search-input" className="sr-only">Recherche globale</label>
+        <input id="global-search-input" data-testid="global-search-input" aria-label="Recherche gouvernorat, delegation, site, cellule" value={query} onChange={(e) => onQueryChange(e.target.value)} placeholder="Rechercher gouvernorat, delegation, site, cellule..." />
         {searchResults.length ? (
-          <div className="search-popover" role="listbox" aria-label="Search results">
+          <div className="search-popover" role="listbox" aria-label="Resultats recherche">
             {searchResults.map((item) => <button role="option" aria-selected="false" key={`${item.type}:${item.id}`} onClick={() => onSearchSelect(item)}><strong>{item.type}</strong><span>{item.label}</span></button>)}
           </div>
         ) : null}
       </div>
-      {dataMode === 'mock' ? <div className="mock-mode-badge"><strong>MOCK DEMO MODE</strong><span>Not official radio measurements</span></div> : null}
-      <div className="sr-only" aria-live="polite">{query ? `${searchResults.length} search results` : ''}</div>
+      {dataMode === 'mock' && adminToolsEnabled ? <div className="mock-mode-badge"><strong>JEU DEMO</strong><span>Validation interne</span></div> : null}
+      <div className="sr-only" aria-live="polite">{query ? `${searchResults.length} resultats de recherche` : ''}</div>
       <div className="header-actions">
-        <select value={metricMode} onChange={(e) => onMetricModeChange(e.target.value)} aria-label="Map metric">
+        <select value={metricMode} onChange={(e) => onMetricModeChange(e.target.value)} aria-label="Metrique carte">
           {metricModes.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
         </select>
-        <button data-testid="open-data-quality" className="ghost-button" onClick={() => onSecondaryPanel?.('data')}>Data Quality</button><button data-testid="open-system-status" className="ghost-button" onClick={() => onSecondaryPanel?.('system')}>System Status</button>
-        <button data-testid="toggle-dark-mode" className="ghost-button" aria-pressed={theme === 'dark'} onClick={onToggleTheme}>{theme === 'dark' ? 'Light Mode' : 'Dark Mode'}</button><button data-testid="toggle-focus-mode" className="ghost-button" aria-pressed={focusMode} onClick={onToggleFocus}>{focusMode ? 'Exit Focus' : 'Focus Mode'}</button>
+        {adminToolsEnabled ? <button data-testid="open-data-quality" className="ghost-button" onClick={() => onSecondaryPanel?.('data')}>Donnees</button> : null}
+        {adminToolsEnabled ? <button data-testid="open-system-status" className="ghost-button" onClick={() => onSecondaryPanel?.('system')}>Admin</button> : null}
       </div>
     </header>
   )

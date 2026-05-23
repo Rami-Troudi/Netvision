@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from 'react'
+import { useMemo, useState, useEffect, useRef, useCallback } from 'react'
 import TopHeader from './components/dashboard/TopHeader'
 import Breadcrumb from './components/dashboard/Breadcrumb'
 import CockpitRail from './components/dashboard/CockpitRail'
@@ -10,8 +10,10 @@ import { fetchJson, loadDashboardData } from './admin/adminData'
 import { aggregateNationalScope, aggregateGovernorateScope, aggregateDelegationScope, buildCells, rankDelegations, rankGovernorates, METRIC_MODES, classifyRanIssue, computeConfidence, computeDataQuality, computeSliceDelta, buildWhyCritical, buildAnalyticalReport } from './admin/adminAggregation'
 import { buildSearchIndex, searchAdmin } from './admin/adminSearch'
 import { transitionLabel } from './admin/adminTransitions'
-import { DEFAULT_FILTERS, applyCellFilters, buildSiteSummaries, summarizeAlerts } from './admin/adminOps'
+import { DEFAULT_FILTERS, applyCellFilters, buildSiteSummaries, summarizeAlerts, COCKPIT_TABS, ADMIN_COCKPIT_TABS } from './admin/adminOps'
 import { buildAutoMapping, callImportWorker } from './admin/importWorker'
+import { DEFAULT_MAP_CONTROLS } from './utils/v2Contracts.mjs'
+import { isAdminToolsEnabled } from './utils/uiPolicy.mjs'
 
 export default function NetVisionDashboard() {
   const [data, setData] = useState(null)
@@ -22,7 +24,7 @@ export default function NetVisionDashboard() {
   const [query, setQuery] = useState('')
   const [activeTab, setActiveTab] = useState('overview')
   const [filters, setFilters] = useState(DEFAULT_FILTERS)
-  const [layerVisibility, setLayerVisibility] = useState({ delegations: true, sites: true })
+  const [mapControls, setMapControls] = useState(DEFAULT_MAP_CONTROLS)
   const [timeIndex, setTimeIndex] = useState(0)
   const [drift, setDrift] = useState({ status: { available: null, reason: '' }, alerts: [] })
   const [peakRows, setPeakRows] = useState([])
@@ -36,9 +38,22 @@ export default function NetVisionDashboard() {
   const [driftUi, setDriftUi] = useState({ acknowledgedUnavailable: false, collapsed: false })
   const [dataMode, setDataMode] = useState('real')
   const [previousObservations, setPreviousObservations] = useState({})
+  const [delegationVariationRows, setDelegationVariationRows] = useState([])
   const [watchlist, setWatchlist] = useState([])
   const [savedViews, setSavedViews] = useState([])
   const [demoStep, setDemoStep] = useState(null)
+  const [timelinePlayback, setTimelinePlayback] = useState({ isPlaying: false, speedMs: 1500, startMode: 'current' })
+  const timeIndexRef = useRef(0)
+  const timeIndexEntriesRef = useRef([])
+  const loadingSliceRef = useRef(false)
+  const pendingSliceIndexRef = useRef(null)
+  const sliceCacheRef = useRef(new Map())
+  const adminToolsEnabled = isAdminToolsEnabled()
+  const visibleTabs = useMemo(() => adminToolsEnabled ? [...COCKPIT_TABS, ...ADMIN_COCKPIT_TABS] : COCKPIT_TABS, [adminToolsEnabled])
+
+  useEffect(() => {
+    if (!adminToolsEnabled && ['analytics', 'data', 'system'].includes(activeTab)) setActiveTab('overview')
+  }, [adminToolsEnabled, activeTab])
 
   useEffect(() => {
     try {
@@ -80,9 +95,9 @@ export default function NetVisionDashboard() {
         check('peakHours', '/api/peak-hours'),
         check('backend', '/api/backend-health'),
       ]
-      const optionalChecks = activeTab === 'system' ? [
+      const optionalChecks = [
         check('jobsHealth', '/api/jobs-health'),
-      ] : []
+      ]
       const pairs = await Promise.all([...coreChecks, ...optionalChecks])
       if (!cancelled) {
         const next = Object.fromEntries(pairs)
@@ -104,6 +119,22 @@ export default function NetVisionDashboard() {
     }
   }, [drift.status.available, driftUi.acknowledgedUnavailable])
 
+  useEffect(() => { timeIndexRef.current = timeIndex }, [timeIndex])
+  useEffect(() => { timeIndexEntriesRef.current = data?.timeIndex || [] }, [data?.timeIndex])
+
+  useEffect(() => {
+    const entries = data?.timeIndex || []
+    if (!entries.length) return undefined
+    let cancelled = false
+    entries.slice(0, 16).forEach((entry) => {
+      if (!entry?.filename || sliceCacheRef.current.has(entry.filename)) return
+      fetchJson(`/api/data/time_data/${encodeURIComponent(entry.filename)}`)
+        .then((slice) => { if (!cancelled) sliceCacheRef.current.set(entry.filename, slice) })
+        .catch(() => {})
+    })
+    return () => { cancelled = true }
+  }, [data?.timeIndex])
+
   useEffect(() => {
     if (!data) return
     let cancelled = false
@@ -121,6 +152,8 @@ export default function NetVisionDashboard() {
   async function reloadRuntimeData() {
     const payload = await loadDashboardData()
     setData(payload)
+    setDelegationVariationRows([])
+    sliceCacheRef.current.clear()
     setTimeIndex(0)
     setScope(initialAdminScope)
     setActiveTab('overview')
@@ -147,26 +180,93 @@ export default function NetVisionDashboard() {
     }
   }
 
-  async function loadTimeSlice(index) {
+  const loadTimeSlice = useCallback(async (index) => {
     if (!data?.timeIndex?.[index]) return
+    if (loadingSliceRef.current) {
+      pendingSliceIndexRef.current = index
+      return
+    }
+    loadingSliceRef.current = true
     const entry = data.timeIndex[index]
     setTimeIndex(index)
-    if (!entry.filename) return
+    if (!entry.filename) {
+      loadingSliceRef.current = false
+      return
+    }
     try {
+      async function readSlice(timeEntry) {
+        if (!timeEntry?.filename) return null
+        if (sliceCacheRef.current.has(timeEntry.filename)) return sliceCacheRef.current.get(timeEntry.filename)
+        const slice = await fetchJson(`/api/data/time_data/${encodeURIComponent(timeEntry.filename)}`)
+        sliceCacheRef.current.set(timeEntry.filename, slice)
+        return slice
+      }
+      let previousSlice = null
       if (index > 0 && data.timeIndex[index - 1]?.filename) {
-        fetchJson(`/api/data/time_data/${encodeURIComponent(data.timeIndex[index - 1].filename)}`).then((slice) => setPreviousObservations(slice?.observations || {})).catch(() => setPreviousObservations({}))
+        previousSlice = await readSlice(data.timeIndex[index - 1]).catch(() => null)
+        setPreviousObservations(previousSlice?.observations || {})
       } else {
         setPreviousObservations({})
+        setDelegationVariationRows([])
       }
-      const slice = await fetchJson(`/api/data/time_data/${encodeURIComponent(entry.filename)}`)
+      const slice = await readSlice(entry)
+      if (previousSlice?.observations && slice?.observations) {
+        const prevCells = buildCells(data.baseline, previousSlice.observations, data.adminCellIndex)
+        const currentCellsForVariation = buildCells(data.baseline, slice.observations, data.adminCellIndex)
+        const prevRows = rankDelegations(prevCells, data.registry, null, metricMode)
+        const currentRows = rankDelegations(currentCellsForVariation, data.registry, null, metricMode)
+        const prevById = new Map(prevRows.map((row) => [row.id, row]))
+        setDelegationVariationRows(currentRows.map((row) => {
+          const prev = prevById.get(row.id) || {}
+          const currentValue = Number(row.value || 0)
+          const previousValue = Number(prev.value || 0)
+          return {
+            ...row,
+            deltaValue: currentValue - previousValue,
+            deltaPrb: Number(row.avg_prb || 0) - Number(prev.avg_prb || 0),
+            deltaCongestion: Number(row.congestion_rate || 0) - Number(prev.congestion_rate || 0),
+            previousValue,
+          }
+        }).filter((row) => Math.abs(row.deltaValue) >= 0.1 || Math.abs(row.deltaPrb) >= 0.1 || Math.abs(row.deltaCongestion) >= 0.1)
+          .sort((a, b) => Math.abs(b.deltaValue) - Math.abs(a.deltaValue))
+          .slice(0, 10))
+      }
       setData((prev) => ({ ...prev, currentTimeEntry: entry, observations: slice?.observations || {} }))
+      const nextEntry = data.timeIndex[Math.min(data.timeIndex.length - 1, index + 1)]
+      if (nextEntry?.filename && !sliceCacheRef.current.has(nextEntry.filename)) {
+        readSlice(nextEntry).catch(() => {})
+      }
+      if (timelinePlayback.isPlaying) {
+        for (let i = index + 2; i <= Math.min(data.timeIndex.length - 1, index + 10); i += 1) {
+          const ahead = data.timeIndex[i]
+          if (!ahead?.filename || sliceCacheRef.current.has(ahead.filename)) continue
+          readSlice(ahead).catch(() => {})
+        }
+      }
     } catch (err) {
       setLoadError(err.message || String(err))
+    } finally {
+      loadingSliceRef.current = false
+      if (pendingSliceIndexRef.current !== null) {
+        const nextRequested = pendingSliceIndexRef.current
+        pendingSliceIndexRef.current = null
+        if (nextRequested !== index) loadTimeSlice(nextRequested)
+      }
     }
-  }
+  }, [data?.timeIndex, data?.baseline, data?.adminCellIndex, data?.registry, metricMode, timelinePlayback.isPlaying])
 
-  const cells = useMemo(() => data ? buildCells(data.baseline, data.observations, data.adminCellIndex) : [], [data])
-  const previousCells = useMemo(() => data && Object.keys(previousObservations || {}).length ? buildCells(data.baseline, previousObservations, data.adminCellIndex) : [], [data, previousObservations])
+  useEffect(() => {
+    if (!timelinePlayback.isPlaying || !timeIndexEntriesRef.current.length) return undefined
+    const timer = window.setInterval(() => {
+      const lastIndex = Math.max(0, timeIndexEntriesRef.current.length - 1)
+      const nextIndex = timeIndexRef.current >= lastIndex ? 0 : timeIndexRef.current + 1
+      loadTimeSlice(nextIndex)
+    }, timelinePlayback.speedMs)
+    return () => window.clearInterval(timer)
+  }, [timelinePlayback.isPlaying, timelinePlayback.speedMs, loadTimeSlice])
+
+  const cells = useMemo(() => data ? buildCells(data.baseline, data.observations, data.adminCellIndex) : [], [data?.baseline, data?.observations, data?.adminCellIndex])
+  const previousCells = useMemo(() => data && Object.keys(previousObservations || {}).length ? buildCells(data.baseline, previousObservations, data.adminCellIndex) : [], [data?.baseline, previousObservations, data?.adminCellIndex])
   const bands = useMemo(() => Array.from(new Set(cells.map((cell) => String(cell.frequency_band)).filter(Boolean))).sort(), [cells])
   const scopedCellsRaw = useMemo(() => {
     if (scope.level === 'governorate') return cells.filter((cell) => cell.admin?.gov_id === scope.governorateId)
@@ -179,10 +279,11 @@ export default function NetVisionDashboard() {
   const alerts = useMemo(() => summarizeAlerts(scopedCells), [scopedCells])
   const metric = METRIC_MODES.find((item) => item.id === metricMode) || METRIC_MODES[0]
   const nationalSummary = useMemo(() => aggregateNationalScope(filteredCells), [filteredCells])
-  const governorateRows = useMemo(() => data ? rankGovernorates(filteredCells, data.registry, metricMode) : [], [filteredCells, data, metricMode])
-  const delegationRows = useMemo(() => data ? rankDelegations(filteredCells, data.registry, scope.governorateId, metricMode) : [], [filteredCells, data, scope.governorateId, metricMode])
-  const allDelegationRows = useMemo(() => data ? rankDelegations(filteredCells, data.registry, null, metricMode) : [], [filteredCells, data, metricMode])
-  const searchIndex = useMemo(() => data ? buildSearchIndex(data.registry, cells, watchlist, savedViews) : [], [data, cells, watchlist, savedViews])
+  const governorateRows = useMemo(() => data ? rankGovernorates(filteredCells, data.registry, metricMode) : [], [filteredCells, data?.registry, metricMode])
+  const previousGovernorateRows = useMemo(() => data && previousCells.length ? rankGovernorates(previousCells, data.registry, metricMode) : [], [data?.registry, previousCells, metricMode])
+  const delegationRows = useMemo(() => data ? rankDelegations(filteredCells, data.registry, scope.governorateId, metricMode) : [], [filteredCells, data?.registry, scope.governorateId, metricMode])
+  const allDelegationRows = useMemo(() => data ? rankDelegations(filteredCells, data.registry, null, metricMode) : [], [filteredCells, data?.registry, metricMode])
+  const searchIndex = useMemo(() => data ? buildSearchIndex(data.registry, cells, watchlist, savedViews) : [], [data?.registry, cells, watchlist, savedViews])
   const searchResults = useMemo(() => searchAdmin(query, searchIndex), [query, searchIndex])
 
   const selectedGovernorate = useMemo(() => data?.registry?.governorates?.find((gov) => gov.gov_id === scope.governorateId) || null, [data, scope.governorateId])
@@ -197,8 +298,8 @@ export default function NetVisionDashboard() {
     return previousCells
   }, [previousCells, scope])
   const ranIssue = useMemo(() => classifyRanIssue(currentSummary), [currentSummary])
-  const confidence = useMemo(() => computeConfidence({ cells: scopedCellsRaw, summary: currentSummary, peakRows, dataMode, timeIndex: data?.timeIndex || [], reconciliation: data?.reconciliation }), [scopedCellsRaw, currentSummary, peakRows, dataMode, data])
-  const dataQuality = useMemo(() => computeDataQuality({ data, cells, timeIndex: data?.timeIndex || [], peakPayload, dataMode }), [data, cells, peakPayload, dataMode])
+  const confidence = useMemo(() => computeConfidence({ cells: scopedCellsRaw, summary: currentSummary, peakRows, dataMode, timeIndex: data?.timeIndex || [], reconciliation: data?.reconciliation }), [scopedCellsRaw, currentSummary, peakRows, dataMode, data?.timeIndex, data?.reconciliation])
+  const dataQuality = useMemo(() => computeDataQuality({ data, cells, timeIndex: data?.timeIndex || [], peakPayload, dataMode }), [data?.baseline, data?.observations, data?.timeIndex, data?.reconciliation, cells, peakPayload, dataMode])
   const whyCritical = useMemo(() => buildWhyCritical({ summary: currentSummary, peakPayload, peakRows, issue: ranIssue, warnings: dataQuality.warnings }), [currentSummary, peakPayload, peakRows, ranIssue, dataQuality])
   const sliceDelta = useMemo(() => computeSliceDelta(scopedCellsRaw, scopedPreviousCells), [scopedCellsRaw, scopedPreviousCells])
 
@@ -224,8 +325,25 @@ export default function NetVisionDashboard() {
     const cell = cells.find((item) => item.cell_name === cellName)
     if (!cell?.admin) return
     if (options.activeTab) setActiveTab(options.activeTab)
-    else setActiveTab('qos')
+    else setActiveTab('operations')
     setScope({ ...initialAdminScope, level: 'cell', governorateId: cell.admin.gov_id, governorateName: cell.admin.gov_name, delegationId: cell.admin.deleg_id, delegationName: cell.admin.deleg_name, selectedSite: cell.site_name, selectedCellName: cell.cell_name, transitionState: 'idle' })
+  }
+
+  function toggleTimelinePlayback() {
+    setTimelinePlayback((prev) => ({ ...prev, isPlaying: !prev.isPlaying }))
+  }
+
+  function changeTimelineSpeed(speedMs) {
+    const allowed = [3000, 1500, 750, 350, 200]
+    const next = allowed.includes(speedMs) ? speedMs : 1500
+    setTimelinePlayback((prev) => ({ ...prev, speedMs: next }))
+  }
+
+  function startTimelineFrom(mode) {
+    const maxIndex = Math.max(0, (data?.timeIndex?.length || 1) - 1)
+    const startIndex = mode === 'start' ? 0 : mode === 'end' ? maxIndex : Math.min(timeIndex, maxIndex)
+    loadTimeSlice(startIndex)
+    setTimelinePlayback((prev) => ({ ...prev, isPlaying: true, startMode: mode }))
   }
 
   function selectSearchResult(item) {
@@ -378,17 +496,17 @@ export default function NetVisionDashboard() {
       report.title,
       `Scope: ${report.scope.level} - ${report.scope.label}`,
       `Timestamp: ${report.timestamp}`,
-      `Confidence: ${confidence.label} (${confidence.score.toFixed(0)}%)`,
+      `Confiance: ${confidence.label} (${confidence.score.toFixed(0)}%)`,
       `Cells: ${currentSummary.observed_cells}`,
       `Congested: ${currentSummary.congested_cells}`,
       `Avg PRB: ${currentSummary.avg_prb.toFixed(1)}%`,
-      `Peak hour: ${report.peak_hours.summary?.peak_hour || 'N/A'}`,
+      `Heure de pointe: ${report.peak_hours.summary?.peak_hour || 'N/A'}`,
       `QoS diagnosis: ${ranIssue.issue}`,
       '',
       'Why critical:',
       ...whyCritical.map((line) => `- ${line}`),
       '',
-      'Data quality:',
+      'Qualite des donnees:',
       ...confidence.reasons.map((line) => `- ${line}`),
       ...dataQuality.warnings.slice(0, 8).map((line) => `- Warning: ${line}`),
       '',
@@ -432,26 +550,37 @@ export default function NetVisionDashboard() {
   ]), [endpointStatus, dataMode])
 
   let panel = null
-  if (!data && !loadError) panel = <div className="panel-shell"><div className="loading-block">Loading NetVision runtime data and administrative geography...</div></div>
-  else if (loadError) panel = <div className="panel-shell"><div className="empty-state warning">{loadError}. If admin boundary files are missing, run scripts/prepare_admin_boundaries.py.</div></div>
-  else panel = <CockpitPanel activeTab={activeTab} scope={scope} data={data} dataMode={dataMode} onDataModeChange={changeDataMode} nationalSummary={nationalSummary} governorateSummary={governorateSummary} delegationSummary={delegationSummary} summary={currentSummary} governorateRows={governorateRows} delegationRows={delegationRows} selectedGovernorate={selectedGovernorate} selectedDelegation={selectedDelegation} selectedCell={selectedCell} siteRows={siteRows} scopedCells={scopedCells} alerts={alerts} metric={metric} currentTime={data.currentTimeEntry} filters={filters} onFilterChange={updateFilters} bands={bands} onSelectGovernorate={selectGovernorate} onSelectDelegation={selectDelegation} onSelectCell={selectCell} reconciliation={data.reconciliation} driftStatus={drift.status} driftAlerts={drift.alerts} driftUi={driftUi} onExpandDrift={() => setDriftUi((prev) => ({ ...prev, collapsed: false }))} peakRows={peakRows} peakPayload={peakPayload} busyMetric={busyMetric} onBusyMetricChange={setBusyMetric} onPeakRowSelect={selectPeakRow} backendHealth={backendHealth} workerState={workerState} importState={importState} endpointCoverage={endpointCoverage} onImportFile={handleImportFile} onImportTypeChange={(importType) => setImportState((prev) => ({ ...prev, importType }))} onRestoreRuntime={restoreRuntimeData} onExportJson={exportScopedJson} onExportReport={exportReport} whyCritical={whyCritical} confidence={confidence} dataQuality={dataQuality} sliceDelta={sliceDelta} watchlist={watchlist} savedViews={savedViews} onPinScope={pinCurrentScope} onRestoreWatch={restoreScopeItem} onRemoveWatch={removeWatchItem} onSaveView={saveCurrentView} onRestoreSavedView={restoreSavedView} onRemoveSavedView={removeSavedView} onRunDemo={runGuidedDemo} />
+  if (!data && !loadError) panel = <div className="panel-shell"><div className="loading-block">Chargement des donnees runtime NetVision et de la geographie administrative...</div></div>
+  else if (loadError) panel = <div className="panel-shell"><div className="empty-state warning">{loadError}. Verifiez les fichiers de geographie administrative.</div></div>
+  else panel = <CockpitPanel activeTab={activeTab} adminToolsEnabled={adminToolsEnabled} scope={scope} data={data} dataMode={dataMode} onDataModeChange={changeDataMode} nationalSummary={nationalSummary} governorateSummary={governorateSummary} delegationSummary={delegationSummary} summary={currentSummary} governorateRows={governorateRows} previousGovernorateRows={previousGovernorateRows} delegationRows={delegationRows} delegationVariationRows={delegationVariationRows} selectedGovernorate={selectedGovernorate} selectedDelegation={selectedDelegation} selectedCell={selectedCell} siteRows={siteRows} scopedCells={scopedCells} alerts={alerts} metric={metric} currentTime={data.currentTimeEntry} filters={filters} onFilterChange={updateFilters} bands={bands} onSelectGovernorate={selectGovernorate} onSelectDelegation={selectDelegation} onSelectCell={selectCell} reconciliation={data.reconciliation} driftStatus={drift.status} driftAlerts={drift.alerts} driftUi={driftUi} onExpandDrift={() => setDriftUi((prev) => ({ ...prev, collapsed: false }))} peakRows={peakRows} peakPayload={peakPayload} busyMetric={busyMetric} onBusyMetricChange={setBusyMetric} onPeakRowSelect={selectPeakRow} backendHealth={backendHealth} workerState={workerState} importState={importState} endpointCoverage={endpointCoverage} onImportFile={handleImportFile} onImportTypeChange={(importType) => setImportState((prev) => ({ ...prev, importType }))} onRestoreRuntime={restoreRuntimeData} onExportJson={exportScopedJson} onExportReport={exportReport} whyCritical={whyCritical} confidence={confidence} dataQuality={dataQuality} sliceDelta={sliceDelta} watchlist={watchlist} savedViews={savedViews} onPinScope={pinCurrentScope} onRestoreWatch={restoreScopeItem} onRemoveWatch={removeWatchItem} onSaveView={saveCurrentView} onRestoreSavedView={restoreSavedView} onRemoveSavedView={removeSavedView} onRunDemo={runGuidedDemo} />
 
   return (
     <div className={`app-shell ${focusMode ? 'focus-mode' : ''} ${theme === 'dark' ? 'theme-dark' : ''}`}>
-      <a href="#main-content" className="skip-link">Skip to main content</a>
-      <TopHeader theme={theme} onToggleTheme={() => setTheme((value) => value === 'dark' ? 'light' : 'dark')} metricMode={metricMode} metricModes={METRIC_MODES} onMetricModeChange={setMetricMode} focusMode={focusMode} onToggleFocus={() => setFocusMode((v) => !v)} query={query} onQueryChange={setQuery} searchResults={searchResults} onSearchSelect={selectSearchResult} dataMode={dataMode} onSecondaryPanel={setActiveTab} />
-      <div className="sr-only" aria-live="polite">{`Current scope ${scope.level}${scope.governorateName ? `, ${scope.governorateName}` : ''}${scope.delegationName ? `, ${scope.delegationName}` : ''}${scope.selectedCellName ? `, ${scope.selectedCellName}` : ''}`}</div>
+      <a href="#main-content" className="skip-link">Aller au contenu principal</a>
+      <TopHeader metricMode={metricMode} metricModes={METRIC_MODES} onMetricModeChange={setMetricMode} query={query} onQueryChange={setQuery} searchResults={searchResults} onSearchSelect={selectSearchResult} dataMode={dataMode} onSecondaryPanel={setActiveTab} adminToolsEnabled={adminToolsEnabled} />
+      <div className="sr-only" aria-live="polite">{`Perimetre courant ${scope.level}${scope.governorateName ? `, ${scope.governorateName}` : ''}${scope.delegationName ? `, ${scope.delegationName}` : ''}${scope.selectedCellName ? `, ${scope.selectedCellName}` : ''}`}</div>
       <main id="main-content" className="command-layout cockpit-layout">
-        <CockpitRail activeTab={activeTab} onTabChange={setActiveTab} alertCount={alerts.length} />
+        <CockpitRail activeTab={activeTab} onTabChange={setActiveTab} alertCount={alerts.length} tabs={visibleTabs} />
         <section className="map-column">
           <Breadcrumb scope={scope} onNational={() => { setActiveTab('overview'); setScope(backToNational()) }} onGovernorate={() => { setActiveTab('overview'); setScope(backToGovernorate(scope)) }} onDelegation={() => { setActiveTab('qos'); setScope(backToDelegation(scope)) }} />
-          <TimelineBar timeIndex={data?.timeIndex || []} currentIndex={timeIndex} onChange={loadTimeSlice} onPrev={() => loadTimeSlice(Math.max(0, timeIndex - 1))} onNext={() => loadTimeSlice(Math.min((data?.timeIndex?.length || 1) - 1, timeIndex + 1))} />
-          {data ? <TunisiaMap governoratesGeo={data.governorates} delegationsGeo={data.delegations} governorateRows={governorateRows} delegationRows={allDelegationRows} cells={cells} filteredCells={filteredCells} scope={scope} metricMode={metricMode} metric={metric} layerVisibility={layerVisibility} onGovernorateClick={selectGovernorate} onDelegationClick={selectDelegation} onCellClick={selectCell} /> : <div className="map-card skeleton-map" />}
-          <div className="scope-footer"><span>Mode: {dataMode}</span><span>Scope: {scope.level}</span><span>{currentSummary.observed_cells || 0} scoped cells</span><span>{data?.currentTimeEntry?.timestamp || 'No time slice'}</span>{(scope.level === 'delegation' || scope.level === 'cell') ? <button data-testid="toggle-sites" onClick={() => setLayerVisibility((v) => ({ ...v, sites: !v.sites }))}>Sites {layerVisibility.sites ? 'on' : 'off'}</button> : <span>Sites locked until delegation</span>}{scope.level !== 'national' ? <button data-testid="toggle-delegations" onClick={() => setLayerVisibility((v) => ({ ...v, delegations: !v.delegations }))}>Delegations {layerVisibility.delegations ? 'on' : 'off'}</button> : null}</div>
+          <TimelineBar
+            timeIndex={data?.timeIndex || []}
+            currentIndex={timeIndex}
+            onChange={(index) => { setTimelinePlayback((prev) => ({ ...prev, isPlaying: false })); loadTimeSlice(index) }}
+            onPrev={() => { setTimelinePlayback((prev) => ({ ...prev, isPlaying: false })); loadTimeSlice(Math.max(0, timeIndex - 1)) }}
+            onNext={() => { setTimelinePlayback((prev) => ({ ...prev, isPlaying: false })); loadTimeSlice(Math.min((data?.timeIndex?.length || 1) - 1, timeIndex + 1)) }}
+            isPlaying={timelinePlayback.isPlaying}
+            speedMs={timelinePlayback.speedMs}
+            onTogglePlay={toggleTimelinePlayback}
+            onSpeedChange={changeTimelineSpeed}
+            onStartFrom={startTimelineFrom}
+          />
+          {data ? <TunisiaMap governoratesGeo={data.governorates} delegationsGeo={data.delegations} governorateRows={governorateRows} delegationRows={allDelegationRows} cells={cells} filteredCells={filteredCells} scope={scope} metricMode={metricMode} metric={metric} mapControls={mapControls} onGovernorateClick={selectGovernorate} onDelegationClick={selectDelegation} onCellClick={selectCell} /> : <div className="map-card skeleton-map" />}
+          <div className="scope-footer map-control-strip"><span>{currentSummary.observed_cells || 0} cellules</span><span>{data?.currentTimeEntry?.timestamp || 'Aucune tranche'}</span>{(scope.level === 'delegation' || scope.level === 'cell') ? <button data-testid="toggle-heatmap" onClick={() => setMapControls((v) => ({ ...v, heatmap: !v.heatmap }))}>{mapControls.heatmap ? 'Voir les sites' : 'Voir la chaleur'}</button> : null}{(scope.level === 'delegation' || scope.level === 'cell') ? <button data-testid="toggle-labels" onClick={() => setMapControls((v) => ({ ...v, labels: !v.labels }))}>{mapControls.labels ? 'Masquer libelles' : 'Afficher libelles'}</button> : null}</div>
         </section>
         <aside className="insight-column">{panel}</aside>
       </main>
-      {demoStep !== null ? <div className="transition-overlay">Guided demo{dataMode === 'mock' ? ' - mock demo mode, not official measurements' : ''}</div> : transitionLabel(scope) ? <div className="transition-overlay">{transitionLabel(scope)}</div> : null}
+      {demoStep !== null ? <div className="transition-overlay">Parcours de demonstration</div> : transitionLabel(scope) ? <div className="transition-overlay">{transitionLabel(scope)}</div> : null}
     </div>
   )
 }

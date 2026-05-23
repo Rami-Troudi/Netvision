@@ -1,12 +1,14 @@
 import { getScopedCellNames } from './adminScope'
+import { normalizeOperationalCell } from '../utils/v2Contracts.mjs'
+import { normalizeAdminNames, normalizeDelegationName, normalizeGovernorateName } from './adminNaming'
 
 export const METRIC_MODES = [
-  { id: 'congestion_rate', label: 'Congestion Rate', unit: '%' },
-  { id: 'avg_prb', label: 'Avg PRB Load', unit: '%' },
-  { id: 'avg_throughput', label: 'Avg Throughput', unit: 'Mbps' },
-  { id: 'avg_cqi', label: 'Avg CQI', unit: '' },
-  { id: 'lost_traffic', label: 'Lost Traffic', unit: 'GB' },
-  { id: 'recoverable_traffic', label: 'Recoverable Traffic', unit: 'GB' },
+  { id: 'congestion_rate', label: 'Taux de congestion', unit: '%' },
+  { id: 'avg_prb', label: 'Charge PRB moyenne', unit: '%' },
+  { id: 'avg_throughput', label: 'Debit moyen', unit: 'Mbps' },
+  { id: 'avg_cqi', label: 'CQI moyen', unit: '' },
+  { id: 'lost_traffic', label: 'Trafic perdu', unit: 'GB' },
+  { id: 'recoverable_traffic', label: 'Trafic recuperable', unit: 'GB' },
 ]
 
 function num(value, fallback = 0) {
@@ -15,35 +17,14 @@ function num(value, fallback = 0) {
 }
 
 export function normalizeObservation(base = {}, obs = {}) {
-  const prb = num(obs.prb_load ?? obs.prb ?? obs.dl_prb_load ?? obs.load, 0)
-  const throughputRaw = num(obs.throughput ?? obs.dl_throughput ?? obs.user_throughput ?? obs.avg_throughput, 0)
-  return {
-    cell_name: obs.cell_name,
-    site_name: base.enodeb_name || base.site_name || '',
-    longitude: num(base.longitude, null),
-    latitude: num(base.latitude, null),
-    azimuth: num(base.azimuth, 0),
-    frequency_band: base.frequency_band ?? null,
-    localcell_id: base.localcell_id ?? null,
-    prb_load: prb,
-    throughput: throughputRaw > 1000 ? throughputRaw / 1000 : throughputRaw,
-    cqi: num(obs.cqi ?? obs.avg_cqi, 0),
-    active_users: num(obs.active_users ?? obs.rrc_connected_users ?? obs.users ?? obs.rrc_users ?? obs.traffic, 0),
-    rrc_users: num(obs.rrc_users ?? obs.rrc_connected_users ?? obs.active_users, 0),
-    ta: num(obs.ta ?? obs.avg_ta ?? obs.timing_advance, 0),
-    traffic: num(obs.traffic ?? obs.data_traffic ?? obs.dl_traffic_gb, 0),
-    congested: Boolean(obs.congested) || prb >= 85,
-    health: num(obs.health ?? obs.health_score, Math.max(0, 100 - Math.max(0, prb - 50) * 1.4)),
-    lost_traffic: num(obs.lost_traffic ?? obs.lost_gb ?? obs.potential_lost_gb, 0),
-    recoverable_traffic: num(obs.recoverable_traffic ?? obs.recoverable_gb, 0),
-  }
+  return normalizeOperationalCell(base, obs, null)
 }
 
 export function buildCells(baseline = {}, observations = {}, adminCellIndex = {}) {
   return Object.entries(baseline).map(([cellName, base]) => ({
     ...normalizeObservation(base, { ...(observations[cellName] || {}), cell_name: cellName }),
     cell_name: cellName,
-    admin: adminCellIndex[cellName] || null,
+    admin: normalizeAdminNames(adminCellIndex[cellName] || null),
   }))
 }
 
@@ -110,7 +91,8 @@ export function aggregateDelegationScope(cells, delegationId) {
 export function rankGovernorates(cells, registry, metricMode = 'congestion_rate') {
   return (registry?.governorates || []).map((gov) => {
     const scoped = cells.filter((cell) => cell.admin?.gov_id === gov.gov_id)
-    return { ...gov, ...aggregateCells(scoped, gov.gov_name), id: gov.gov_id, name: gov.gov_name, value: metricValue(aggregateCells(scoped), metricMode) }
+    const govName = normalizeGovernorateName(gov.gov_name)
+    return { ...gov, gov_name: govName, ...aggregateCells(scoped, govName), id: gov.gov_id, name: govName, value: metricValue(aggregateCells(scoped), metricMode) }
   }).sort((a, b) => b.value - a.value)
 }
 
@@ -119,8 +101,10 @@ export function rankDelegations(cells, registry, governorateId, metricMode = 'co
     .filter((deleg) => !governorateId || deleg.gov_id === governorateId)
     .map((deleg) => {
       const scoped = cells.filter((cell) => cell.admin?.deleg_id === deleg.deleg_id)
-      const agg = aggregateCells(scoped, deleg.deleg_name)
-      return { ...deleg, ...agg, id: deleg.deleg_id, name: deleg.deleg_name, value: metricValue(agg, metricMode) }
+      const delegName = normalizeDelegationName(deleg.deleg_name)
+      const govName = normalizeGovernorateName(deleg.gov_name)
+      const agg = aggregateCells(scoped, delegName)
+      return { ...deleg, deleg_name: delegName, gov_name: govName, ...agg, id: deleg.deleg_id, name: delegName, value: metricValue(agg, metricMode) }
     })
     .sort((a, b) => b.value - a.value)
 }
@@ -151,19 +135,19 @@ export function formatMetric(value, digits = 1) {
 }
 
 export function diagnoseCell(cell) {
-  if (!cell) return 'Select a cell to calculate multi-KPI diagnosis.'
+  if (!cell) return 'Selectionnez une cellule pour calculer le diagnostic multi-KPI.'
   const highPrb = cell.prb_load >= 85
   const lowThroughput = cell.throughput > 0 && cell.throughput < 15
   const lowCqi = cell.cqi > 0 && cell.cqi < 8
   const goodThroughput = cell.throughput >= 15
   const goodCqi = cell.cqi >= 9
   const highTa = cell.ta >= 2.5
-  if (highPrb && lowThroughput && lowCqi && highTa) return 'High PRB, low throughput, low CQI and elevated TA indicate edge coverage or interference pressure.'
-  if (highPrb && lowThroughput && !lowCqi) return 'High PRB with low throughput and acceptable CQI indicates capacity pressure.'
-  if (highPrb && goodThroughput && goodCqi) return 'The cell is loaded but throughput and CQI remain acceptable in this slice.'
-  if (highPrb) return 'PRB is elevated; compare with recurring busy-hour patterns before treating it as structural congestion.'
-  if (lowThroughput && lowCqi) return 'Throughput and CQI degradation suggest radio quality or interference review.'
-  return 'No severe multi-KPI fault pattern detected in the selected time slice.'
+  if (highPrb && lowThroughput && lowCqi && highTa) return 'PRB eleve, debit faible, CQI faible et TA eleve : verifier couverture de bord de cellule ou interference.'
+  if (highPrb && lowThroughput && !lowCqi) return 'PRB eleve avec debit faible et CQI acceptable : pression capacitaire probable.'
+  if (highPrb && goodThroughput && goodCqi) return 'Cellule chargee, mais debit et CQI restent acceptables sur cette tranche.'
+  if (highPrb) return 'PRB eleve : comparer avec les heures critiques recurrentes avant de conclure a une congestion structurelle.'
+  if (lowThroughput && lowCqi) return 'Debit et CQI degraderes : revue qualite radio ou interference recommandee.'
+  return 'Aucun defaut multi-KPI severe detecte sur cette tranche.'
 }
 
 export function classifyRanIssue(cellOrScope) {
