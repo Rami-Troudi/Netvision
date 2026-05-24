@@ -1,4 +1,5 @@
 import { enforceRateLimit, requireAuthenticatedRequest } from './_lib/security'
+import { appendAudit, auditActor } from './_lib/audit'
 
 const BACKEND_BASE_URL = (process.env.BACKEND_API_URL || 'http://127.0.0.1:8000').trim()
 const BACKEND_TIMEOUT_MS = Number.parseInt(process.env.BACKEND_API_TIMEOUT_MS || '30000', 10)
@@ -77,14 +78,17 @@ export default async function handler(req, res) {
     try {
       payload = normalizePayload(req.body)
     } catch (err) {
+      appendAudit({ actor: auditActor(req), endpoint: '/api/recommend-context', action: 'upload', result: 'invalid_payload', detail: err instanceof Error ? err.message : String(err) })
       return res.status(400).json({ error: err instanceof Error ? err.message : String(err) })
     }
 
     try {
       const backendData = await callBackend('/context/upload', 'POST', payload)
+      appendAudit({ actor: auditActor(req), endpoint: '/api/recommend-context', action: 'upload', result: 'ok' })
       return res.status(200).json({ success: true, ...backendData })
     } catch (err) {
       const statusCode = Number.isInteger(err?.statusCode) ? err.statusCode : 502
+      appendAudit({ actor: auditActor(req), endpoint: '/api/recommend-context', action: 'upload', result: 'error', detail: err instanceof Error ? err.message : String(err) })
       return res.status(statusCode).json({
         error: 'Failed to upload recommendation context',
         detail: err instanceof Error ? err.message : String(err),
@@ -96,9 +100,11 @@ export default async function handler(req, res) {
   if (req.method === 'DELETE') {
     try {
       const backendData = await callBackend('/context/reset', 'DELETE')
+      appendAudit({ actor: auditActor(req), endpoint: '/api/recommend-context', action: 'reset', result: 'ok' })
       return res.status(200).json({ success: true, ...backendData })
     } catch (err) {
       const statusCode = Number.isInteger(err?.statusCode) ? err.statusCode : 502
+      appendAudit({ actor: auditActor(req), endpoint: '/api/recommend-context', action: 'reset', result: 'error', detail: err instanceof Error ? err.message : String(err) })
       return res.status(statusCode).json({
         error: 'Failed to reset recommendation context',
         detail: err instanceof Error ? err.message : String(err),

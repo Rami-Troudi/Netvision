@@ -17,12 +17,11 @@ export const ADMIN_TABS = Object.freeze([
 ])
 
 export const ACTION_LABELS_FR = Object.freeze({
-  tilt: 'Ajuster l inclinaison',
+  tilt: 'Ajuster inclinaison / puissance',
   redistribute: 'Reequilibrer la charge',
+  neighbor_optimization: 'Optimiser les voisins',
   add_carrier: 'Ajouter une porteuse',
   add_sector: 'Ajouter un secteur',
-  new_site: 'Planifier un nouveau site',
-  add_site: 'Ajouter un site',
 })
 
 export const STATE_LABELS_FR = Object.freeze({

@@ -5,14 +5,15 @@ const TIME_ENTRY = {
   timestamp: process.env.SMOKE_TIMESTAMP || '01-12-2025 00:00',
   filename: process.env.SMOKE_TIME_FILE || '01-12-2025_00-00.json',
 }
-const ACTIONS = ['tilt', 'redistribute', 'add_carrier', 'add_sector', 'add_site', 'new_site']
+const ACTIONS = ['tilt', 'redistribute', 'neighbor_optimization', 'add_carrier', 'add_sector']
 
 function actionParams(action) {
   if (action === 'tilt') return { degrees: 2 }
   if (action === 'redistribute') return { ratio: 0.15 }
+  if (action === 'neighbor_optimization') return { interference_relief: 0.12 }
   if (action === 'add_carrier') return { band: 3 }
-  if (action === 'add_sector') return { targetSectors: 4 }
-  return { siteType: 'macro' }
+  if (action === 'add_sector') return { target_sectors: 4 }
+  return {}
 }
 
 async function readBody(res) {

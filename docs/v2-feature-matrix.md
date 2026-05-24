@@ -6,7 +6,7 @@
 | Smart recommendations | Operations tab recommendation cards | `POST /api/recommend`, FastAPI `/predict` | Contract mapping tests, browser QA |
 | Recommendation-to-simulation | Recommendation card `Simulate` action | `POST /api/jobs`, `GET /api/jobs/:id`, worker | Contract payload tests, `smoke:v2`, browser QA |
 | Manual simulator | Operations action selector | `POST /api/jobs`, `POST /api/simulate` diagnostic | Contract action tests, `smoke:v2` all supported actions |
-| Site planning | Operations site planning card | `add_site` / `new_site` simulator actions | `smoke:v2`, browser QA |
+| Site planning | Advisory only outside simulator scope | planning study inputs, not executable simulator action | Contract rejection tests, browser QA |
 | Analytics modal | Analytics tab | runtime cells, `/api/peak-hours`, FastAPI summary later | Browser QA |
 | Explore modal | Analytics peak pressure section | `/api/peak-hours` | Browser QA |
 | Import CSV mapping | Data tab ingestion workflow | data worker, `POST /api/recommend-context` | Browser/manual fixture QA |

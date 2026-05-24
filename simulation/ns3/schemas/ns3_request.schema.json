@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://netvision.local/schemas/ns3_request.schema.json",
+  "title": "NetVision ns-3 scenario request",
+  "type": "object",
+  "required": ["job_id", "engine", "fidelity_level", "scenario", "action", "topology", "observed_kpis", "traffic_model"],
+  "properties": {
+    "job_id": { "type": "string" },
+    "engine": { "const": "ns3" },
+    "fidelity_level": { "const": "operations_v1" },
+    "scenario": {
+      "type": "object",
+      "required": ["target_cell", "duration_seconds", "random_seed"],
+      "properties": {
+        "scope": { "const": "cell" },
+        "target_cell": { "type": "string" },
+        "timestamp": { "type": ["string", "null"] },
+        "duration_seconds": { "type": "number", "minimum": 1, "maximum": 30 },
+        "random_seed": { "type": "number" }
+      }
+    },
+    "action": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "enum": ["tilt", "redistribute", "neighbor_optimization", "add_carrier", "add_sector"] },
+        "params": { "type": "object" }
+      }
+    },
+    "topology": { "type": "object" },
+    "observed_kpis": { "type": "object" },
+    "traffic_model": { "type": "object" },
+    "calibration": { "type": "object" },
+    "limits": { "type": "object" }
+  }
+}

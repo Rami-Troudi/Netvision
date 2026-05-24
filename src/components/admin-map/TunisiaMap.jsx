@@ -6,6 +6,7 @@ import { buildSiteSummaries, stateColor } from '../../admin/adminOps'
 import { DEFAULT_MAP_CONTROLS } from '../../utils/v2Contracts.mjs'
 import { normalizeDelegationName, normalizeGovernorateName } from '../../admin/adminNaming'
 import { stateLabelFr } from '../../utils/uiPolicy.mjs'
+import { deriveMapState } from './mapState.mjs'
 
 function decorateFeatures(fc, rows, idKey, metricMode) {
   const byId = new Map(rows.map((row) => [row.id, row]))
@@ -98,10 +99,12 @@ export default function TunisiaMap({ governoratesGeo, delegationsGeo, governorat
   const transitionRef = useRef([])
   const clickHandlersRef = useRef({ onGovernorateClick, onDelegationClick, onCellClick })
   const sourceRef = useRef({ govSource: null, delSource: null, siteSource: null })
+  const derivedMapStateRef = useRef(deriveMapState({ scope, mapControls }))
   const lastCameraRef = useRef('')
   const [hover, setHover] = useState(null)
   const [mapError, setMapError] = useState(null)
   const [mapReady, setMapReady] = useState(false)
+  const hoveredLayerRef = useRef(null)
 
   const govSource = useMemo(() => decorateFeatures(governoratesGeo, governorateRows, 'gov_id', metricMode), [governoratesGeo, governorateRows, metricMode])
   const delSource = useMemo(() => decorateFeatures(delegationsGeo, delegationRows, 'deleg_id', metricMode), [delegationsGeo, delegationRows, metricMode])
@@ -111,6 +114,12 @@ export default function TunisiaMap({ governoratesGeo, delegationsGeo, governorat
     return []
   }, [filteredCells, scope])
   const siteSource = useMemo(() => siteFeatureCollection(buildSiteSummaries(scopedCells)), [scopedCells])
+  const derivedMapState = useMemo(() => deriveMapState({ scope, mapControls }), [scope, mapControls])
+
+  useEffect(() => {
+    derivedMapStateRef.current = derivedMapState
+    setHover(null)
+  }, [derivedMapState])
 
   useEffect(() => {
     clickHandlersRef.current = { onGovernorateClick, onDelegationClick, onCellClick }
@@ -158,8 +167,31 @@ export default function TunisiaMap({ governoratesGeo, delegationsGeo, governorat
       map.on('click', 'radio-sites', (e) => e.features?.[0] && clickHandlersRef.current.onCellClick(e.features[0].properties.worst_cell))
       ;['admin-governorates-fill', 'admin-delegations-fill', 'radio-sites'].forEach((layer) => {
         map.on('mouseenter', layer, () => { map.getCanvas().style.cursor = 'pointer' })
-        map.on('mousemove', layer, (e) => setHover({ layer, props: e.features?.[0]?.properties || {} }))
-        map.on('mouseleave', layer, () => { map.getCanvas().style.cursor = ''; setHover(null) })
+        map.on('mousemove', layer, (e) => {
+          hoveredLayerRef.current = layer
+          const props = e.features?.[0]?.properties || {}
+          setHover({ layer, props })
+        })
+        map.on('mouseleave', layer, () => {
+          if (hoveredLayerRef.current === layer) hoveredLayerRef.current = null
+          map.getCanvas().style.cursor = ''
+          setHover(null)
+        })
+      })
+      map.on('mousemove', (e) => {
+        const features = map.queryRenderedFeatures(e.point, { layers: derivedMapStateRef.current.hoverLayers })
+        if (!features?.length) {
+          hoveredLayerRef.current = null
+          setHover(null)
+          map.getCanvas().style.cursor = ''
+          return
+        }
+        const feature = features[0]
+        const layer = feature.layer?.id
+        if (!layer) return
+        hoveredLayerRef.current = layer
+        map.getCanvas().style.cursor = 'pointer'
+        setHover({ layer, props: feature.properties || {} })
       })
     })
     return () => {
@@ -188,29 +220,24 @@ export default function TunisiaMap({ governoratesGeo, delegationsGeo, governorat
         transitionRef.current.push(window.setTimeout(applyScopeRendering, 100))
         return
       }
-      const govFilter = scope.level === 'national' ? null : ['==', ['get', 'gov_id'], scope.governorateId || '']
-      const delFilter = scope.level === 'governorate' ? ['==', ['get', 'gov_id'], scope.governorateId || ''] : (scope.level === 'delegation' || scope.level === 'cell') ? ['==', ['get', 'deleg_id'], scope.delegationId || ''] : ['==', ['get', 'deleg_id'], '__none__']
-      const showDelegations = scope.level === 'governorate' || scope.level === 'delegation' || scope.level === 'cell'
-      const showSites = (scope.level === 'delegation' || scope.level === 'cell') && mapControls?.sites !== false
-      const showSelectedCell = scope.level === 'cell' && showSites && Boolean(scope.selectedCellName)
-      const showHeatmap = showSites && Boolean(mapControls?.heatmap)
-      safeSetFilter(map, 'admin-governorates-fill', govFilter)
-      safeSetFilter(map, 'admin-governorates-line', govFilter)
-      safeSetFilter(map, 'admin-governorates-selected', ['==', ['get', 'gov_id'], scope.governorateId || ''])
-      safeSetFilter(map, 'admin-delegations-fill', delFilter)
-      safeSetFilter(map, 'admin-delegations-line', delFilter)
-      safeSetFilter(map, 'admin-delegations-selected', ['==', ['get', 'deleg_id'], scope.delegationId || ''])
-      safeSetFilter(map, 'selected-cell', showSelectedCell ? ['==', ['get', 'worst_cell'], scope.selectedCellName] : ['==', ['get', 'worst_cell'], '__none__'])
-      safeSetPaint(map, 'admin-delegations-fill', 'fill-opacity', showDelegations && mapControls?.delegations !== false ? 0.62 : 0)
-      safeSetPaint(map, 'admin-delegations-line', 'line-opacity', showDelegations && mapControls?.delegations !== false ? 0.78 : 0)
-      safeSetPaint(map, 'admin-delegations-selected', 'line-opacity', showDelegations && mapControls?.delegations !== false ? 1 : 0)
-      safeSetPaint(map, 'radio-sites', 'circle-opacity', showSites && !showHeatmap ? 0.95 : 0.28)
-      safeSetPaint(map, 'radio-sites-heatmap', 'heatmap-opacity', showHeatmap ? 0.8 : 0)
-      safeSetPaint(map, 'selected-cell', 'circle-opacity', showSelectedCell ? 0.95 : 0)
-      safeSetLayout(map, 'radio-sites', 'visibility', showSites ? 'visible' : 'none')
-      safeSetLayout(map, 'radio-sites-heatmap', 'visibility', showHeatmap ? 'visible' : 'none')
-      safeSetLayout(map, 'radio-site-labels', 'visibility', showSites && mapControls?.labels ? 'visible' : 'none')
-      safeSetLayout(map, 'selected-cell', 'visibility', showSelectedCell ? 'visible' : 'none')
+      const next = deriveMapState({ scope, mapControls })
+      safeSetFilter(map, 'admin-governorates-fill', next.filters.governorates)
+      safeSetFilter(map, 'admin-governorates-line', next.filters.governorates)
+      safeSetFilter(map, 'admin-governorates-selected', next.filters.governorateSelected)
+      safeSetFilter(map, 'admin-delegations-fill', next.filters.delegations)
+      safeSetFilter(map, 'admin-delegations-line', next.filters.delegations)
+      safeSetFilter(map, 'admin-delegations-selected', next.filters.delegationSelected)
+      safeSetFilter(map, 'selected-cell', next.filters.selectedCell)
+      safeSetPaint(map, 'admin-delegations-fill', 'fill-opacity', next.visibility.delegations ? 0.62 : 0)
+      safeSetPaint(map, 'admin-delegations-line', 'line-opacity', next.visibility.delegations ? 0.78 : 0)
+      safeSetPaint(map, 'admin-delegations-selected', 'line-opacity', next.visibility.delegations ? 1 : 0)
+      safeSetPaint(map, 'radio-sites', 'circle-opacity', next.visibility.sites && !next.visibility.heatmap ? 0.95 : 0.28)
+      safeSetPaint(map, 'radio-sites-heatmap', 'heatmap-opacity', next.visibility.heatmap ? 0.8 : 0)
+      safeSetPaint(map, 'selected-cell', 'circle-opacity', next.visibility.selectedCell ? 0.95 : 0)
+      safeSetLayout(map, 'radio-sites', 'visibility', next.visibility.sites ? 'visible' : 'none')
+      safeSetLayout(map, 'radio-sites-heatmap', 'visibility', next.visibility.heatmap ? 'visible' : 'none')
+      safeSetLayout(map, 'radio-site-labels', 'visibility', next.visibility.labels ? 'visible' : 'none')
+      safeSetLayout(map, 'selected-cell', 'visibility', next.visibility.selectedCell ? 'visible' : 'none')
     }
     applyScopeRendering()
   }, [scope, mapControls, mapReady])
@@ -218,7 +245,7 @@ export default function TunisiaMap({ governoratesGeo, delegationsGeo, governorat
   useEffect(() => {
     const map = mapRef.current
     if (!mapReady || !map) return
-    const cameraKey = `${scope.level}:${scope.governorateId || ''}:${scope.delegationId || ''}`
+    const cameraKey = derivedMapState.cameraKey
     if (lastCameraRef.current === cameraKey) return
     lastCameraRef.current = cameraKey
     map.resize()
@@ -235,7 +262,7 @@ export default function TunisiaMap({ governoratesGeo, delegationsGeo, governorat
       const feature = delegationsGeo.features.find((f) => f.properties.deleg_id === scope.delegationId)
       if (feature) map.flyTo({ center: featureCenter(feature), zoom: 9.6, duration: 900, essential: true })
     }
-  }, [scope.level, scope.governorateId, scope.delegationId, governoratesGeo, delegationsGeo, mapReady])
+  }, [scope.level, scope.governorateId, scope.delegationId, governoratesGeo, delegationsGeo, mapReady, derivedMapState.cameraKey])
 
   const hoverTitle = hover?.props?.site_name || hover?.props?.display_name || hover?.props?.gov_name || hover?.props?.deleg_name || 'Zone inconnue'
   const hoverType = hover?.layer === 'admin-delegations-fill' ? 'Delegation' : hover?.layer === 'admin-governorates-fill' ? 'Gouvernorat' : 'Site'
@@ -248,6 +275,10 @@ export default function TunisiaMap({ governoratesGeo, delegationsGeo, governorat
         : metric?.id === 'avg_cqi'
           ? [0, 3, 5, 7, 8, 9, 10, 11, 12, 15]
           : [0, 10, 20, 30, 40, 50, 60, 70, 85, 100]
+  const fallbackCells = (filteredCells || [])
+    .filter((cell) => Number.isFinite(Number(cell.prb_load)))
+    .sort((a, b) => Number(b.prb_load || 0) - Number(a.prb_load || 0))
+    .slice(0, 8)
   return (
     <div className="map-card">
       <div ref={mapNode} className="netvision-map-container" aria-label={`Carte ${metric.label}`} />
@@ -255,6 +286,7 @@ export default function TunisiaMap({ governoratesGeo, delegationsGeo, governorat
         <strong>Rendu cartographique indisponible</strong>
         <span>MapLibre ne peut pas demarrer WebGL dans cette session. Utilisez les classements et la recherche pour naviguer.</span>
         <code>{mapError}</code>
+        {fallbackCells.length ? <div className="map-fallback-table"><strong>Voir cellules prioritaires</strong>{fallbackCells.map((cell) => <button key={cell.cell_name} type="button" onClick={() => onCellClick?.(cell.cell_name)}>{cell.cell_name} - PRB {Number(cell.prb_load || 0).toFixed(1)}%</button>)}</div> : null}
       </div> : null}
       <div className="map-toolbar"><strong>{metric.label}</strong><span>{scope.level === 'delegation' || scope.level === 'cell' ? `${mapControls?.heatmap ? 'Chaleur radio' : 'Sites radio'}` : 'Zones administratives'}</span></div>
       <div className="site-state-legend">

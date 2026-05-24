@@ -15,7 +15,11 @@
     "smoke:v2": "node scripts/v2-api-smoke.mjs",
     "smoke:v2:core": "node scripts/v2-api-smoke-core.mjs",
     "smoke:v2:sim": "node scripts/v2-api-smoke-sim.mjs",
+    "qa:ns3:rationality": "node scripts/ns3-rationality-batch.mjs",
+    "pw:doctor": "node scripts/playwright-doctor.mjs",
     "verify:backend": "npm run test:contracts && npm run smoke:v2:core && npm run smoke:v2:sim",
+    "ns3:check": "node scripts/ns3-prereq-check.mjs",
+    "topology:neighbors": "node scripts/build_neighbor_graph.mjs runtime_data runtime_data_mock",
     "data:labelled-compare": "node scripts/generate_labelled_comparison_data.mjs",
     "backend": "python run_backend.py",
     "redis:ping": "redis-cli -h 127.0.0.1 -p 6379 ping"

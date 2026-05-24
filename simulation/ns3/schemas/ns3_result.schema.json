@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://netvision.local/schemas/ns3_result.schema.json",
+  "title": "NetVision ns-3 adapted result",
+  "type": "object",
+  "required": ["engine", "fidelity_level", "before", "after", "impact", "recovery_rate", "confidence", "calibration"],
+  "properties": {
+    "engine": { "const": "ns3" },
+    "status": { "enum": ["done", "failed"] },
+    "fidelity_level": { "const": "operations_v1" },
+    "target_cell": { "type": ["string", "null"] },
+    "action": { "enum": ["tilt", "redistribute", "neighbor_optimization", "add_carrier", "add_sector", "unknown"] },
+    "before": { "type": "object" },
+    "after": { "type": "object" },
+    "impact": { "type": "object" },
+    "recovery_rate": { "type": "number" },
+    "recommendation": { "type": "string" },
+    "confidence": { "enum": ["low", "medium", "high"] },
+    "scenario_assumptions": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "calibration": { "type": "object" },
+    "artifacts": { "type": "object" },
+    "runtime_seconds": { "type": "number" }
+  }
+}

@@ -79,7 +79,7 @@ function BusyHourHeatmap({ rows }) {
   return <div className="heatmap-card"><div className="section-title">Profil 24h</div><div className="heatmap-grid"><div className="heatmap-hours">{Array.from({ length: 24 }, (_, hour) => <span key={hour}>{String(hour).padStart(2, '0')}</span>)}</div>{rows.slice(0, 8).map((row) => <div key={`${row.group_by}:${row.id}`} className="heatmap-row"><strong title={row.name}>{row.name}</strong><div>{(row.hourly_profile || []).map((bucket) => <span key={bucket.hour} title={`${row.name} ${bucket.label}: ${formatMetric(bucket.metric_value)}`} style={{ opacity: 0.18 + Math.min(0.82, (Number(bucket.metric_value) || 0) / max) }} />)}</div></div>)}</div></div>
 }
 
-function QosPanel({ scope, summary, selectedCell, siteRows, scopedCells, filters, onFilterChange, bands, onSelectCell, peakRows, sliceDelta, workerState, currentTime }) {
+function QosPanel({ scope, summary, selectedCell, siteRows, scopedCells, filters, onFilterChange, bands, onSelectCell, peakRows, sliceDelta, workerState, currentTime, onTabChange }) {
   const issue = classifyRanIssue({ ...summary, recurrence_ratio: computeRecurrenceMetrics(peakRows).recurrence_ratio })
   const compliance = computeCompliance(scopedCells)
   if (scope.level === 'national') {
@@ -89,7 +89,7 @@ function QosPanel({ scope, summary, selectedCell, siteRows, scopedCells, filters
     return <ScopeQosPanel title={scope.governorateName} summary={summary} issue={issue} compliance={compliance} note="Selectionnez une delegation pour afficher les sites et les cellules." sliceDelta={sliceDelta} />
   }
   if (selectedCell) {
-    return <CellQosPanel cell={selectedCell} currentTime={currentTime} workerState={workerState} sliceDelta={sliceDelta} />
+    return <CellQosPanel cell={selectedCell} currentTime={currentTime} workerState={workerState} sliceDelta={sliceDelta} onOpenOperations={() => onTabChange?.('operations')} />
   }
   return <section className="panel-shell cockpit-panel"><div className="panel-heading"><div><p>Qualite radio</p><h1>{scope.delegationName || 'Delegation'}</h1></div><StatusBadge status={summary.status} /></div><SincePreviousCard delta={sliceDelta} compact /><ScopeKpis summary={summary} /><RanIssueBox issue={issue} /><ComplianceCards compliance={compliance} /><FilterBox filters={filters} onFilterChange={onFilterChange} bands={bands} /><div className="site-table-card"><div className="section-title">Sites de la delegation <span>{siteRows.length}</span></div>{siteRows.length ? <table><caption className="sr-only">Etat radio des sites</caption><thead><tr><th scope="col">Etat</th><th scope="col">Site</th><th scope="col">Cellule prioritaire</th><th scope="col">Cellules</th><th scope="col">PRB</th><th scope="col">Qualite</th></tr></thead><tbody>{siteRows.map((site) => <tr key={site.site_name} onClick={() => onSelectCell(site.worst_cell)}><td><span className="state-dot" style={{ background: site.state_color }} />{site.state_label}</td><td>{site.site_name}</td><td>{site.worst_cell}</td><td>{site.cells.length}</td><td>{formatMetric(site.avg_prb)}%</td><td>{formatMetric(site.avg_throughput)} Mbps / CQI {formatMetric(site.avg_cqi)}</td></tr>)}</tbody></table> : <div className="empty-state" role="note">Aucun actif radio rapproche dans cette delegation.</div>}</div></section>
 }
@@ -136,7 +136,7 @@ function ScopeKpis({ summary }) {
   return <div className="kpi-grid compact"><KpiCard label="Cellules" value={summary.observed_cells} /><KpiCard label="PRB moyen" value={summary.avg_prb} unit="%" /><KpiCard label="Debit" value={summary.avg_throughput} unit="Mbps" /><KpiCard label="CQI" value={summary.avg_cqi} /><KpiCard label="Utilisateurs" value={summary.active_users} /><KpiCard label="Congestion" value={summary.congestion_rate} unit="%" /></div>
 }
 
-function CellQosPanel({ cell, currentTime, workerState, sliceDelta }) {
+function CellQosPanel({ cell, currentTime, workerState, sliceDelta, onOpenOperations }) {
   const state = getCellState(cell)
   const issue = classifyRanIssue(cell)
   return <section className="panel-shell cockpit-panel">
@@ -149,11 +149,11 @@ function CellQosPanel({ cell, currentTime, workerState, sliceDelta }) {
     </div>
     <SincePreviousCard delta={sliceDelta} compact />
     <div className="kpi-grid compact">
-      <KpiCard label="Charge PRB" value={cell.prb_load} unit="%" />
-      <KpiCard label="Debit" value={cell.throughput} unit="Mbps" />
-      <KpiCard label="CQI" value={cell.cqi} />
-      <KpiCard label="Utilisateurs actifs" value={cell.active_users} />
-      <KpiCard label="TA" value={cell.ta} />
+      <KpiCard label="Charge PRB" value={cell.prb_load} unit="%" hint="Mesure la saturation capacitaire de la cellule." />
+      <KpiCard label="Debit" value={cell.throughput} unit="Mbps" hint="Capacite utile percue par les utilisateurs." />
+      <KpiCard label="CQI" value={cell.cqi} hint="Qualite radio instantanee du lien." />
+      <KpiCard label="Utilisateurs actifs" value={cell.active_users} hint="Concurrence radio sur cette tranche horaire." />
+      <KpiCard label="TA" value={cell.ta} hint="Indicateur de distance et d'etendue de couverture." />
       <KpiCard label="Sante" value={cell.health} />
     </div>
     <div className="diagnosis-box">
@@ -165,6 +165,7 @@ function CellQosPanel({ cell, currentTime, workerState, sliceDelta }) {
       <strong>Action cellule prete</strong>
       <p>Ouvrez Action cellule pour simuler une correction sur {cell.cell_name} a {currentTime?.timestamp || 'la tranche courante'}.</p>
       <span className={workerState === 'ready' ? 'severity-low' : 'severity-medium'}>{workerState === 'ready' ? 'Simulation disponible' : 'Simulation indisponible'}</span>
+      <button type="button" className="primary-cta" onClick={onOpenOperations}>Ouvrir Action cellule</button>
     </div>
     <div className="site-table-card">
       <div className="section-title">Cell context</div>
@@ -181,17 +182,28 @@ function CellQosPanel({ cell, currentTime, workerState, sliceDelta }) {
   </section>
 }
 
-function OperationsPanel({ selectedCell, currentTime, workerState, backendHealth, onSelectCell, alerts }) {
+function OperationsPanel({ selectedCell, currentTime, workerState, backendHealth, jobsHealth, onSelectCell, alerts }) {
   const queueReady = workerState === 'ready'
+  const simulationDetail = queueReady
+    ? 'Simulation ns-3 disponible'
+    : (typeof workerState === 'string' && workerState !== 'unavailable' ? workerState : 'Simulation ns-3 indisponible: verifier WSL Ubuntu, ns-3 et Redis dans Admin.')
   if (!selectedCell) {
     return <section className="panel-shell cockpit-panel"><div className="panel-heading"><div><p>Action cellule</p><h1>Selectionner une cellule</h1></div><StatusBadge status="watch" /></div><div className="empty-state" role="note">Recherchez une cellule ou cliquez un site dans Qualite radio pour ouvrir les recommandations et les simulations.</div>{alerts?.length ? <div className="site-table-card"><div className="section-title">Cellules prioritaires</div><table><caption className="sr-only">Cellules a traiter</caption><tbody>{alerts.slice(0, 8).map((cell) => <tr key={cell.cell_name} onClick={() => onSelectCell?.(cell.cell_name)}><td>{cell.cell_name}</td><td>{stateLabel(getCellState(cell))}</td><td>{formatMetric(cell.prb_load)}%</td></tr>)}</tbody></table></div> : null}</section>
   }
-  return <CellOperationalPanel cell={selectedCell} currentTime={currentTime} queueReady={queueReady} queueDetail={queueReady ? 'Simulation disponible' : 'Service de simulation indisponible'} backendHealth={backendHealth} />
+  return <CellOperationalPanel cell={selectedCell} currentTime={currentTime} queueReady={queueReady} queueDetail={simulationDetail} backendHealth={backendHealth} disabledActions={jobsHealth?.slo?.disabled_actions || []} />
 }
 
-function DataPanel({ data, reconciliation, importState, onImportFile, onImportTypeChange, onRestoreRuntime, onExportJson, onExportReport, dataMode, onDataModeChange, dataQuality, currentTime }) {
+function DataPanel({ data, reconciliation, importState, onImportFile, onImportTypeChange, onImportProfileChange, onRestoreRuntime, onExportJson, onExportReport, dataMode, onDataModeChange, dataQuality, currentTime }) {
   const warnings = reconciliation?.warnings || []
-  return <section className="panel-shell cockpit-panel" aria-busy={importState.status === 'parsing'}><div className="panel-heading"><div><p>Data Quality</p><h1>Runtime and admin data</h1></div></div><div className="kpi-grid"><KpiCard label="Runtime cells" value={dataQuality?.baselineCount ?? Object.keys(data?.baseline || {}).length} /><KpiCard label="Matched cells" value={dataQuality?.matched ?? reconciliation?.cell_spatial_join?.matched_cells ?? 'N/A'} /><KpiCard label="Unmatched cells" value={dataQuality?.unmatched ?? 'N/A'} /><KpiCard label="Low spatial confidence" value={dataQuality?.lowSpatial ?? 'N/A'} /><KpiCard label="Missing KPI ratio" value={formatMetric((dataQuality?.missingKpiRatio || 0) * 100, 0)} unit="%" /><KpiCard label="Time slices" value={dataQuality?.timeSlices ?? 0} /><KpiCard label="No observations" value={dataQuality?.withoutObs ?? 0} /><KpiCard label="Last peak-hours" value={dataQuality?.lastPeakComputation || 'N/A'} /></div><div className="ingestion-card"><div className="section-title">Data ingestion</div><div className="ingestion-row"><label htmlFor="data-mode">Mode</label><select id="data-mode" value={dataMode || 'real'} onChange={(e) => onDataModeChange?.(e.target.value)}><option value="real">Real mode</option><option value="mock">Mock demo mode</option></select><label htmlFor="import-type" className="sr-only">Import type</label><select id="import-type" value={importState.importType} onChange={(e) => onImportTypeChange(e.target.value)}><option value="reference">Reference Data CSV</option><option value="kpi">KPI Hourly Data CSV</option></select><label className="file-pill">Choose CSV<input aria-label="Choose CSV file for import" type="file" accept=".csv,text/csv" onChange={(e) => onImportFile(e.target.files?.[0], importState.importType)} /></label><button data-testid="restore-runtime" className="ghost-button" onClick={onRestoreRuntime}>Restore runtime</button></div>{importState.status !== 'idle' ? <div className={`empty-state ${importState.status === 'error' ? 'warning' : ''}`} role="status">{importState.status === 'error' ? importState.error : `${importState.fileName} - ${importState.result?.imported_cells ?? importState.preview?.totalRows ?? 0} rows/cells processed`}</div> : <div className="empty-state" role="note">Import reference CSV first for geometry, then KPI CSV to update timeline/session data. Strict congestion mode activates when a Congestion Flag column is mapped.</div>}{importState.result?.warnings?.map((w) => <div key={w} className="empty-state warning" role="note">{w}</div>)}</div>{warnings.map((w) => <div key={w} className="empty-state warning" role="note">{w}</div>)}<div className="export-actions"><button data-testid="export-json" className="primary-cta" onClick={onExportJson}>Export report JSON</button><button data-testid="export-report" className="ghost-button" onClick={onExportReport}>Download report TXT</button><button data-testid="export-recommendations-csv" className="ghost-button" onClick={() => downloadRecommendationsCsv(currentTime?.timestamp)}>Full recommendations CSV</button><button data-testid="export-congested-csv" className="ghost-button" onClick={() => downloadRecommendationsCsv(currentTime?.timestamp)}>Congested recommendations CSV</button></div></section>
+  const schemaDiff = importState.dryRun?.schema_diff
+  const missingRequired = schemaDiff?.missing_required || []
+  const unknownFields = schemaDiff?.unknown || []
+  const dryRunWarnings = importState.dryRun?.sample_warnings || []
+  const importStatusMessage = importState.status === 'error'
+    ? importState.error
+    : `${importState.fileName} - ${importState.result?.imported_cells ?? importState.preview?.totalRows ?? 0} lignes/cellules traitees`
+
+  return <section className="panel-shell cockpit-panel" aria-busy={importState.status === 'parsing'}><div className="panel-heading"><div><p>Data Quality</p><h1>Runtime and admin data</h1></div></div><div className="kpi-grid"><KpiCard label="Runtime cells" value={dataQuality?.baselineCount ?? Object.keys(data?.baseline || {}).length} /><KpiCard label="Matched cells" value={dataQuality?.matched ?? reconciliation?.cell_spatial_join?.matched_cells ?? 'N/A'} /><KpiCard label="Unmatched cells" value={dataQuality?.unmatched ?? 'N/A'} /><KpiCard label="Low spatial confidence" value={dataQuality?.lowSpatial ?? 'N/A'} /><KpiCard label="Missing KPI ratio" value={formatMetric((dataQuality?.missingKpiRatio || 0) * 100, 0)} unit="%" /><KpiCard label="Time slices" value={dataQuality?.timeSlices ?? 0} /><KpiCard label="No observations" value={dataQuality?.withoutObs ?? 0} /><KpiCard label="Last peak-hours" value={dataQuality?.lastPeakComputation || 'N/A'} /></div><div className="ingestion-card"><div className="section-title">Data ingestion</div><div className="ingestion-row"><label htmlFor="data-mode">Mode</label><select id="data-mode" value={dataMode || 'real'} onChange={(e) => onDataModeChange?.(e.target.value)}><option value="real">Real mode</option><option value="mock">Mock demo mode</option></select><label htmlFor="import-type" className="sr-only">Import type</label><select id="import-type" value={importState.importType} onChange={(e) => onImportTypeChange(e.target.value)}><option value="reference">Reference Data CSV</option><option value="kpi">KPI Hourly Data CSV</option></select><label htmlFor="import-profile" className="sr-only">Import profile</label><select id="import-profile" value={importState.selectedProfileId || ''} onChange={(e) => onImportProfileChange?.(e.target.value)}><option value="">Auto mapping</option>{(importState.profiles || []).map((profile) => <option key={profile.id} value={profile.id}>{profile.dataset_name} ({profile.source_type})</option>)}</select><label className="file-pill">Choose CSV<input aria-label="Choose CSV file for import" type="file" accept=".csv,text/csv" onChange={(e) => onImportFile(e.target.files?.[0], importState.importType)} /></label><button data-testid="restore-runtime" className="ghost-button" onClick={onRestoreRuntime}>Restore runtime</button></div>{importState.status !== 'idle' ? <div className={`empty-state ${importState.status === 'error' ? 'warning' : ''}`} role="status">{importStatusMessage}</div> : <div className="empty-state" role="note">Import reference CSV first for geometry, then KPI CSV to update timeline/session data. Strict congestion mode activates when a Congestion Flag column is mapped.</div>}{schemaDiff ? <div className="site-table-card"><div className="section-title">Schema diff (dry-run)</div><div className="delta-grid"><span>Accepted <strong>{schemaDiff.accepted?.length || 0}</strong></span><span>Unknown <strong>{unknownFields.length}</strong></span><span>Missing required <strong>{missingRequired.length}</strong></span></div></div> : null}{missingRequired.length ? <div className="empty-state warning" role="note">Import bloque: colonnes obligatoires manquantes ({missingRequired.join(', ')}).</div> : null}{unknownFields.length ? <div className="empty-state warning" role="note">Champs ignores (non autorises): {unknownFields.slice(0, 8).join(', ')}{unknownFields.length > 8 ? ' ...' : ''}.</div> : null}{dryRunWarnings.map((w) => <div key={w} className="empty-state warning" role="note">{w}</div>)}{importState.result?.warnings?.map((w) => <div key={w} className="empty-state warning" role="note">{w}</div>)}</div>{warnings.map((w) => <div key={w} className="empty-state warning" role="note">{w}</div>)}<div className="export-actions"><button data-testid="export-json" className="primary-cta" onClick={onExportJson}>Export report JSON</button><button data-testid="export-report" className="ghost-button" onClick={onExportReport}>Download report TXT</button><button data-testid="export-recommendations-csv" className="ghost-button" onClick={() => downloadRecommendationsCsv(currentTime?.timestamp)}>Full recommendations CSV</button><button data-testid="export-congested-csv" className="ghost-button" onClick={() => downloadRecommendationsCsv(currentTime?.timestamp)}>Congested recommendations CSV</button></div></section>
 }
 
 function SystemPanel({ backendHealth, workerState, data, endpointCoverage }) {

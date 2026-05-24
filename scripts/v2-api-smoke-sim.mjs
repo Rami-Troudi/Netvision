@@ -4,8 +4,9 @@ const TIME_ENTRY = {
   timestamp: process.env.SMOKE_TIMESTAMP || '01-12-2025 00:00',
   filename: process.env.SMOKE_TIME_FILE || '01-12-2025_00-00.json',
 }
-const ACTIONS = ['tilt', 'redistribute', 'add_carrier', 'add_sector', 'add_site', 'new_site']
+const ACTIONS = ['tilt', 'redistribute', 'neighbor_optimization', 'add_carrier', 'add_sector']
 const REQUEST_TIMEOUT_MS = Number.parseInt(process.env.SMOKE_REQUEST_TIMEOUT_MS || '45000', 10)
+const FAST_FALLBACK_ENABLED = process.env.NETVISION_FAST_SIM_FALLBACK === 'true'
 const AUTH_TOKEN =
   process.env.API_AUTH_TOKEN
   || process.env.API_TOKEN
@@ -24,9 +25,10 @@ function authHeaders() {
 function actionParams(action) {
   if (action === 'tilt') return { degrees: 2 }
   if (action === 'redistribute') return { ratio: 0.15 }
+  if (action === 'neighbor_optimization') return { interference_relief: 0.12 }
   if (action === 'add_carrier') return { band: 3 }
-  if (action === 'add_sector') return { targetSectors: 4 }
-  return { siteType: 'macro' }
+  if (action === 'add_sector') return { target_sectors: 4 }
+  return {}
 }
 
 async function readBody(res) {
@@ -77,33 +79,75 @@ async function pollJob(jobId) {
 
 const results = []
 
-for (const action of ACTIONS) {
-  results.push(await check(`Direct simulation ${action}`, async () => {
-    const payload = await expectOk(`${NEXT_BASE}/api/simulate`, {
+if (FAST_FALLBACK_ENABLED) {
+  for (const action of ACTIONS) {
+    results.push(await check(`Direct fast diagnostic ${action}`, async () => {
+      const payload = await expectOk(`${NEXT_BASE}/api/simulate`, {
+        method: 'POST',
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cell_name: CELL, action, params: actionParams(action), time_entry: TIME_ENTRY, engine: 'fast', mode: 'fast' }),
+      })
+      if (!payload.before || !payload.after) throw new Error('before/after missing')
+      return `confidence=${payload.confidence ?? 'n/a'}`
+    }))
+  }
+} else {
+  results.push(await check('Direct fast diagnostic disabled by default', async () => {
+    const res = await fetch(`${NEXT_BASE}/api/simulate`, {
       method: 'POST',
       headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cell_name: CELL, action, params: actionParams(action), time_entry: TIME_ENTRY, mode: 'fast' }),
+      body: JSON.stringify({ cell_name: CELL, action: 'tilt', params: { degrees: 2 }, time_entry: TIME_ENTRY, engine: 'fast', mode: 'fast' }),
     })
-    if (!payload.before || !payload.after) throw new Error('before/after missing')
-    return `confidence=${payload.confidence ?? 'n/a'}`
+    if (res.status < 400) throw new Error(`expected diagnostic rejection, got ${res.status}`)
+    return `rejected=${res.status}`
   }))
 }
 
+let jobsHealth = null
 results.push(await check('Jobs health', async () => {
   const payload = await expectOk(`${NEXT_BASE}/api/jobs-health`)
+  jobsHealth = payload
   return payload.ready === false ? payload.detail || 'not ready' : 'ready'
 }))
 
 results.push(await check('Queued simulation lifecycle', async () => {
+  if (jobsHealth?.ready === false) {
+    return `SKIP ns3 unavailable: ${jobsHealth.detail || jobsHealth.reason || 'not ready'}`
+  }
   const queued = await expectOk(`${NEXT_BASE}/api/jobs`, {
     method: 'POST',
     headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ cell_name: CELL, action: 'tilt', params: { degrees: 2 }, time_entry: TIME_ENTRY, mode: 'fast' }),
+    body: JSON.stringify({ cell_name: CELL, action: 'tilt', params: { degrees: 2 }, time_entry: TIME_ENTRY, engine: 'ns3', fidelity_level: 'operations_v1' }),
   })
   if (!queued.jobId) throw new Error('jobId missing')
   const finalJob = await pollJob(queued.jobId)
   if (!finalJob.result?.before || !finalJob.result?.after) throw new Error('queued result missing before/after')
   return `job=${queued.jobId}`
+}))
+
+results.push(await check('Queued ns3 source-truth actions', async () => {
+  if (jobsHealth?.ready === false) {
+    return `SKIP ns3 unavailable: ${jobsHealth.detail || jobsHealth.reason || 'not ready'}`
+  }
+  const summaries = []
+  for (const action of ACTIONS) {
+    const queued = await expectOk(`${NEXT_BASE}/api/jobs`, {
+      method: 'POST',
+      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cell_name: CELL, action, params: actionParams(action), time_entry: TIME_ENTRY, engine: 'ns3', fidelity_level: 'operations_v1' }),
+    })
+    if (!queued.jobId) throw new Error(`${action}: jobId missing`)
+    const finalJob = await pollJob(queued.jobId)
+    const result = finalJob.result || {}
+    if (result.engine !== 'ns3') throw new Error(`${action}: engine is not ns3`)
+    if (result.action !== action) throw new Error(`${action}: adapted action mismatch ${result.action}`)
+    if (!(result.before?.throughput_mbps > 0)) throw new Error(`${action}: before throughput missing`)
+    if (!(result.after?.throughput_mbps > result.before.throughput_mbps)) throw new Error(`${action}: throughput did not improve`)
+    if (!(result.after?.prb_load < result.before.prb_load)) throw new Error(`${action}: PRB did not improve`)
+    if (!result.artifacts?.scenario || !result.artifacts?.metrics || !result.artifacts?.result) throw new Error(`${action}: artifacts missing`)
+    summaries.push(`${action}:${queued.jobId}`)
+  }
+  return summaries.join(',')
 }))
 
 const passed = results.filter(Boolean).length

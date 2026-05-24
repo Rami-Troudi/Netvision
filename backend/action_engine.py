@@ -53,7 +53,6 @@ ACTION_ORDER = {
     "Add Band": 4,
     "Tilt Adjustment": 5,
     "Add Sector": 6,
-    "Add Site": 7,
     "Check Coverage/Interference": 90,
     "No Action Required": 99,
 }
@@ -880,9 +879,9 @@ def _site_wide_saturation_status(
     ) > SITE_SATURATION_CELL_RATIO
 
     # --- Multi-day structural check ---
-    # Only confirm Add Site if strict PRB saturation persists across >= MIN_DAYS
-    # separate calendar days. A single peak-hour snapshot is not sufficient evidence
-    # for a capital infrastructure project.
+    # Only confirm structural sector expansion if strict PRB saturation persists
+    # across >= MIN_DAYS separate calendar days. A single peak-hour snapshot is not
+    # sufficient evidence for a capital infrastructure project.
     if site_wide_saturation and "timestamp" in site_rows.columns:
         congested_days: set = set()
 
@@ -1169,28 +1168,16 @@ def evaluate_cell(
                 f"{threshold_reason}; site-wide saturation detected on {target_enodeb} "
                 f"({congested_site_cells}/{total_site_cells} cells congested)"
             )
-            if structural_ratio > 0.80:
-                recommended_actions = [
-                    _build_action(
-                        action_name="Add Site",
-                        reason=saturation_reason,
-                        recovery_rate=RECOVERY_RATES["new_site"],
-                        tier="long_terme",
-                        lost_ue=estimated_lost_ue,
-                        lost_gb=estimated_lost_gb,
-                    )
-                ]
-            else:
-                recommended_actions = [
-                    _build_action(
-                        action_name="Add Sector",
-                        reason=saturation_reason,
-                        recovery_rate=RECOVERY_RATES["new_sector"],
-                        tier="long_terme",
-                        lost_ue=estimated_lost_ue,
-                        lost_gb=estimated_lost_gb,
-                    )
-                ]
+            recommended_actions = [
+                _build_action(
+                    action_name="Add Sector",
+                    reason=saturation_reason,
+                    recovery_rate=RECOVERY_RATES["new_sector"],
+                    tier="long_terme",
+                    lost_ue=estimated_lost_ue,
+                    lost_gb=estimated_lost_gb,
+                )
+            ]
         elif rebalancing_candidate:
             neighbor_label = ", ".join(item["cell_name"] for item in neighbors)
             recommended_actions = [

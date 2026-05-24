@@ -10,6 +10,11 @@ const METRICS = new Set(['prb', 'active_users', 'traffic', 'congestion_rate', 't
 
 let cachedRaw = null
 let cachedMode = null
+let cachedRawPromise = null
+let cachedResponses = new Map()
+let cachedResponsePromises = new Map()
+let cachedCellRaw = new Map()
+let cachedCellRawPromises = new Map()
 
 export const config = {
   api: { bodyParser: false, responseLimit: false },
@@ -46,6 +51,10 @@ function parseHour(timestamp) {
   if (!match) return null
   const hour = Number.parseInt(match[1], 10)
   return hour >= 0 && hour <= 23 ? hour : null
+}
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 function hourLabel(hour) {
@@ -122,14 +131,99 @@ async function readSlice(slicePath) {
   return rows
 }
 
+function readCellFromJsonText(text, cellName) {
+  const escaped = escapeRegExp(cellName)
+  const match = text.match(new RegExp(`"${escaped}"\\s*:\\s*(\\{[^{}]*\\})`))
+  if (!match) return null
+  try {
+    return JSON.parse(match[1])
+  } catch {
+    return null
+  }
+}
+
+async function loadCellRaw(cellName, refresh = false) {
+  const p = paths()
+  const cacheKey = `${p.mode}:${cellName}`
+  if (!refresh && cachedCellRaw.has(cacheKey)) return cachedCellRaw.get(cacheKey)
+  if (!refresh && cachedCellRawPromises.has(cacheKey)) return cachedCellRawPromises.get(cacheKey)
+  const promise = buildCellRawPayload(p, cellName).finally(() => {
+    cachedCellRawPromises.delete(cacheKey)
+  })
+  cachedCellRawPromises.set(cacheKey, promise)
+  const payload = await promise
+  cachedCellRaw.set(cacheKey, payload)
+  return payload
+}
+
+async function buildCellRawPayload(p, cellName) {
+  if (!await exists(p.timeIndex)) {
+    return { mode: p.mode, generated_at: new Date().toISOString(), observations: [], unavailable_reason: `time_index.json is missing in ${p.root}.` }
+  }
+  const [timeIndexRaw, baselineRaw, adminRaw] = await Promise.all([
+    readFile(p.timeIndex, 'utf8'),
+    readFile(p.baseline, 'utf8').catch(() => '{}'),
+    readFile(p.adminIndex, 'utf8').catch(() => '{}'),
+  ])
+  const timeIndex = JSON.parse(timeIndexRaw)
+  const baseline = JSON.parse(baselineRaw)
+  const adminIndex = JSON.parse(adminRaw)
+  const base = baseline[cellName] || {}
+  const admin = adminIndex[cellName] || base.admin || {}
+  const timestamps = Array.isArray(timeIndex?.timestamps) ? timeIndex.timestamps : []
+  const observations = []
+
+  for (let start = 0; start < timestamps.length; start += 32) {
+    const batch = timestamps.slice(start, start + 32)
+    const rows = await Promise.all(batch.map(async (entry) => {
+      const hour = parseHour(entry.timestamp)
+      const filename = String(entry.filename || '').trim()
+      if (hour === null || !filename) return null
+      const slicePath = path.resolve(p.timeData, filename)
+      if (!await exists(slicePath)) return null
+      let row = null
+      if (path.extname(slicePath).toLowerCase() === '.json') {
+        row = readCellFromJsonText(await readFile(slicePath, 'utf8'), cellName)
+      } else {
+        row = (await readSlice(slicePath)).find((item) => String(item.cell_name || '').trim() === cellName)
+      }
+      if (!row) return null
+      return {
+        cell_name: cellName,
+        site_name: base.site_name || base.enodeb_name || row.site_name || cellName,
+        gov_id: admin.gov_id || '',
+        gov_name: admin.gov_name || '',
+        deleg_id: admin.deleg_id || '',
+        deleg_name: admin.deleg_name || '',
+        timestamp: entry.timestamp,
+        hour,
+        ...normalizeObs(row),
+      }
+    }))
+    observations.push(...rows.filter(Boolean))
+  }
+
+  return { mode: p.mode, generated_at: new Date().toISOString(), observations, unavailable_reason: observations.length ? '' : `No samples were found for ${cellName}.` }
+}
+
 async function loadRaw(refresh = false) {
   const p = paths()
   if (!refresh && cachedRaw && cachedMode === p.mode) return cachedRaw
+  if (!refresh && cachedRawPromise && cachedMode === p.mode) return cachedRawPromise
   cachedMode = p.mode
 
+  cachedRawPromise = buildRawPayload(p).finally(() => {
+    cachedRawPromise = null
+  })
+  cachedRaw = await cachedRawPromise
+  cachedResponses = new Map()
+  cachedResponsePromises = new Map()
+  return cachedRaw
+}
+
+async function buildRawPayload(p) {
   if (!await exists(p.timeIndex)) {
-    cachedRaw = { mode: p.mode, generated_at: new Date().toISOString(), observations: [], unavailable_reason: `time_index.json is missing in ${p.root}. Run the runtime data processing pipeline or switch data mode.` }
-    return cachedRaw
+    return { mode: p.mode, generated_at: new Date().toISOString(), observations: [], unavailable_reason: `time_index.json is missing in ${p.root}. Run the runtime data processing pipeline or switch data mode.` }
   }
 
   const [timeIndexRaw, baselineRaw, adminRaw] = await Promise.all([
@@ -142,8 +236,7 @@ async function loadRaw(refresh = false) {
   const adminIndex = JSON.parse(adminRaw)
   const timestamps = Array.isArray(timeIndex?.timestamps) ? timeIndex.timestamps : []
   if (!timestamps.length) {
-    cachedRaw = { mode: p.mode, generated_at: new Date().toISOString(), observations: [], unavailable_reason: `time_index.json has no timestamps in ${p.root}.` }
-    return cachedRaw
+    return { mode: p.mode, generated_at: new Date().toISOString(), observations: [], unavailable_reason: `time_index.json has no timestamps in ${p.root}.` }
   }
   const observations = []
 
@@ -173,8 +266,7 @@ async function loadRaw(refresh = false) {
     }
   }
 
-  cachedRaw = { mode: p.mode, generated_at: new Date().toISOString(), observations, unavailable_reason: observations.length ? '' : `No readable time_data slices were found from ${p.timeData}.` }
-  return cachedRaw
+  return { mode: p.mode, generated_at: new Date().toISOString(), observations, unavailable_reason: observations.length ? '' : `No readable time_data slices were found from ${p.timeData}.` }
 }
 
 function passFilters(row, query) {
@@ -331,6 +423,19 @@ function summarize(rows, metric) {
   }
 }
 
+function responseCacheKey({ mode, groupBy, metric, limit, query }) {
+  return JSON.stringify({
+    mode,
+    groupBy,
+    metric,
+    limit,
+    gov_id: query.gov_id,
+    deleg_id: query.deleg_id,
+    site_name: query.site_name,
+    cell_name: query.cell_name,
+  })
+}
+
 export default async function handler(req, res) {
   if (!requireAuthenticatedRequest(req, res)) return
   if (!enforceRateLimit(req, res, { keyPrefix: 'peak-hours', maxRequests: 60, windowMs: 60_000 })) return
@@ -348,22 +453,34 @@ export default async function handler(req, res) {
   }
 
   try {
-    const raw = await loadRaw(refresh)
+    const canUseCellFastPath = groupBy === 'cell' && query.cell_name && !query.gov_id && !query.deleg_id && !query.site_name
+    const raw = canUseCellFastPath ? await loadCellRaw(query.cell_name, refresh) : await loadRaw(refresh)
     if (!raw.observations.length) return res.status(200).json(emptyPayload(groupBy, metric, raw.unavailable_reason || 'No peak-hour samples are available.'))
-    const scoped = raw.observations.filter((row) => passFilters(row, query))
-    if (!scoped.length) return res.status(200).json(emptyPayload(groupBy, metric, 'No peak-hour samples match the selected scope.'))
-    const rows = analyzeGroups(scoped, groupBy, metric).slice(0, limit)
-    return res.status(200).json({
-      available: true,
-      generated_at: raw.generated_at,
-      source: `${raw.mode} runtime data time_index.json + time_data`,
-      group_by: groupBy,
-      metric,
-      filters: query,
-      total_returned: rows.length,
-      summary: summarize(rows, metric),
-      rows,
+    const cacheKey = responseCacheKey({ mode: raw.mode, groupBy, metric, limit, query })
+    if (!refresh && cachedResponses.has(cacheKey)) return res.status(200).json(cachedResponses.get(cacheKey))
+    if (!refresh && cachedResponsePromises.has(cacheKey)) return res.status(200).json(await cachedResponsePromises.get(cacheKey))
+    const responsePromise = Promise.resolve().then(() => {
+      const scoped = raw.observations.filter((row) => passFilters(row, query))
+      if (!scoped.length) return emptyPayload(groupBy, metric, 'No peak-hour samples match the selected scope.')
+      const rows = analyzeGroups(scoped, groupBy, metric).slice(0, limit)
+      return {
+        available: true,
+        generated_at: raw.generated_at,
+        source: `${raw.mode} runtime data time_index.json + time_data`,
+        group_by: groupBy,
+        metric,
+        filters: query,
+        total_returned: rows.length,
+        summary: summarize(rows, metric),
+        rows,
+      }
+    }).finally(() => {
+      cachedResponsePromises.delete(cacheKey)
     })
+    cachedResponsePromises.set(cacheKey, responsePromise)
+    const payload = await responsePromise
+    cachedResponses.set(cacheKey, payload)
+    return res.status(200).json(payload)
   } catch (err) {
     console.error('Failed to load peak-hours payload:', err)
     return res.status(200).json(emptyPayload(groupBy, metric, err.message || 'Failed to load peak-hours data.'))

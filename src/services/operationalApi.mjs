@@ -3,10 +3,16 @@ import { ACTION_LABELS_FR } from '../utils/uiPolicy.mjs'
 
 export const TERMINAL_JOB_STATES = new Set(['done', 'failed'])
 
+const NON_SIM_ACTION_LABELS_FR = Object.freeze({
+  'No Action Required': 'Aucune action requise',
+  'Check Coverage/Interference': 'Verifier couverture / interferences',
+  'Add Site': 'Planification site hors simulateur',
+})
+
 export function normalizeRecommendation(raw = {}) {
   const title = String(raw.action_name || raw.action || raw.title || 'Recommendation').trim()
   const simAction = mapRecommendationToSimulatorAction(title)
-  const displayTitle = ACTION_LABELS_FR[simAction] || title
+  const displayTitle = ACTION_LABELS_FR[simAction] || NON_SIM_ACTION_LABELS_FR[title] || title
   return {
     ...raw,
     title: displayTitle,
@@ -26,6 +32,9 @@ export function normalizeRecommendation(raw = {}) {
 function localizeRecommendationReason(reason) {
   if (!reason) return ''
   return reason
+    .replace(/Congestion thresholds are not jointly met/gi, 'Les seuils de congestion ne sont pas confirmes ensemble')
+    .replace(/No Action Required/gi, 'Aucune action requise')
+    .replace(/Check Coverage\/Interference/gi, 'Verifier couverture / interferences')
     .replace(/active users above/gi, 'utilisateurs actifs au-dessus de')
     .replace(/RRC users above/gi, 'utilisateurs RRC au-dessus de')
     .replace(/structural congestion ratio/gi, 'taux de congestion structurelle')
@@ -38,7 +47,15 @@ function localizeRecommendationReason(reason) {
 async function readJsonResponse(res, fallbackMessage) {
   const payload = await res.json().catch(() => ({}))
   if (!res.ok) {
-    throw new Error(payload?.detail || payload?.error || fallbackMessage || `Request failed with ${res.status}`)
+    let errMsg = fallbackMessage || `Request failed with ${res.status}`
+    if (typeof payload?.error === 'object' && payload?.error !== null) {
+      errMsg = payload.error.detail || payload.error.message || errMsg
+    } else if (typeof payload?.error === 'string') {
+      errMsg = payload.error
+    } else if (typeof payload?.detail === 'string') {
+      errMsg = payload.detail
+    }
+    throw new Error(errMsg)
   }
   return payload
 }
@@ -65,11 +82,11 @@ export async function fetchRecommendations({ cell, currentTime }) {
   }
 }
 
-export async function queueSimulation({ cell, action, currentTime, params }) {
+export async function queueSimulation({ cell, action, currentTime, params, fidelityLevel }) {
   const res = await fetch('/api/jobs', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(buildSimulationPayload({ cell, action, currentTime, params })),
+    body: JSON.stringify(buildSimulationPayload({ cell, action, currentTime, params, fidelityLevel })),
   })
   return readJsonResponse(res, 'Simulation queue request failed')
 }
@@ -79,11 +96,11 @@ export async function fetchJob(jobId) {
   return readJsonResponse(res, 'Job status request failed')
 }
 
-export async function runDirectSimulation({ cell, action, currentTime, params }) {
+export async function runDirectSimulation({ cell, action, currentTime, params, fidelityLevel }) {
   const res = await fetch('/api/simulate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(buildSimulationPayload({ cell, action, currentTime, params })),
+    body: JSON.stringify(buildSimulationPayload({ cell, action, currentTime, params, fidelityLevel })),
   })
   return readJsonResponse(res, 'Direct simulation failed')
 }

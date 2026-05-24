@@ -1428,6 +1428,7 @@ if (typeof module !== 'undefined' && module.exports) {
     parseTimestamp,
     isValidDate,
     formatTimestampFromDate,
+    parseCsvPreview,
     classifyRow,
     buildFeatureUpdates,
     applyCsvMapping,

@@ -23,12 +23,25 @@ test('normalizes simulatable backend recommendations for V2 cards', () => {
 
 test('keeps non-simulated advisory recommendations visible but not queueable', () => {
   const rec = normalizeRecommendation({
-    action: 'Check Coverage/Interference',
-    reason: 'coverage/interference issue',
+    action: 'Add Site',
+    reason: 'site capacitaire requires placement study',
   })
 
-  assert.equal(rec.title, 'Check Coverage/Interference')
+  assert.equal(rec.title, 'Planification site hors simulateur')
   assert.equal(rec.simAction, null)
   assert.equal(rec.isSimulatable, false)
-  assert.equal(rec.reason, 'coverage/interference issue')
+  assert.equal(rec.reason, 'site capacitaire requires placement study')
+})
+
+test('normalizes neighbor-sector actions as a distinct source-truth simulator action', () => {
+  const rec = normalizeRecommendation({
+    action: 'Actions on Neighbors',
+    reason: 'neighbor PRB headroom available',
+    recovery_rate: 35,
+  })
+
+  assert.equal(rec.title, 'Optimiser les voisins')
+  assert.equal(rec.simAction, 'neighbor_optimization')
+  assert.equal(rec.isSimulatable, true)
+  assert.equal(rec.recoveryRate, 35)
 })

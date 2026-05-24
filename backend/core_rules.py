@@ -44,8 +44,8 @@ STRUCTURAL_BUSY_HOUR_PRB: float = 75.0
 SEVERITY_CONGESTED: int = 50
 
 # Site-wide saturation guardrails for CAPEX recommendations.
-# Add Site should only be considered when most cells on a site are saturated
-# across multiple calendar days, not from a single hot snapshot.
+# Site deployment remains advisory; executable simulation is limited to sector
+# expansion until placement and geospatial planning inputs are available.
 SITE_SATURATION_CELL_RATIO: float = 0.60
 SITE_SATURATION_MIN_DAYS: int = 3
 
@@ -61,7 +61,6 @@ RECOVERY_RATES: dict[str, float] = {
     "actions_on_neighbors": 35.0,
     "add_band": 50.0,
     "new_sector": 85.0,
-    "new_site": 90.0,
     "check_coverage": 10.0,
 }
 
@@ -73,7 +72,6 @@ ACTION_NAME_TO_RATE_KEY: dict[str, str] = {
     "Carrier Extension": "carrier_extension",
     "Add Band": "add_band",
     "Add Sector": "new_sector",
-    "Add Site": "new_site",
     "Check Coverage/Interference": "check_coverage",
 }
 

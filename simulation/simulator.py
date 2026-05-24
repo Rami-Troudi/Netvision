@@ -9,6 +9,7 @@ is paramount - all values are bounded by physical limits.
 import argparse
 import json
 import math
+import os
 from pathlib import Path
 from typing import Dict, Any, Tuple, List, Optional, Union
 import pandas as pd
@@ -63,10 +64,9 @@ DEFAULT_BAND_PARAMS = {"name": "Unknown", "bw_mhz": 10, "max_prb": 50, "path_los
 ORANGE_RECOVERY_RATES = {
     "tilt": 0.15,
     "redistribute": 0.40,
+    "neighbor_optimization": 0.35,
     "add_carrier": 0.50,
     "add_sector": 0.85,
-    "add_site": 0.90,
-    "new_site": 0.90,
 }
 
 OBSERVATION_FIELDS = [
@@ -274,7 +274,9 @@ def read_parquet_dataframe(path: Path) -> pd.DataFrame:
 
 
 def get_runtime_data_dir(base_dir: Path) -> Path:
-    return (base_dir / "runtime_data").resolve()
+    mode = str(os.environ.get("DATA_MODE", "real")).strip().lower()
+    runtime_dir = "runtime_data_mock" if mode == "mock" else "runtime_data"
+    return (base_dir / runtime_dir).resolve()
 
 
 def load_time_index_entries(base_dir: Path) -> List[Dict[str, Any]]:
@@ -304,6 +306,7 @@ def apply_tilt_scenario(state: Dict[str, float], params: Dict[str, Any], baselin
     """
     current_tilt = baseline_info.get("tilt", 4) if baseline_info else 4
     delta_degrees = float(params.get("degrees", 2))
+    power_delta_db = clamp(float(params.get("power_delta_db", 0)), -3.0, 3.0)
     new_tilt = clamp_tilt(current_tilt + delta_degrees)
     actual_delta = new_tilt - current_tilt
     
@@ -330,6 +333,7 @@ def apply_tilt_scenario(state: Dict[str, float], params: Dict[str, Any], baselin
         # CQI improvement: remaining users have better SINR
         # Approx 0.2-0.4 CQI improvement per degree of downtilt
         cqi_improvement = 0.3 * actual_delta * (1 - load / 200)  # Less improvement at high load
+        cqi_improvement += max(0.0, -power_delta_db) * 0.08
         new_cqi = clamp_cqi(cqi + cqi_improvement)
         
         # Affected neighbors receive the pushed users
@@ -343,6 +347,7 @@ def apply_tilt_scenario(state: Dict[str, float], params: Dict[str, Any], baselin
         
         # CQI degradation due to increased interference
         cqi_degradation = abs(actual_delta) * 0.25
+        cqi_degradation += max(0.0, power_delta_db) * 0.06
         new_cqi = clamp_cqi(cqi - cqi_degradation)
         
         affected = []
@@ -485,6 +490,59 @@ def apply_redistribute(state: Dict[str, float], params: Dict[str, Any], baseline
         "throughput": new_throughput,
     }, affected, confidence
 
+
+def apply_neighbor_optimization(state: Dict[str, float], params: Dict[str, Any], observations: Optional[Dict[str, Any]] = None) -> Tuple[Dict[str, float], List[Dict[str, Any]], float]:
+    """
+    Optimize neighboring sectors/cells to relieve interference and PRB pressure.
+
+    This is distinct from load redistribution: the serving cell keeps its users,
+    while neighboring sectors are tuned to reduce overlap/interference and unlock
+    a modest capacity envelope.
+    """
+    relief = clamp(float(params.get("interference_relief", 0.12)), 0.05, 0.30)
+    neighbor_cells = params.get("neighbor_cells") or params.get("neighbors") or []
+    if isinstance(neighbor_cells, str):
+        neighbor_cells = [neighbor_cells]
+    if not isinstance(neighbor_cells, list):
+        neighbor_cells = []
+
+    load = state["load"]
+    throughput = state["throughput"]
+    cqi = state["cqi"]
+
+    # Neighbor actions mostly improve radio quality, with limited direct PRB relief.
+    prb_relief = min(0.18, relief * 0.75)
+    new_load = clamp_load(load * (1 - prb_relief))
+    cqi_gain = 0.35 + relief * 2.0
+    new_cqi = clamp_cqi(cqi + cqi_gain)
+    throughput_gain = throughput * (0.10 + relief)
+    new_throughput = clamp_throughput(throughput + throughput_gain)
+
+    affected = []
+    for name in neighbor_cells[:6]:
+        obs = observations.get(name, {}) if observations else {}
+        neighbor_load = float(obs.get("load", obs.get("prb_load", 50)) or 50)
+        affected.append({
+            "name": str(name),
+            "load_change": round(min(5.0, max(1.0, neighbor_load * relief * 0.08)), 2),
+            "cqi_change": round(-0.1, 2),
+        })
+
+    if not affected:
+        affected = [{
+            "name": "neighboring_sectors",
+            "load_change": round(load * prb_relief * 0.35, 2),
+            "cqi_change": round(-0.1, 2),
+        }]
+
+    confidence = 0.62 if neighbor_cells else 0.52
+    return {
+        "load": new_load,
+        "cqi": new_cqi,
+        "throughput": new_throughput,
+    }, affected, confidence
+
+
 def apply_add_sector(state: Dict[str, float], params: Dict[str, Any]) -> Tuple[Dict[str, float], List[Dict[str, Any]], float]:
     """
     Add a new sector to the existing site.
@@ -534,48 +592,7 @@ def apply_add_sector(state: Dict[str, float], params: Dict[str, Any]) -> Tuple[D
         "throughput": new_throughput,
         "traffic": new_active_users,
         "active_users": new_active_users,
-    }, affected, 0.75  # Higher confidence than new_site (less infra risk)
-
-def apply_new_site(state: Dict[str, float], params: Dict[str, Any]) -> Tuple[Dict[str, float], List[Dict[str, Any]], float]:
-    """
-    Deploy a capacitary site and offload the serving cell.
-
-    This model keeps calculations fast while exposing concrete KPI deltas for
-    PRB load, throughput, and active users.
-    """
-    load = state["load"]
-    throughput = state["throughput"]
-    cqi = state["cqi"]
-    active_users = clamp_active_users(state.get("active_users", state.get("traffic", 0.0)))
-
-    site_type = str(params.get("siteType") or params.get("site_type") or "macro").strip().lower()
-    recovery_rate = ORANGE_RECOVERY_RATES["add_site"]
-
-    offloaded_load = load * recovery_rate
-    offloaded_users = active_users * recovery_rate
-    new_load = clamp_load(load - offloaded_load)
-    new_active_users = clamp_active_users(active_users - offloaded_users)
-
-    # Throughput improves proportionally to recovered capacity envelope.
-    throughput_gain = throughput * recovery_rate
-    new_throughput = clamp_throughput(throughput + throughput_gain)
-    new_cqi = clamp_cqi(cqi + 1.2)
-
-    affected = [{
-        "name": "planned_site",
-        "type": site_type,
-        "load_change": round(offloaded_load, 2),
-        "active_users_change": round(offloaded_users, 2),
-    }]
-
-    return {
-        "load": new_load,
-        "cqi": new_cqi,
-        "throughput": new_throughput,
-        "traffic": new_active_users,
-        "active_users": new_active_users,
-    }, affected, 0.82
-
+    }, affected, 0.75
 
 def apply_recovery_envelope(before_state: Dict[str, float], after_state: Dict[str, float], recovery_rate: float) -> Dict[str, float]:
     """
@@ -736,7 +753,7 @@ def simulate_action(base_dir: Path, cell_name: str, action: str, params: Dict[st
     
     # Log warning for healthy cells but still run the simulation
     healthy_cell_warning = None
-    if load < 50 and cqi > 10 and action in ["tilt", "add_carrier", "redistribute"]:
+    if load < 50 and cqi > 10 and action in ["tilt", "add_carrier", "redistribute", "neighbor_optimization"]:
         healthy_cell_warning = "Cell is healthy - simulation still applied for testing purposes"
 
     if action == "tilt":
@@ -767,18 +784,19 @@ def simulate_action(base_dir: Path, cell_name: str, action: str, params: Dict[st
         target = params.get("target", "neighbors")
         recommendation = f"MLB handover bias to {target} to balance load"
 
+    elif action == "neighbor_optimization":
+        after_raw, affected, confidence = apply_neighbor_optimization(
+            before_state, params, observations
+        )
+        recovery_rate = ORANGE_RECOVERY_RATES["neighbor_optimization"]
+        after_raw = apply_recovery_envelope(before_state, after_raw, recovery_rate)
+        recommendation = "Optimize neighboring sectors to reduce interference and unlock capacity"
+
     elif action == "add_sector":
         after_raw, affected, confidence = apply_add_sector(before_state, params)
         recovery_rate = ORANGE_RECOVERY_RATES["add_sector"]
         after_raw = apply_recovery_envelope(before_state, after_raw, recovery_rate)
         recommendation = "Add sector to increase structural capacity envelope"
-        
-    elif action in {"new_site", "add_site"}:
-        after_raw, affected, confidence = apply_new_site(before_state, params)
-        recovery_rate = ORANGE_RECOVERY_RATES["add_site"]
-        after_raw = apply_recovery_envelope(before_state, after_raw, recovery_rate)
-        site_type = str(params.get("siteType") or params.get("site_type") or "macro").strip().lower()
-        recommendation = f"Deploy {site_type} capacitary site to offload demand from {cell_name}"
 
     else:
         raise ValueError(f"Unsupported action for simulator: {action}")
@@ -798,7 +816,7 @@ def simulate_action(base_dir: Path, cell_name: str, action: str, params: Dict[st
         "cell": cell_name,
         "action": action,
         "timestamp": timestamp,
-        "recovery_rate": int(round(ORANGE_RECOVERY_RATES.get(action, ORANGE_RECOVERY_RATES.get("add_site", 0.0)) * 100)),
+        "recovery_rate": int(round(ORANGE_RECOVERY_RATES.get(action, 0.0) * 100)),
         "before": before_fmt,
         "after": after_fmt,
         "impact": impact,
@@ -826,7 +844,7 @@ def simulate_action(base_dir: Path, cell_name: str, action: str, params: Dict[st
 def main() -> None:
     parser = argparse.ArgumentParser(description="NetVision Action Simulator")
     parser.add_argument("--cell", required=True, help="Cell name")
-    parser.add_argument("--action", required=True, help="Action type: tilt|add_carrier|redistribute|add_sector|new_site|add_site")
+    parser.add_argument("--action", required=True, help="Action type: tilt|redistribute|neighbor_optimization|add_carrier|add_sector")
     parser.add_argument("--params", default="{}", help="JSON string of parameters")
     parser.add_argument("--time-file", default=None, help="Time-slice filename (from runtime_data/time_data)")
     parser.add_argument("--mode", default="fast", choices=["fast"], help="Simulation mode (fast only; ns-3 removed)")

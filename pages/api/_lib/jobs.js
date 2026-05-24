@@ -41,6 +41,7 @@ function ensureSchema(database) {
     PRAGMA busy_timeout = 5000;
     CREATE TABLE IF NOT EXISTS jobs (
       id TEXT PRIMARY KEY,
+      idempotency_key TEXT,
       type TEXT NOT NULL,
       status TEXT NOT NULL,
       request_json TEXT NOT NULL,
@@ -54,6 +55,11 @@ function ensureSchema(database) {
       completed_at TEXT
     );
   `)
+  const columns = database.prepare('PRAGMA table_info(jobs)').all().map((column) => column.name)
+  if (!columns.includes('idempotency_key')) {
+    database.exec('ALTER TABLE jobs ADD COLUMN idempotency_key TEXT')
+  }
+  database.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_jobs_idempotency_key ON jobs(idempotency_key);')
 }
 
 export function getJobsDb() {
@@ -73,14 +79,20 @@ function getNowIso() {
   return new Date().toISOString()
 }
 
-export function createJobRecord({ id, type, payload }) {
+export function createJobRecord({ id, type, payload, idempotencyKey = null }) {
   const now = getNowIso()
   const database = getJobsDb()
   const stmt = database.prepare(`
-    INSERT INTO jobs (id, type, status, request_json, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO jobs (id, idempotency_key, type, status, request_json, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
   `)
-  stmt.run(id, type, JOB_STATUSES.PENDING, JSON.stringify(payload), now, now)
+  stmt.run(id, idempotencyKey, type, JOB_STATUSES.PENDING, JSON.stringify(payload), now, now)
+}
+
+export function getJobRecordByIdempotencyKey(idempotencyKey) {
+  if (typeof idempotencyKey !== 'string' || !idempotencyKey.trim()) return null
+  const database = getJobsDb()
+  return database.prepare('SELECT * FROM jobs WHERE idempotency_key = ?').get(idempotencyKey.trim())
 }
 
 export function updateJobRecord({ id, status, resultJson, resultPath, errorText, queueJobId, startedAt, completedAt }) {

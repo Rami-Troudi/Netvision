@@ -1,5 +1,6 @@
 import { enforceRateLimit, requireAuthenticatedRequest } from '../_lib/security'
 import { formatJobApiResponse, getJobRecord } from '../_lib/jobs'
+import { ERROR_TYPES, sendApiError } from '../_lib/apiErrors'
 
 export const config = {
   api: {
@@ -20,17 +21,17 @@ export default async function handler(req, res) {
   if (!enforceRateLimit(req, res, { keyPrefix: 'jobs-status', maxRequests: 120, windowMs: 60_000 })) return
 
   if (req.method !== 'GET') {
-    return res.status(405).json({ error: 'Method not allowed' })
+    return sendApiError(res, 405, ERROR_TYPES.VALIDATION, 'Method not allowed')
   }
 
   const jobId = normalizeId(req.query.id)
   if (!jobId) {
-    return res.status(400).json({ error: 'Missing job id' })
+    return sendApiError(res, 400, ERROR_TYPES.VALIDATION, 'Missing job id')
   }
 
   const jobRow = getJobRecord(jobId)
   if (!jobRow) {
-    return res.status(404).json({ error: 'Job not found' })
+    return sendApiError(res, 404, ERROR_TYPES.DATA, 'Job not found')
   }
 
   return res.status(200).json(formatJobApiResponse(jobRow))

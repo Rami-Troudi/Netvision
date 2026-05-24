@@ -141,8 +141,8 @@
 - [ ] Move supported actions, mode validation, params object validation, and time-entry validation into one module.
 - [ ] Make `/api/jobs` reject unsupported actions immediately with HTTP 400.
 - [ ] Make direct simulation and queued simulation return the same validation error shape.
-- [ ] Keep supported actions limited to `tilt`, `redistribute`, `add_carrier`, `add_sector`, `add_site`, `new_site`.
-- [ ] Run direct and queued smoke checks for all six actions.
+- [ ] Keep supported actions limited to `tilt`, `redistribute`, `neighbor_optimization`, `add_carrier`, `add_sector`.
+- [ ] Run direct and queued smoke checks for all five source-truth actions.
 
 ### Task 5: Build A Precomputed Peak-Hours Index
 
@@ -240,4 +240,3 @@
 - Unsupported simulator actions fail before queueing.
 - Health diagnostics are machine-readable and operator-readable.
 - `npm run build`, contract tests, `scripts/v2-api-smoke.mjs`, and backend validation pass.
-

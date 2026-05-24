@@ -8,6 +8,7 @@ const { Worker } = require('bullmq')
 const { getRedisUrl, getRedisConnectionOptions } = require('./redisConfig.cjs')
 const { getPythonBin } = require('./pythonConfig.cjs')
 const { getRuntimeDataRoot } = require('./runtimeDataRoot.cjs')
+const { runNs3Job } = require('../simulation/ns3/adapter/ns3JobAdapter.js')
 
 const JOB_QUEUE_NAME = (process.env.JOB_QUEUE_NAME || 'netvision-jobs').trim()
 const REDIS_URL = getRedisUrl()
@@ -27,6 +28,7 @@ const JOB_RESULTS_DIR = path.resolve(RUNTIME_DIR, 'job-results')
 
 let db = null
 let allowTimeFileSet = null
+let allowTimeFileSetMode = ''
 
 function ensureRuntimeDirectories() {
   fs.mkdirSync(RUNTIME_DIR, { recursive: true })
@@ -53,6 +55,7 @@ function getDb() {
       result_path TEXT,
       error_text TEXT,
       queue_job_id TEXT,
+      idempotency_key TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       started_at TEXT,
@@ -135,7 +138,8 @@ function isPathInsideDirectory(targetPath, directoryPath) {
 }
 
 async function loadAllowedTimeFiles() {
-  if (allowTimeFileSet) return allowTimeFileSet
+  const { mode } = getRuntimeDataRoot(PROJECT_ROOT)
+  if (allowTimeFileSet && allowTimeFileSetMode === mode) return allowTimeFileSet
 
   const { root } = getRuntimeDataRoot(PROJECT_ROOT)
   const indexPath = path.resolve(root, 'time_index.json')
@@ -147,16 +151,17 @@ async function loadAllowedTimeFiles() {
     .filter(Boolean)
 
   allowTimeFileSet = new Set(filenames)
+  allowTimeFileSetMode = mode
   return allowTimeFileSet
 }
 
-function runPython({ args, timeout }) {
+function runPython({ args, timeout, env }) {
   return new Promise((resolve, reject) => {
     const child = spawn(PYTHON_BIN, args, {
       cwd: PROJECT_ROOT,
       timeout,
       shell: false,
-      env: process.env,
+      env: env || process.env,
     })
 
     let stdout = ''
@@ -230,7 +235,12 @@ async function runSimulationJob(payload) {
     args.push('--time-file', resolvedTimeFile)
   }
 
-  const { code, signal, stdout, stderr } = await runPython({ args, timeout: 30_000 })
+  const runtimeMode = getRuntimeDataRoot(PROJECT_ROOT).mode
+  const { code, signal, stdout, stderr } = await runPython({
+    args,
+    timeout: 30_000,
+    env: { ...process.env, DATA_MODE: runtimeMode },
+  })
   if (code !== 0) {
     throw new Error(`Simulation failed (code=${code}, signal=${signal || 'none'}): ${stderr || stdout}`)
   }
@@ -258,7 +268,11 @@ async function writeResultArtifact(jobId, type, result) {
 
 async function executeJobByType(type, payload) {
   if (type === 'simulate') {
-    return runSimulationJob(payload)
+    const engine = String(payload?.engine || 'ns3').trim().toLowerCase()
+    if (engine === 'ns3') {
+      return runNs3Job({ projectRoot: PROJECT_ROOT, jobId: payload.__jobId, payload })
+    }
+    throw new Error(`Unsupported simulation engine: ${engine}. Only ns3 is enabled.`)
   }
   throw new Error(`Unsupported job type: ${type}`)
 }
@@ -300,7 +314,7 @@ const worker = new Worker(
     }
 
     try {
-      const result = await executeJobByType(jobRow.type, payload)
+      const result = await executeJobByType(jobRow.type, { ...payload, __jobId: jobId })
       const artifactPath = await writeResultArtifact(jobId, jobRow.type, result)
       updateJobRow({
         id: jobId,

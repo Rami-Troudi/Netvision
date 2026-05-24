@@ -55,7 +55,6 @@ VALID_ACTION_LABELS = {
     "Carrier Extension",
     "Add Band",
     "Add Sector",
-    "Add Site",
     "Check Coverage/Interference",
     "No Action Required",
 }

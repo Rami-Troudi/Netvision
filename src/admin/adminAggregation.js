@@ -32,7 +32,9 @@ export function buildCells(baseline = {}, observations = {}, adminCellIndex = {}
   return Object.entries(baseline).map(([cellName, base]) => ({
     ...normalizeObservation(base, { ...(observations[cellName] || {}), cell_name: cellName }),
     cell_name: cellName,
-    admin: normalizeAdminNames(adminCellIndex[cellName] || null),
+    // Keep baseline admin mapping as fallback when cell index does not contain
+    // generated/mock cells yet.
+    admin: normalizeAdminNames(adminCellIndex[cellName] || base?.admin || null),
   }))
 }
 
@@ -96,19 +98,33 @@ export function aggregateDelegationScope(cells, delegationId) {
   return aggregateCells(cells.filter((cell) => cell.admin?.deleg_id === delegationId), delegationId)
 }
 
+function groupCellsByAdmin(cells = [], key) {
+  const grouped = new Map()
+  for (const cell of cells) {
+    const id = cell.admin?.[key]
+    if (!id) continue
+    if (!grouped.has(id)) grouped.set(id, [])
+    grouped.get(id).push(cell)
+  }
+  return grouped
+}
+
 export function rankGovernorates(cells, registry, metricMode = 'congestion_rate') {
+  const cellsByGov = groupCellsByAdmin(cells, 'gov_id')
   return (registry?.governorates || []).map((gov) => {
-    const scoped = cells.filter((cell) => cell.admin?.gov_id === gov.gov_id)
+    const scoped = cellsByGov.get(gov.gov_id) || []
     const govName = normalizeGovernorateName(gov.gov_name)
-    return { ...gov, gov_name: govName, ...aggregateCells(scoped, govName), id: gov.gov_id, name: govName, value: metricValue(aggregateCells(scoped), metricMode) }
+    const agg = aggregateCells(scoped, govName)
+    return { ...gov, gov_name: govName, ...agg, id: gov.gov_id, name: govName, value: metricValue(agg, metricMode) }
   }).sort((a, b) => b.value - a.value)
 }
 
 export function rankDelegations(cells, registry, governorateId, metricMode = 'congestion_rate') {
+  const cellsByDelegation = groupCellsByAdmin(cells, 'deleg_id')
   return (registry?.delegations || [])
     .filter((deleg) => !governorateId || deleg.gov_id === governorateId)
     .map((deleg) => {
-      const scoped = cells.filter((cell) => cell.admin?.deleg_id === deleg.deleg_id)
+      const scoped = cellsByDelegation.get(deleg.deleg_id) || []
       const delegName = normalizeDelegationName(deleg.deleg_name)
       const govName = normalizeGovernorateName(deleg.gov_name)
       const agg = aggregateCells(scoped, delegName)

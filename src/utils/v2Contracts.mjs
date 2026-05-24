@@ -3,10 +3,16 @@ import { ACTION_LABELS_FR } from './uiPolicy.mjs'
 export const SIMULATOR_ACTIONS = Object.freeze([
   { id: 'tilt', label: ACTION_LABELS_FR.tilt, params: { degrees: 2 } },
   { id: 'redistribute', label: ACTION_LABELS_FR.redistribute, params: { ratio: 0.15 } },
+  { id: 'neighbor_optimization', label: ACTION_LABELS_FR.neighbor_optimization, params: { interference_relief: 0.12 } },
   { id: 'add_carrier', label: ACTION_LABELS_FR.add_carrier, params: null },
-  { id: 'add_sector', label: ACTION_LABELS_FR.add_sector, params: { targetSectors: 4 } },
-  { id: 'new_site', label: ACTION_LABELS_FR.new_site, params: { siteType: 'macro' } },
-  { id: 'add_site', label: ACTION_LABELS_FR.add_site, params: { siteType: 'macro' } },
+  { id: 'add_sector', label: ACTION_LABELS_FR.add_sector, params: { target_sectors: 4 } },
+])
+
+export const DEFAULT_SIMULATION_ENGINE = 'ns3'
+export const DEFAULT_FIDELITY_LEVEL = 'operations_v1'
+export const SIMULATION_FIDELITY_LEVELS = Object.freeze([
+  { id: 'operations_v1', label: 'Standard' },
+  { id: 'operations_v2_calibrated', label: 'Calibre' },
 ])
 
 export const DEFAULT_MAP_CONTROLS = Object.freeze({
@@ -21,16 +27,23 @@ export const DEFAULT_MAP_CONTROLS = Object.freeze({
 const ACTION_LABEL_TO_ID = Object.freeze({
   'Antenna Tilt': 'tilt',
   'Tilt Adjustment': 'tilt',
+  'Tilt / Power': 'tilt',
+  'Ajustement puissance': 'tilt',
   Tilt: 'tilt',
   'Load Rebalancing': 'redistribute',
+  'Equilibrage charge': 'redistribute',
+  'Équilibrage charge': 'redistribute',
   Redistribute: 'redistribute',
-  'Actions on Neighbors': 'redistribute',
+  'Actions on Neighbors': 'neighbor_optimization',
+  'Actions sur voisins': 'neighbor_optimization',
   'Carrier Extension': 'add_carrier',
   'Add Carrier': 'add_carrier',
   'Add Band': 'add_carrier',
+  'Extension L1800': 'add_carrier',
+  'Extension L800': 'add_carrier',
+  'Extension LTE': 'add_carrier',
   'Add Sector': 'add_sector',
-  'New Site': 'new_site',
-  'Add Site': 'add_site',
+  'Ajout 4eme secteur': 'add_sector',
 })
 
 function num(value, fallback = 0) {
@@ -101,7 +114,7 @@ export function paramsForSimulatorAction(action, cell = {}) {
   return { ...(item.params || {}) }
 }
 
-export function buildSimulationPayload({ cell, action, currentTime, params }) {
+export function buildSimulationPayload({ cell, action, currentTime, params, fidelityLevel = DEFAULT_FIDELITY_LEVEL }) {
   const cellName = String(cell?.cell_name || '').trim()
   if (!cellName) throw new Error('Simulation requires a selected cell')
   const nextAction = String(action || '').trim()
@@ -113,6 +126,7 @@ export function buildSimulationPayload({ cell, action, currentTime, params }) {
     action: nextAction,
     params: params && typeof params === 'object' && !Array.isArray(params) ? params : paramsForSimulatorAction(nextAction, cell),
     time_entry: currentTime && typeof currentTime === 'object' ? currentTime : {},
-    mode: 'fast',
+    engine: DEFAULT_SIMULATION_ENGINE,
+    fidelity_level: SIMULATION_FIDELITY_LEVELS.some((level) => level.id === fidelityLevel) ? fidelityLevel : DEFAULT_FIDELITY_LEVEL,
   }
 }

@@ -1,4 +1,5 @@
 import { enforceRateLimit, requireAuthenticatedRequest } from './_lib/security'
+import { appendAudit, auditActor } from './_lib/audit'
 
 const BACKEND_BASE_URL = (process.env.BACKEND_API_URL || 'http://127.0.0.1:8000').trim()
 const BACKEND_TIMEOUT_MS = Number.parseInt(process.env.BACKEND_API_TIMEOUT_MS || '420000', 10)
@@ -103,6 +104,7 @@ export default async function handler(req, res) {
   try {
     const backend = await fetchBackendExportWithRetry(timestamp)
     if (!backend.ok) {
+      appendAudit({ actor: auditActor(req), endpoint: '/api/recommendations-export', action: 'export', result: 'backend_error', detail: String(backend.status || 502) })
       return res.status(backend.status || 502).json({
         error: 'Failed to export recommendations from backend',
         attempts: backend.attempts,
@@ -115,10 +117,12 @@ export default async function handler(req, res) {
     res.setHeader('X-Backend-Attempts', String(backend.attempts))
     res.setHeader('Content-Type', backend.contentType)
     res.setHeader('Content-Disposition', backend.contentDisposition)
+    appendAudit({ actor: auditActor(req), endpoint: '/api/recommendations-export', action: 'export', result: 'ok', detail: timestamp || 'latest' })
     return res.status(200).send(backend.csvText)
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err)
     const isConnectionError = /fetch failed|econnrefused|econnreset|etimedout/i.test(detail)
+    appendAudit({ actor: auditActor(req), endpoint: '/api/recommendations-export', action: 'export', result: 'error', detail })
     return res.status(502).json({
       error: isConnectionError
         ? 'Python backend is not reachable — make sure it is running on the configured port'
