@@ -23,7 +23,7 @@ export default function TopHeader({
       <div className="brand-lockup">
         <div className="brand-mark">NV</div>
         <div>
-          <div className="brand-title">NetVision Jumeau Numerique</div>
+          <div className="brand-title">NetVision Supervision RAN</div>
           <div className="brand-subtitle">Centre regional RAN Tunisie</div>
         </div>
       </div>
@@ -36,7 +36,7 @@ export default function TopHeader({
           </div>
         ) : null}
       </div>
-      {dataMode === 'mock' && adminToolsEnabled ? <div className="mock-mode-badge"><strong>JEU DEMO</strong><span>Validation interne</span></div> : null}
+      {dataMode === 'mock' ? <div className="mock-mode-badge"><strong>Jeu de démonstration</strong><span>{adminToolsEnabled ? 'runtime_data_mock' : 'Mode opérateur'}</span></div> : null}
       <div className="sr-only" aria-live="polite">{query ? `${searchResults.length} resultats de recherche` : ''}</div>
       <div className="header-actions">
         <select value={metricMode} onChange={(e) => onMetricModeChange(e.target.value)} aria-label="Metrique carte">

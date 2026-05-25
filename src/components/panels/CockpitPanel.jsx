@@ -13,7 +13,7 @@ import { diagnosisLabelFr } from '../../utils/uiPolicy.mjs'
 export default function CockpitPanel(props) {
   const { activeTab, adminToolsEnabled } = props
   if (activeTab === 'peak-hours') return <PeakHoursPanel {...props} />
-  if (activeTab === 'forecast') return <ForecastPanel {...props} />
+  if (adminToolsEnabled && activeTab === 'forecast') return <ForecastPanel {...props} />
   if (activeTab === 'qos') return <QosPanel {...props} />
   if (activeTab === 'operations') return <OperationsPanel {...props} />
   if (adminToolsEnabled && activeTab === 'analytics') return <AnalyticsPanel {...props} />
@@ -26,7 +26,7 @@ function ForecastPanel({ scope, forecastState, driftState, selectedCell }) {
   const rows = forecastState?.rows || []
   const driftRows = driftState?.rows || []
   return <section className="panel-shell cockpit-panel">
-    <div className="panel-heading"><div><p>Prevision QoS</p><h1>{selectedCell?.cell_name || scope.delegationName || 'Prevision court terme'}</h1></div><StatusBadge status={forecastState?.available ? 'watch' : 'stable'} /></div>
+    <div className="panel-heading"><div><p>Prévision QoS</p><h1>{selectedCell?.cell_name || scope.delegationName || 'Prévision court terme'}</h1></div><StatusBadge status={forecastState?.available ? 'watch' : 'stable'} /></div>
     <div className="kpi-grid compact">
       <KpiCard label="Prevision disponible" value={forecastState?.available ? 'Oui' : 'Non'} />
       <KpiCard label="Confiance" value={forecastState?.confidence || 'low'} />
@@ -121,7 +121,7 @@ function QosPanel({ scope, summary, selectedCell, siteRows, scopedCells, filters
   if (selectedCell) {
     return <CellQosPanel cell={selectedCell} currentTime={currentTime} workerState={workerState} sliceDelta={sliceDelta} onOpenOperations={() => onTabChange?.('operations')} />
   }
-  return <section className="panel-shell cockpit-panel"><div className="panel-heading"><div><p>Qualite radio</p><h1>{scope.delegationName || 'Delegation'}</h1></div><StatusBadge status={summary.status} /></div><SincePreviousCard delta={sliceDelta} compact /><ScopeKpis summary={summary} /><RanIssueBox issue={issue} /><ComplianceCards compliance={compliance} /><FilterBox filters={filters} onFilterChange={onFilterChange} bands={bands} /><div className="site-table-card"><div className="section-title">Sites de la delegation <span>{siteRows.length}</span></div>{siteRows.length ? <table><caption className="sr-only">Etat radio des sites</caption><thead><tr><th scope="col">Etat</th><th scope="col">Site</th><th scope="col">Cellule prioritaire</th><th scope="col">Cellules</th><th scope="col">PRB</th><th scope="col">Qualite</th></tr></thead><tbody>{siteRows.map((site) => <tr key={site.site_name} onClick={() => onSelectCell(site.worst_cell)}><td><span className="state-dot" style={{ background: site.state_color }} />{site.state_label}</td><td>{site.site_name}</td><td>{site.worst_cell}</td><td>{site.cells.length}</td><td>{formatMetric(site.avg_prb)}%</td><td>{formatMetric(site.avg_throughput)} Mbps / CQI {formatMetric(site.avg_cqi)}</td></tr>)}</tbody></table> : <div className="empty-state" role="note">Aucun actif radio rapproche dans cette delegation.</div>}</div></section>
+  return <section className="panel-shell cockpit-panel"><div className="panel-heading"><div><p>Qualité radio</p><h1>{scope.delegationName || 'Delegation'}</h1></div><StatusBadge status={summary.status} /></div><SincePreviousCard delta={sliceDelta} compact /><ScopeKpis summary={summary} /><RanIssueBox issue={issue} /><ComplianceCards compliance={compliance} /><FilterBox filters={filters} onFilterChange={onFilterChange} bands={bands} /><div className="site-table-card"><div className="section-title">Sites de la delegation <span>{siteRows.length}</span></div>{siteRows.length ? <table><caption className="sr-only">Etat radio des sites</caption><thead><tr><th scope="col">Etat</th><th scope="col">Site</th><th scope="col">Cellule prioritaire</th><th scope="col">Cellules</th><th scope="col">PRB</th><th scope="col">Qualité</th></tr></thead><tbody>{siteRows.map((site) => <tr key={site.site_name} onClick={() => onSelectCell(site.worst_cell)}><td><span className="state-dot" style={{ background: site.state_color }} />{site.state_label}</td><td>{site.site_name}</td><td>{site.worst_cell}</td><td>{site.cells.length}</td><td>{formatMetric(site.avg_prb)}%</td><td>{formatMetric(site.avg_throughput)} Mbps / CQI {formatMetric(site.avg_cqi)}</td></tr>)}</tbody></table> : <div className="empty-state" role="note">Aucun actif radio rapproche dans cette delegation.</div>}</div></section>
 }
 
 function ScopeQosPanel({ title, summary, issue, compliance, note, sliceDelta }) {

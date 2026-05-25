@@ -58,7 +58,7 @@ export default function NetVisionDashboard() {
   const visibleTabs = useMemo(() => adminToolsEnabled ? [...COCKPIT_TABS, ...ADMIN_COCKPIT_TABS] : COCKPIT_TABS, [adminToolsEnabled])
 
   useEffect(() => {
-    if (!adminToolsEnabled && ['analytics', 'data', 'system'].includes(activeTab)) setActiveTab('overview')
+    if (!adminToolsEnabled && ['forecast', 'analytics', 'data', 'system'].includes(activeTab)) setActiveTab('overview')
   }, [adminToolsEnabled, activeTab])
 
   useEffect(() => {
@@ -90,13 +90,19 @@ export default function NetVisionDashboard() {
   useEffect(() => { localStorage.setItem('netvision.savedViews', JSON.stringify(savedViews)) }, [savedViews])
 
   useEffect(() => {
-    if (!restorationFlags.forecast) return
+    if (!adminToolsEnabled || !restorationFlags.forecast || !['forecast', 'system'].includes(activeTab)) {
+      setForecastState({ available: false, rows: [], assumptions: [], confidence: 'low' })
+      return
+    }
     fetchJson('/api/forecast').then((p) => setForecastState(p)).catch(() => setForecastState({ available: false, rows: [], reason: 'API forecast indisponible' }))
-  }, [restorationFlags.forecast, data?.currentTimeEntry?.timestamp, scope.selectedCellName])
+  }, [adminToolsEnabled, restorationFlags.forecast, activeTab])
   useEffect(() => {
-    if (!restorationFlags.drift) return
+    if (!adminToolsEnabled || !restorationFlags.drift || !['forecast', 'system'].includes(activeTab)) {
+      setDriftState({ available: false, rows: [], summary: {} })
+      return
+    }
     fetchJson('/api/drift').then((p) => setDriftState(p)).catch(() => setDriftState({ available: false, rows: [], reason: 'API drift indisponible' }))
-  }, [restorationFlags.drift, data?.currentTimeEntry?.timestamp, scope.selectedCellName])
+  }, [adminToolsEnabled, restorationFlags.drift, activeTab])
 
   useEffect(() => { timeIndexRef.current = timeIndex }, [timeIndex])
   useEffect(() => { dataRef.current = data }, [data])
@@ -351,7 +357,7 @@ export default function NetVisionDashboard() {
     const next = role === 'admin' ? 'admin' : 'operator'
     setNetvisionRole(next)
     setInterfaceRole(next)
-    if (next !== 'admin' && ['analytics', 'data', 'system'].includes(activeTab)) setActiveTab('overview')
+    if (next !== 'admin' && ['forecast', 'analytics', 'data', 'system'].includes(activeTab)) setActiveTab('overview')
   }
 
   function selectPeakRow(row) {

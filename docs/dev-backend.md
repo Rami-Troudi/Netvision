@@ -25,7 +25,7 @@ PONG
 Default configuration:
 
 ```bash
-REDIS_URL=redis://127.0.0.1:6379
+REDIS_URL=redis://127.0.0.1:6381
 REDIS_CONNECTION_TIMEOUT_MS=1000
 ```
 
@@ -33,7 +33,7 @@ REDIS_CONNECTION_TIMEOUT_MS=1000
 
 ```bash
 REDIS_HOST=127.0.0.1
-REDIS_PORT=6379
+REDIS_PORT=6381
 ```
 
 ## FastAPI Backend

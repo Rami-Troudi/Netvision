@@ -157,7 +157,7 @@ test('derives deterministic map state from scope and controls', () => {
   })
 
   assert.equal(state.cameraKey, 'cell:gov-1:deleg-1')
-  assert.deepEqual(state.filters.selectedCell, ['==', ['get', 'worst_cell'], 'TN1158_c01'])
+  assert.deepEqual(state.filters.selectedCell, ['==', ['get', 'cell_name'], 'TN1158_c01'])
   assert.equal(state.visibility.sites, true)
   assert.equal(state.visibility.heatmap, true)
   assert.equal(state.visibility.labels, true)

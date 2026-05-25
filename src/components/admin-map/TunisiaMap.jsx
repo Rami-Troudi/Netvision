@@ -52,6 +52,7 @@ function siteFeatureCollection(sites = []) {
         type: 'Feature',
         properties: {
           site_name: site.site_name,
+          cell_name: site.worst_cell,
           worst_cell: site.worst_cell,
           state: site.state,
           state_label: site.state_label,

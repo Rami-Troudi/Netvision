@@ -25,7 +25,7 @@
     "topology:neighbors": "node scripts/build_neighbor_graph.mjs runtime_data runtime_data_mock",
     "data:labelled-compare": "node scripts/generate_labelled_comparison_data.mjs",
     "backend": "python run_backend.py",
-    "redis:ping": "redis-cli -h 127.0.0.1 -p 6379 ping"
+    "redis:ping": "node scripts/redis-ping.mjs"
   },
   "dependencies": {
     "@turf/turf": "^7.3.1",

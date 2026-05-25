@@ -22,7 +22,7 @@ export function deriveMapState({ scope = {}, mapControls = {}, selectedCellName 
           ? ['==', ['get', 'deleg_id'], delegationId]
           : ['==', ['get', 'deleg_id'], '__none__'],
       delegationSelected: ['==', ['get', 'deleg_id'], delegationId],
-      selectedCell: showSelectedCell ? ['==', ['get', 'worst_cell'], selectedCell] : ['==', ['get', 'worst_cell'], '__none__'],
+      selectedCell: showSelectedCell ? ['==', ['get', 'cell_name'], selectedCell] : ['==', ['get', 'cell_name'], '__none__'],
     },
     visibility: {
       delegations: showDelegations,

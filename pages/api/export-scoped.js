@@ -30,7 +30,7 @@ export default async function handler(req, res) {
     time_window: payload.time_window || {},
     filters: payload.filters || {},
     data_mode: payload.data_mode || 'unknown',
-    source_runtime_root: getRuntimeDataRoot().root,
+    source_runtime: getRuntimeDataRoot().mode === 'mock' ? 'runtime_data_mock' : 'runtime_data',
   }
   const envelope = { ...payload, audit: auditMeta }
 

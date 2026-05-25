@@ -58,7 +58,7 @@ def _get_redis() -> Any:
     with _redis_init_lock:
         if _redis_client is not None:
             return _redis_client
-        redis_url = os.environ.get("REDIS_URL", "redis://127.0.0.1:6379").strip()
+        redis_url = os.environ.get("REDIS_URL", "redis://127.0.0.1:6381").strip()
         try:
             client = _redis_mod.Redis.from_url(
                 redis_url,

@@ -1,4 +1,3 @@
-const { spawn } = require('child_process')
 const fs = require('fs')
 const fsPromises = require('fs/promises')
 const path = require('path')
@@ -6,13 +5,10 @@ const { DatabaseSync } = require('node:sqlite')
 const IORedis = require('ioredis')
 const { Worker } = require('bullmq')
 const { getRedisUrl, getRedisConnectionOptions } = require('./redisConfig.cjs')
-const { getPythonBin } = require('./pythonConfig.cjs')
-const { getRuntimeDataRoot } = require('./runtimeDataRoot.cjs')
 const { runNs3Job } = require('../simulation/ns3/adapter/ns3JobAdapter.js')
 
 const JOB_QUEUE_NAME = (process.env.JOB_QUEUE_NAME || 'netvision-jobs').trim()
 const REDIS_URL = getRedisUrl()
-const PYTHON_BIN = getPythonBin()
 
 const JOB_STATUSES = {
   PENDING: 'pending',
@@ -27,8 +23,6 @@ const DB_PATH = path.resolve(RUNTIME_DIR, 'jobs.sqlite')
 const JOB_RESULTS_DIR = path.resolve(RUNTIME_DIR, 'job-results')
 
 let db = null
-let allowTimeFileSet = null
-let allowTimeFileSetMode = ''
 
 function ensureRuntimeDirectories() {
   fs.mkdirSync(RUNTIME_DIR, { recursive: true })
@@ -126,140 +120,6 @@ function parseJsonString(raw, fallbackValue = null) {
   } catch {
     return fallbackValue
   }
-}
-
-async function fileExists(filePath) {
-  try {
-    await fsPromises.access(filePath)
-    return true
-  } catch {
-    return false
-  }
-}
-
-function isPlainObject(value) {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
-}
-
-function isPathInsideDirectory(targetPath, directoryPath) {
-  const relative = path.relative(directoryPath, targetPath)
-  return Boolean(relative) && !relative.startsWith('..') && !path.isAbsolute(relative)
-}
-
-async function loadAllowedTimeFiles() {
-  const { mode } = getRuntimeDataRoot(PROJECT_ROOT)
-  if (allowTimeFileSet && allowTimeFileSetMode === mode) return allowTimeFileSet
-
-  const { root } = getRuntimeDataRoot(PROJECT_ROOT)
-  const indexPath = path.resolve(root, 'time_index.json')
-  const raw = await fsPromises.readFile(indexPath, 'utf8')
-  const parsed = parseJsonString(raw, {})
-  const timestamps = Array.isArray(parsed?.timestamps) ? parsed.timestamps : []
-  const filenames = timestamps
-    .map((entry) => (entry && typeof entry.filename === 'string' ? entry.filename.trim() : ''))
-    .filter(Boolean)
-
-  allowTimeFileSet = new Set(filenames)
-  allowTimeFileSetMode = mode
-  return allowTimeFileSet
-}
-
-function runPython({ args, timeout, env }) {
-  return new Promise((resolve, reject) => {
-    const child = spawn(PYTHON_BIN, args, {
-      cwd: PROJECT_ROOT,
-      timeout,
-      shell: false,
-      env: env || process.env,
-    })
-
-    let stdout = ''
-    let stderr = ''
-
-    child.stdout.on('data', (chunk) => {
-      stdout += chunk.toString()
-    })
-
-    child.stderr.on('data', (chunk) => {
-      stderr += chunk.toString()
-    })
-
-    child.on('error', (err) => {
-      reject(err)
-    })
-
-    child.on('close', (code, signal) => {
-      resolve({ code, signal, stdout, stderr })
-    })
-  })
-}
-
-async function resolveSimulationTimeFile(timeEntry) {
-  const requestedTimeFile = typeof timeEntry?.filename === 'string' ? timeEntry.filename.trim() : ''
-  if (!requestedTimeFile) return null
-
-  const allowList = await loadAllowedTimeFiles()
-  if (!allowList.has(requestedTimeFile)) {
-    throw new Error('time_entry.filename is not in allowed time_index.json')
-  }
-
-  const { root } = getRuntimeDataRoot(PROJECT_ROOT)
-  const timeDataRoot = path.resolve(root, 'time_data')
-  const resolved = path.resolve(timeDataRoot, requestedTimeFile)
-  if (!isPathInsideDirectory(resolved, timeDataRoot)) {
-    throw new Error('Invalid time_entry.filename path')
-  }
-  if (!(await fileExists(resolved))) {
-    throw new Error('time_entry.filename does not exist')
-  }
-
-  return resolved
-}
-
-async function runSimulationJob(payload) {
-  const cellName = typeof payload?.cell_name === 'string' ? payload.cell_name.trim() : ''
-  const action = typeof payload?.action === 'string' ? payload.action.trim() : ''
-  const params = isPlainObject(payload?.params) ? payload.params : {}
-  const timeEntry = isPlainObject(payload?.time_entry) ? payload.time_entry : {}
-
-  if (!cellName || !action) {
-    throw new Error('Missing cell_name or action')
-  }
-
-  const scriptPath = path.resolve(PROJECT_ROOT, 'simulation', 'simulator.py')
-  if (!(await fileExists(scriptPath))) {
-    throw new Error('Simulation script missing')
-  }
-
-  const args = [
-    scriptPath,
-    '--cell', cellName,
-    '--action', action,
-    '--params', JSON.stringify(params),
-    '--mode', 'fast',
-  ]
-
-  const resolvedTimeFile = await resolveSimulationTimeFile(timeEntry)
-  if (resolvedTimeFile) {
-    args.push('--time-file', resolvedTimeFile)
-  }
-
-  const runtimeMode = getRuntimeDataRoot(PROJECT_ROOT).mode
-  const { code, signal, stdout, stderr } = await runPython({
-    args,
-    timeout: 30_000,
-    env: { ...process.env, DATA_MODE: runtimeMode },
-  })
-  if (code !== 0) {
-    throw new Error(`Simulation failed (code=${code}, signal=${signal || 'none'}): ${stderr || stdout}`)
-  }
-
-  const parsed = parseJsonString(stdout.trim(), null)
-  if (!parsed || typeof parsed !== 'object') {
-    throw new Error('Simulation output is not valid JSON')
-  }
-
-  return parsed
 }
 
 async function writeResultArtifact(jobId, type, result) {
