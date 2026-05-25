@@ -51,6 +51,7 @@ function getDb() {
       type TEXT NOT NULL,
       status TEXT NOT NULL,
       request_json TEXT NOT NULL,
+      request_hash TEXT,
       result_json TEXT,
       result_path TEXT,
       error_text TEXT,
@@ -62,6 +63,14 @@ function getDb() {
       completed_at TEXT
     );
   `)
+  const columns = db.prepare('PRAGMA table_info(jobs)').all().map((column) => column.name)
+  if (!columns.includes('idempotency_key')) {
+    db.exec('ALTER TABLE jobs ADD COLUMN idempotency_key TEXT')
+  }
+  if (!columns.includes('request_hash')) {
+    db.exec('ALTER TABLE jobs ADD COLUMN request_hash TEXT')
+  }
+  db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_jobs_idempotency_key ON jobs(idempotency_key);')
   return db
 }
 

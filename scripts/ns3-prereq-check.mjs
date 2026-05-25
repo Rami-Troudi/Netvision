@@ -47,8 +47,9 @@ await check('ns-3 runner binary', async () => {
 })
 
 await check('Queue Redis >= 5', async () => {
-  const result = await run('wsl.exe', ['-d', distro, '-u', 'root', '--', 'bash', '-lc', 'redis-cli -p 6381 INFO server | grep ^redis_version'])
-  if (!result.ok) throw new Error(clean(result.stderr || result.stdout || 'Redis on port 6381 unavailable'))
+  const redisPort = process.env.REDIS_PORT || '6381'
+  const result = await run('wsl.exe', ['-d', distro, '-u', 'root', '--', 'bash', '-lc', `redis-cli -p ${redisPort} INFO server | grep ^redis_version`])
+  if (!result.ok) throw new Error(clean(result.stderr || result.stdout || `Redis on port ${redisPort} unavailable`))
   const match = clean(result.stdout).match(/redis_version:([0-9]+)\./)
   const major = Number(match?.[1] || 0)
   if (major < 5) throw new Error(`Redis >= 5 required for BullMQ, got ${clean(result.stdout)}`)

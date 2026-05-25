@@ -162,11 +162,11 @@ export default function CellOperationalPanel({ cell, currentTime, queueReady = f
     <section className="panel-shell cell-panel" aria-busy={recState === 'loading' || simState === 'queued' || simState === 'running'}>
       <div className="panel-heading"><div><p>Action cellule</p><h1>{cell?.cell_name || 'Selectionner cellule'}</h1></div><span className="live-pill">Correction simulee</span></div>
       <div className="kpi-grid compact">
-        <KpiCard label="Charge PRB" value={cell?.prb_load || 0} unit="%" />
-        <KpiCard label="Debit" value={cell?.throughput || 0} unit="Mbps" />
-        <KpiCard label="CQI" value={cell?.cqi || 0} />
-        <KpiCard label="Utilisateurs actifs" value={cell?.active_users || 0} />
-        <KpiCard label="TA" value={cell?.ta || 0} />
+        <KpiCard label="Charge PRB" value={cell?.prb_load || 0} unit="%" hint="Mesure la pression capacitaire radio." />
+        <KpiCard label="Debit" value={cell?.throughput || 0} unit="Mbps" hint="Mesure l experience utilisateur." />
+        <KpiCard label="CQI" value={cell?.cqi || 0} hint="Indique la qualite radio percue." />
+        <KpiCard label="Utilisateurs actifs" value={cell?.active_users || 0} hint="Montre la demande instantanee." />
+        <KpiCard label="TA" value={cell?.ta || 0} hint="Aide a detecter bord de cellule/couverture." />
         <KpiCard label="Sante" value={cell?.health || 0} unit="%" />
       </div>
       <div className="diagnosis-box"><strong>Diagnostic :</strong> {diagnoseCell(cell)}</div>
@@ -209,8 +209,8 @@ export default function CellOperationalPanel({ cell, currentTime, queueReady = f
         </> : null}
       </div>
       {!queueReady ? <div id="queue-unavailable-reason" className="empty-state warning" role="status">{queueDetail || 'Simulation indisponible.'}</div> : null}
-      {simState === 'queued' ? <div className="empty-state" role="status">Preparation scenario ns-3...</div> : null}
-      {simState === 'running' ? <div className="empty-state" role="status">Simulation ns-3 en cours...</div> : null}
+      {simState === 'queued' ? <div className="empty-state" role="status">Preparation du scenario...</div> : null}
+      {simState === 'running' ? <div className="empty-state" role="status">Simulation en cours...</div> : null}
       {simState !== 'idle' && simState !== 'complete' && simState !== 'queued' && simState !== 'running' ? <div className="empty-state warning">{simState}</div> : null}
       <div className="section-title">Historique simulations</div>
       {jobs.length ? <div className="job-queue" role="status" aria-live="polite">{jobs.map((job) => <div key={job.jobId} className="job-row"><strong>{SIMULATOR_ACTIONS.find((item) => item.id === job.action)?.label || 'Simulation'}</strong><span>{jobStatusLabel(job.status)}</span><em>{jobDetailLabel(job)}</em></div>)}</div> : <div className="empty-state" role="note">Aucune simulation lancee sur cette cellule.</div>}

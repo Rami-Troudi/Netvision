@@ -6,7 +6,8 @@ export default function SimulationImpactCard({ result }) {
   const after = result.after || result.predicted || {}
   return (
     <div className="simulation-impact">
-      <div className="section-title">Impact avant / apres</div>
+      <div className="section-title">Resultat indicatif</div>
+      <p className="impact-note">Impact avant / apres estime par scenario local.</p>
       <div className="impact-grid">
         <Impact label="PRB" before={before.prb_load ?? before.load} after={after.prb_load ?? after.load} unit="%" />
         <Impact label="Debit" before={normalizeThroughput(before.throughput)} after={normalizeThroughput(after.throughput)} unit="Mbps" />
@@ -14,17 +15,23 @@ export default function SimulationImpactCard({ result }) {
       </div>
       {result.engine || result.fidelity_level || result.runtime_seconds ? (
         <div className="impact-meta">
-          <span>Moteur {result.engine === 'ns3' ? 'ns-3' : result.engine || 'simulation'}</span>
           <span>Niveau {localizeFidelity(result.fidelity_level)}</span>
           {Number.isFinite(Number(result.runtime_seconds)) ? <span>Duree {formatMetric(result.runtime_seconds)}s</span> : null}
           {result.calibration?.quality ? <span>Calibration {localizeCalibrationQuality(result.calibration.quality)}</span> : null}
-          {result.calibration?.profile ? <span>Profil {result.calibration.profile}</span> : null}
           {Number.isFinite(Number(result.confidence_pct)) ? <span>Confiance {formatMetric(result.confidence_pct)}%</span> : null}
+        </div>
+      ) : null}
+      {result.feasibility || result.credibility ? (
+        <div className="assumption-list">
+          <strong>Credibilite du resultat</strong>
+          {result.feasibility ? <span>Faisabilite {result.feasibility.ok ? 'confirmee' : 'bloquee'}</span> : null}
+          {result.credibility ? <span>Score credibilite {formatMetric(result.credibility.score)}%</span> : null}
+          {Array.isArray(result.credibility?.reasons) && result.credibility.reasons.slice(0, 3).map((item) => <span key={item}>{item}</span>)}
         </div>
       ) : null}
       {Array.isArray(result.scenario_assumptions) && result.scenario_assumptions.length ? (
         <div className="assumption-list">
-          <strong>Hypotheses</strong>
+          <strong>Hypotheses du scenario</strong>
           {result.scenario_assumptions.slice(0, 3).map((item) => <span key={item}>{item}</span>)}
         </div>
       ) : null}
@@ -58,8 +65,8 @@ function localizeCalibrationQuality(quality) {
 }
 function localizeFidelity(fidelity) {
   const key = String(fidelity || 'operations_v1').toLowerCase()
-  if (key === 'operations_v2_calibrated') return 'operations_v2_calibrated (calibre)'
-  return 'operations_v1 (standard)'
+  if (key === 'operations_v2_calibrated') return 'calibre'
+  return 'standard'
 }
 function Impact({ label, before, after, unit = '' }) {
   return <div><span>{label}</span><strong>{formatMetric(before)}{unit}</strong><em>{formatMetric(after)}{unit}</em></div>

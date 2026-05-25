@@ -105,6 +105,15 @@ export default function TunisiaMap({ governoratesGeo, delegationsGeo, governorat
   const [mapError, setMapError] = useState(null)
   const [mapReady, setMapReady] = useState(false)
   const hoveredLayerRef = useRef(null)
+  const rafRef = useRef(null)
+
+  function scheduleMapUpdate(fn) {
+    if (rafRef.current) window.cancelAnimationFrame(rafRef.current)
+    rafRef.current = window.requestAnimationFrame(() => {
+      rafRef.current = null
+      fn()
+    })
+  }
 
   const govSource = useMemo(() => decorateFeatures(governoratesGeo, governorateRows, 'gov_id', metricMode), [governoratesGeo, governorateRows, metricMode])
   const delSource = useMemo(() => decorateFeatures(delegationsGeo, delegationRows, 'deleg_id', metricMode), [delegationsGeo, delegationRows, metricMode])
@@ -196,6 +205,7 @@ export default function TunisiaMap({ governoratesGeo, delegationsGeo, governorat
     })
     return () => {
       transitionRef.current.forEach(clearTimeout)
+      if (rafRef.current) window.cancelAnimationFrame(rafRef.current)
       setMapReady(false)
       map.remove()
       mapRef.current = null
@@ -205,9 +215,12 @@ export default function TunisiaMap({ governoratesGeo, delegationsGeo, governorat
   useEffect(() => {
     const map = mapRef.current
     if (!mapReady || !map?.isStyleLoaded()) return
-    safeSetData(map, 'admin-governorates', govSource)
-    safeSetData(map, 'admin-delegations', delSource)
-    safeSetData(map, 'radio-sites', siteSource)
+    setHover(null)
+    scheduleMapUpdate(() => {
+      safeSetData(map, 'admin-governorates', govSource)
+      safeSetData(map, 'admin-delegations', delSource)
+      safeSetData(map, 'radio-sites', siteSource)
+    })
   }, [govSource, delSource, siteSource, mapReady])
 
   useEffect(() => {
@@ -215,7 +228,7 @@ export default function TunisiaMap({ governoratesGeo, delegationsGeo, governorat
     if (!map) return
     transitionRef.current.forEach(clearTimeout)
     transitionRef.current = []
-    const applyScopeRendering = () => {
+    const applyScopeRendering = () => scheduleMapUpdate(() => {
       if (!hasLayer(map, 'admin-governorates-fill')) {
         transitionRef.current.push(window.setTimeout(applyScopeRendering, 100))
         return
@@ -238,7 +251,7 @@ export default function TunisiaMap({ governoratesGeo, delegationsGeo, governorat
       safeSetLayout(map, 'radio-sites-heatmap', 'visibility', next.visibility.heatmap ? 'visible' : 'none')
       safeSetLayout(map, 'radio-site-labels', 'visibility', next.visibility.labels ? 'visible' : 'none')
       safeSetLayout(map, 'selected-cell', 'visibility', next.visibility.selectedCell ? 'visible' : 'none')
-    }
+    })
     applyScopeRendering()
   }, [scope, mapControls, mapReady])
 

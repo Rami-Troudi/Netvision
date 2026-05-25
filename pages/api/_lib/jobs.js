@@ -4,6 +4,7 @@ import { createRequire } from 'module'
 import { DatabaseSync } from 'node:sqlite'
 import { Queue } from 'bullmq'
 import IORedis from 'ioredis'
+import crypto from 'crypto'
 
 const require = createRequire(import.meta.url)
 const { getRedisUrl, getRedisConnectionTimeoutMs, getRedisConnectionOptions } = require('../../../job-workers/redisConfig.cjs')
@@ -45,6 +46,7 @@ function ensureSchema(database) {
       type TEXT NOT NULL,
       status TEXT NOT NULL,
       request_json TEXT NOT NULL,
+      request_hash TEXT,
       result_json TEXT,
       result_path TEXT,
       error_text TEXT,
@@ -58,6 +60,9 @@ function ensureSchema(database) {
   const columns = database.prepare('PRAGMA table_info(jobs)').all().map((column) => column.name)
   if (!columns.includes('idempotency_key')) {
     database.exec('ALTER TABLE jobs ADD COLUMN idempotency_key TEXT')
+  }
+  if (!columns.includes('request_hash')) {
+    database.exec('ALTER TABLE jobs ADD COLUMN request_hash TEXT')
   }
   database.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_jobs_idempotency_key ON jobs(idempotency_key);')
 }
@@ -83,10 +88,10 @@ export function createJobRecord({ id, type, payload, idempotencyKey = null }) {
   const now = getNowIso()
   const database = getJobsDb()
   const stmt = database.prepare(`
-    INSERT INTO jobs (id, idempotency_key, type, status, request_json, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO jobs (id, idempotency_key, type, status, request_json, request_hash, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `)
-  stmt.run(id, idempotencyKey, type, JOB_STATUSES.PENDING, JSON.stringify(payload), now, now)
+  stmt.run(id, idempotencyKey, type, JOB_STATUSES.PENDING, JSON.stringify(payload), hashJobPayload(payload), now, now)
 }
 
 export function getJobRecordByIdempotencyKey(idempotencyKey) {
@@ -140,6 +145,16 @@ export function parseJsonValue(rawValue) {
   } catch {
     return null
   }
+}
+
+export function stableStringify(value) {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value)
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`
+  return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`).join(',')}}`
+}
+
+export function hashJobPayload(payload) {
+  return crypto.createHash('sha256').update(stableStringify(payload)).digest('hex')
 }
 
 export function formatJobApiResponse(jobRow) {

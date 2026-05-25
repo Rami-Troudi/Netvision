@@ -1,17 +1,33 @@
 export function isAdminToolsEnabled() {
   if (typeof window === 'undefined') return process.env.NEXT_PUBLIC_NETVISION_ADMIN_TOOLS === 'true'
   const params = new URLSearchParams(window.location.search)
-  return process.env.NEXT_PUBLIC_NETVISION_ADMIN_TOOLS === 'true' || params.get('admin') === '1'
+  const role = window.localStorage?.getItem('netvision_role')
+  return process.env.NEXT_PUBLIC_NETVISION_ADMIN_TOOLS === 'true' || params.get('admin') === '1' || role === 'admin'
+}
+
+export function getNetvisionRole() {
+  if (typeof window === 'undefined') return 'operator'
+  const params = new URLSearchParams(window.location.search)
+  if (params.get('admin') === '1' || process.env.NEXT_PUBLIC_NETVISION_ADMIN_TOOLS === 'true') return 'admin'
+  return window.localStorage?.getItem('netvision_role') === 'admin' ? 'admin' : 'operator'
+}
+
+export function setNetvisionRole(role) {
+  if (typeof window === 'undefined') return
+  const next = role === 'admin' ? 'admin' : 'operator'
+  window.localStorage?.setItem('netvision_role', next)
 }
 
 export const OPERATOR_TABS = Object.freeze([
   { id: 'overview', label: 'Vue reseau', short: 'VR' },
   { id: 'peak-hours', label: 'Heures critiques', short: 'HC' },
+  { id: 'forecast', label: 'Prevision QoS', short: 'PQ' },
   { id: 'qos', label: 'Qualite radio', short: 'QR' },
   { id: 'operations', label: 'Action cellule', short: 'AC' },
 ])
 
 export const ADMIN_TABS = Object.freeze([
+  { id: 'analytics', label: 'Analyse', short: 'AN' },
   { id: 'data', label: 'Donnees', short: 'DN' },
   { id: 'system', label: 'Admin', short: 'AD' },
 ])

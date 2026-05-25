@@ -48,6 +48,8 @@ button { cursor: pointer; }
 .mock-mode-badge span { font-size: 11px; color: var(--muted); white-space: nowrap; }
 .header-actions { display: flex; gap: 10px; align-items: center; }
 .header-actions select, .simulation-control select { height: 40px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); padding: 0 12px; color: var(--ink); }
+.role-switch { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 12px; }
+.role-switch select { min-width: 116px; }
 .ghost-button { height: 40px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--ink); padding: 0 14px; }
 .ghost-button:hover { border-color: var(--orange); color: var(--orange-strong); }
 button:focus-visible,

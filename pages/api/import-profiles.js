@@ -6,6 +6,11 @@ import { ERROR_TYPES, sendApiError } from './_lib/apiErrors.js'
 
 const STORE_DIR = path.resolve(process.cwd(), '.runtime', 'admin')
 const STORE_FILE = path.resolve(STORE_DIR, 'import_profiles.json')
+const ACCEPTED_MAPPING_FIELDS = new Set([
+  'cell_name', 'localcell_id', 'enodeb_name', 'longitude', 'latitude', 'azimuth', 'frequency_band',
+  'timestamp', 'date', 'time', 'load', 'throughput', 'cqi', 'active_users', 'rrc_users', 'traffic', 'ta',
+  'congested', 'severity', 'issue_type', 'root_cause', 'health_score',
+])
 
 async function readProfiles() {
   try {
@@ -22,6 +27,10 @@ async function writeProfiles(profiles) {
   await fs.writeFile(STORE_FILE, JSON.stringify(profiles, null, 2), 'utf8')
 }
 
+function sanitizeMapping(mapping = {}) {
+  return Object.fromEntries(Object.entries(mapping).filter(([field, header]) => ACCEPTED_MAPPING_FIELDS.has(field) && typeof header === 'string' && header.trim()))
+}
+
 export default async function handler(req, res) {
   if (!requireAuthenticatedRequest(req, res)) return
   if (!enforceRateLimit(req, res, { keyPrefix: 'import-profiles', maxRequests: 20, windowMs: 60_000 })) return
@@ -35,7 +44,7 @@ export default async function handler(req, res) {
     const body = req.body || {}
     const datasetName = String(body.dataset_name || '').trim()
     const sourceType = String(body.source_type || '').trim().toLowerCase()
-    const mapping = body.mapping && typeof body.mapping === 'object' && !Array.isArray(body.mapping) ? body.mapping : null
+    const mapping = body.mapping && typeof body.mapping === 'object' && !Array.isArray(body.mapping) ? sanitizeMapping(body.mapping) : null
     const strictCongestion = Boolean(body.strict_congestion_flag)
     if (!datasetName || !sourceType || !mapping) {
       appendAudit({ actor: auditActor(req), endpoint: '/api/import-profiles', action: 'upsert', result: 'invalid_payload' })
@@ -44,7 +53,7 @@ export default async function handler(req, res) {
     const now = new Date().toISOString()
     const profiles = await readProfiles()
     const id = String(body.id || `${sourceType}:${datasetName}`.toLowerCase())
-    const next = { id, dataset_name: datasetName, source_type: sourceType, mapping, strict_congestion_flag: strictCongestion, updated_at: now }
+    const next = { id, version: 1, dataset_name: datasetName, source_type: sourceType, mapping, strict_congestion_flag: strictCongestion, updated_at: now }
     const idx = profiles.findIndex((p) => p.id === id)
     if (idx >= 0) {
       next.created_at = profiles[idx].created_at || now

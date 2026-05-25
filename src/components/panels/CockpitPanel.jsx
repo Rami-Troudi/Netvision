@@ -13,17 +13,47 @@ import { diagnosisLabelFr } from '../../utils/uiPolicy.mjs'
 export default function CockpitPanel(props) {
   const { activeTab, adminToolsEnabled } = props
   if (activeTab === 'peak-hours') return <PeakHoursPanel {...props} />
+  if (activeTab === 'forecast') return <ForecastPanel {...props} />
   if (activeTab === 'qos') return <QosPanel {...props} />
   if (activeTab === 'operations') return <OperationsPanel {...props} />
+  if (adminToolsEnabled && activeTab === 'analytics') return <AnalyticsPanel {...props} />
   if (adminToolsEnabled && activeTab === 'data') return <DataPanel {...props} />
   if (adminToolsEnabled && activeTab === 'system') return <SystemPanel {...props} />
   return <OverviewPanel {...props} />
 }
 
+function ForecastPanel({ scope, forecastState, driftState, selectedCell }) {
+  const rows = forecastState?.rows || []
+  const driftRows = driftState?.rows || []
+  return <section className="panel-shell cockpit-panel">
+    <div className="panel-heading"><div><p>Prevision QoS</p><h1>{selectedCell?.cell_name || scope.delegationName || 'Prevision court terme'}</h1></div><StatusBadge status={forecastState?.available ? 'watch' : 'stable'} /></div>
+    <div className="kpi-grid compact">
+      <KpiCard label="Prevision disponible" value={forecastState?.available ? 'Oui' : 'Non'} />
+      <KpiCard label="Confiance" value={forecastState?.confidence || 'low'} />
+      <KpiCard label="Hypotheses" value={(forecastState?.assumptions || []).length} />
+      <KpiCard label="Ecart moyen" value={driftState?.summary?.avg_abs_delta_pct || 0} unit="%" />
+    </div>
+    {forecastState?.reason ? <div className="empty-state warning" role="note">{forecastState.reason}</div> : null}
+    {rows.length ? <div className="site-table-card"><div className="section-title">KPI prevus</div><table><thead><tr><th>Cellule</th><th>PRB</th><th>Debit</th><th>CQI</th><th>Users</th></tr></thead><tbody>{rows.slice(0, 10).map((r) => <tr key={r.cell_name}><td>{r.cell_name}</td><td>{formatMetric(r.prb_load)}%</td><td>{formatMetric(r.throughput)} Mbps</td><td>{formatMetric(r.cqi)}</td><td>{formatMetric(r.active_users, 0)}</td></tr>)}</tbody></table></div> : null}
+    {driftRows.length ? <div className="site-table-card"><div className="section-title">Fiabilite prevision</div><table><thead><tr><th>Cellule</th><th>Ecart abs</th><th>Ecart %</th><th>Severite</th></tr></thead><tbody>{driftRows.slice(0, 10).map((r) => <tr key={r.cell_name}><td>{r.cell_name}</td><td>{formatMetric(r.abs_delta)}</td><td>{formatMetric(r.delta_pct)}%</td><td>{r.severity}</td></tr>)}</tbody></table></div> : null}
+  </section>
+}
+
+function AnalyticsPanel({ governorateRows, delegationRows }) {
+  return <section className="panel-shell cockpit-panel">
+    <div className="panel-heading"><div><p>Analyse</p><h1>Explore KPI</h1></div></div>
+    <div className="site-table-card"><div className="section-title">Top gouvernorats</div><table><thead><tr><th>Nom</th><th>Congestion</th><th>PRB</th><th>Debit</th></tr></thead><tbody>{governorateRows.slice(0, 10).map((row) => <tr key={row.id}><td>{row.name}</td><td>{formatMetric(row.congestion_rate)}%</td><td>{formatMetric(row.avg_prb)}%</td><td>{formatMetric(row.avg_throughput)} Mbps</td></tr>)}</tbody></table></div>
+    <div className="site-table-card"><div className="section-title">Top delegations</div><table><thead><tr><th>Nom</th><th>Congestion</th><th>PRB</th><th>Debit</th></tr></thead><tbody>{delegationRows.slice(0, 10).map((row) => <tr key={row.id}><td>{row.name}</td><td>{formatMetric(row.congestion_rate)}%</td><td>{formatMetric(row.avg_prb)}%</td><td>{formatMetric(row.avg_throughput)} Mbps</td></tr>)}</tbody></table></div>
+  </section>
+}
+
 function OverviewPanel(props) {
-  const { scope, nationalSummary, governorateRows, delegationRows, delegationVariationRows, metric, selectedGovernorate, selectedDelegation, delegationSummary, governorateSummary, onSelectGovernorate, onSelectDelegation, reconciliation, sliceDelta } = props
+  const { scope, nationalSummary, governorateRows, delegationRows, delegationVariationRows, metric, selectedGovernorate, selectedDelegation, delegationSummary, governorateSummary, onSelectGovernorate, onSelectDelegation, reconciliation, sliceDelta, watchlist = [], savedViews = [], onRestoreView, onRemoveView } = props
   const summary = scope.level === 'delegation' || scope.level === 'cell' ? delegationSummary : scope.level === 'governorate' ? governorateSummary : nationalSummary
-  return <section className="panel-shell cockpit-panel"><div className="panel-heading"><div><p>Vue reseau</p><h1>{scope.level === 'national' ? 'Reseau mobile Tunisie' : scope.delegationName || scope.governorateName}</h1></div><StatusBadge status={summary.status} /></div><SincePreviousCard delta={sliceDelta} compact />{scope.level === 'national' ? <NationalPanel compact summary={nationalSummary} governorates={governorateRows} delegationVariations={delegationVariationRows} metric={metric} onSelectGovernorate={onSelectGovernorate} reconciliation={reconciliation} /> : null}{scope.level === 'governorate' ? <GovernoratePanel governorate={selectedGovernorate} summary={governorateSummary} delegations={delegationRows} metric={metric} currentTime={props.currentTime} onSelectDelegation={onSelectDelegation} /> : null}{(scope.level === 'delegation' || scope.level === 'cell') ? <DelegationPanel delegation={selectedDelegation} summary={delegationSummary} sites={props.siteRows} onSelectCell={props.onSelectCell} /> : null}</section>
+  return <section className="panel-shell cockpit-panel"><div className="panel-heading"><div><p>Vue reseau</p><h1>{scope.level === 'national' ? 'Reseau mobile Tunisie' : scope.delegationName || scope.governorateName}</h1></div><StatusBadge status={summary.status} /></div><SincePreviousCard delta={sliceDelta} compact />{scope.level === 'national' ? <NationalPanel compact summary={nationalSummary} governorates={governorateRows} delegationVariations={delegationVariationRows} metric={metric} onSelectGovernorate={onSelectGovernorate} reconciliation={reconciliation} /> : null}{scope.level === 'governorate' ? <GovernoratePanel governorate={selectedGovernorate} summary={governorateSummary} delegations={delegationRows} metric={metric} currentTime={props.currentTime} onSelectDelegation={onSelectDelegation} /> : null}{(scope.level === 'delegation' || scope.level === 'cell') ? <DelegationPanel delegation={selectedDelegation} summary={delegationSummary} sites={props.siteRows} onSelectCell={props.onSelectCell} /> : null}
+  {watchlist.length ? <div className="site-table-card"><div className="section-title">Watchlist NOC</div><table><tbody>{watchlist.slice(0, 8).map((w) => <tr key={w.cell_name}><td>{w.cell_name}</td><td>{w.note || 'Surveillance'}</td></tr>)}</tbody></table></div> : null}
+  {savedViews.length ? <div className="site-table-card"><div className="section-title">Vues sauvegardees</div><table><tbody>{savedViews.slice(0, 8).map((v) => <tr key={v.id}><td>{v.name}</td><td><button className="ghost-button" onClick={() => onRestoreView?.(v.id)}>Restaurer</button><button className="ghost-button" onClick={() => onRemoveView?.(v.id)}>Supprimer</button></td></tr>)}</tbody></table></div> : null}
+  </section>
 }
 
 const BUSY_METRICS = [
@@ -182,11 +212,13 @@ function CellQosPanel({ cell, currentTime, workerState, sliceDelta, onOpenOperat
   </section>
 }
 
-function OperationsPanel({ selectedCell, currentTime, workerState, backendHealth, jobsHealth, onSelectCell, alerts }) {
+function OperationsPanel({ selectedCell, currentTime, workerState, backendHealth, jobsHealth, onSelectCell, alerts, adminToolsEnabled }) {
   const queueReady = workerState === 'ready'
   const simulationDetail = queueReady
-    ? 'Simulation ns-3 disponible'
-    : (typeof workerState === 'string' && workerState !== 'unavailable' ? workerState : 'Simulation ns-3 indisponible: verifier WSL Ubuntu, ns-3 et Redis dans Admin.')
+    ? 'Simulation disponible'
+    : adminToolsEnabled
+      ? (typeof workerState === 'string' && workerState !== 'unavailable' ? workerState : 'Simulation ns-3 indisponible: verifier WSL Ubuntu, ns-3 et Redis dans Admin.')
+      : 'Simulation indisponible : verifier les services dans le mode Admin.'
   if (!selectedCell) {
     return <section className="panel-shell cockpit-panel"><div className="panel-heading"><div><p>Action cellule</p><h1>Selectionner une cellule</h1></div><StatusBadge status="watch" /></div><div className="empty-state" role="note">Recherchez une cellule ou cliquez un site dans Qualite radio pour ouvrir les recommandations et les simulations.</div>{alerts?.length ? <div className="site-table-card"><div className="section-title">Cellules prioritaires</div><table><caption className="sr-only">Cellules a traiter</caption><tbody>{alerts.slice(0, 8).map((cell) => <tr key={cell.cell_name} onClick={() => onSelectCell?.(cell.cell_name)}><td>{cell.cell_name}</td><td>{stateLabel(getCellState(cell))}</td><td>{formatMetric(cell.prb_load)}%</td></tr>)}</tbody></table></div> : null}</section>
   }

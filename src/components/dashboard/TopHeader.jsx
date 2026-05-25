@@ -1,4 +1,23 @@
-export default function TopHeader({ metricMode, metricModes, onMetricModeChange, query, onQueryChange, searchResults, onSearchSelect, dataMode, onSecondaryPanel, adminToolsEnabled = false }) {
+export default function TopHeader({
+  metricMode,
+  metricModes,
+  onMetricModeChange,
+  query,
+  onQueryChange,
+  searchResults,
+  onSearchSelect,
+  dataMode,
+  onSecondaryPanel,
+  adminToolsEnabled = false,
+  theme = 'light',
+  onToggleTheme,
+  focusMode = false,
+  onToggleFocus,
+  onRunDemo,
+  role = 'operator',
+  onRoleChange,
+  showRoleSwitch = false,
+}) {
   return (
     <header className="top-header">
       <div className="brand-lockup">
@@ -23,8 +42,20 @@ export default function TopHeader({ metricMode, metricModes, onMetricModeChange,
         <select value={metricMode} onChange={(e) => onMetricModeChange(e.target.value)} aria-label="Metrique carte">
           {metricModes.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
         </select>
+        {adminToolsEnabled ? <button className="ghost-button" onClick={onToggleTheme}>{theme === 'dark' ? 'Mode clair' : 'Mode sombre'}</button> : null}
+        {adminToolsEnabled ? <button className="ghost-button" onClick={onToggleFocus}>{focusMode ? 'Sortir focus' : 'Mode focus'}</button> : null}
+        {adminToolsEnabled ? <button className="ghost-button" onClick={onRunDemo}>Demo guidee</button> : null}
         {adminToolsEnabled ? <button data-testid="open-data-quality" className="ghost-button" onClick={() => onSecondaryPanel?.('data')}>Donnees</button> : null}
         {adminToolsEnabled ? <button data-testid="open-system-status" className="ghost-button" onClick={() => onSecondaryPanel?.('system')}>Admin</button> : null}
+        {showRoleSwitch ? (
+          <label className="role-switch">
+            <span>Mode</span>
+            <select value={role} onChange={(event) => onRoleChange?.(event.target.value)} aria-label="Mode interface">
+              <option value="operator">Operateur</option>
+              <option value="admin">Admin</option>
+            </select>
+          </label>
+        ) : null}
       </div>
     </header>
   )

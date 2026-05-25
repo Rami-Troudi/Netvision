@@ -15,7 +15,7 @@ export function useSystemEndpoints() {
           const payload = await res.json().catch(() => ({}))
           const reachable = res.ok
           const degraded = payload?.available === false || payload?.ready === false
-          return [name, { wired: true, reachable, degraded, detail: payload?.detail || payload?.reason || payload?.error || '' }]
+          return [name, { wired: true, reachable, degraded, detail: payload?.detail || payload?.reason || payload?.error || '', payload }]
         } catch (err) {
           return [name, { wired: true, reachable: false, degraded: true, detail: err.message || String(err) }]
         }
@@ -31,13 +31,7 @@ export function useSystemEndpoints() {
       if (!cancelled) {
         const next = Object.fromEntries(pairs)
         setEndpointStatus(next)
-        try {
-          const healthRes = await fetch('/api/jobs-health', { cache: 'no-store' })
-          const healthPayload = await healthRes.json().catch(() => null)
-          setJobsHealth(healthPayload)
-        } catch {
-          setJobsHealth(null)
-        }
+        setJobsHealth(next.jobsHealth?.payload || null)
         setWorkerState(next.jobsHealth?.reachable && !next.jobsHealth?.degraded ? 'ready' : (next.jobsHealth?.detail || 'unavailable'))
       }
     }

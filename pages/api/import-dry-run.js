@@ -22,6 +22,30 @@ function buildSchemaDiff(headers = [], inferredMapping = {}) {
   return { accepted, unknown, missing_required: missingRequired }
 }
 
+function computeCoverage(rows = [], mapping = {}) {
+  const mappedHeaders = Object.values(mapping || {}).filter(Boolean)
+  const present = (field) => {
+    const header = mapping[field]
+    if (!header) return 0
+    return rows.filter((row) => String(row?.[header] ?? '').trim()).length
+  }
+  const total = Math.max(1, rows.length)
+  const cellHeader = mapping.cell_name
+  const timestampHeader = mapping.timestamp || mapping.date || mapping.time
+  return {
+    accepted_field_count: mappedHeaders.length,
+    total_rows: rows.length,
+    cell_count: cellHeader ? new Set(rows.map((row) => String(row?.[cellHeader] || '').trim()).filter(Boolean)).size : 0,
+    timestamp_count: timestampHeader ? new Set(rows.map((row) => String(row?.[timestampHeader] || '').trim()).filter(Boolean)).size : 0,
+    kpi_coverage: {
+      prb: present('load') / total,
+      throughput: present('throughput') / total,
+      cqi: present('cqi') / total,
+      active_users: present('active_users') / total,
+    },
+  }
+}
+
 export default async function handler(req, res) {
   if (!requireAuthenticatedRequest(req, res)) return
   if (!enforceRateLimit(req, res, { keyPrefix: 'import-dry-run', maxRequests: 8, windowMs: 60_000 })) return
@@ -37,12 +61,14 @@ export default async function handler(req, res) {
   try {
     const preview = parseCsvPreview({ csvText, maxPreviewRows: 10 })
     const schemaDiff = buildSchemaDiff(preview.headers || [], preview.inferredMapping || {})
+    const coverage = computeCoverage(preview.allRows || [], preview.inferredMapping || {})
     const response = {
       mode: 'dry_run',
       import_type: importType === 'kpi' ? 'kpi' : 'reference',
       mapping: preview.inferredMapping || {},
       schema_diff: schemaDiff,
       sample_warnings: [],
+      coverage,
       can_apply: schemaDiff.missing_required.length === 0 && (preview.totalRows || 0) > 0,
       preview: {
         total_rows: preview.totalRows || 0,

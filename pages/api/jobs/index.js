@@ -10,6 +10,7 @@ import {
   updateJobRecord,
   getJobRecordByIdempotencyKey,
   formatJobApiResponse,
+  hashJobPayload,
 } from '../_lib/jobs'
 import { ERROR_TYPES, sendApiError } from '../_lib/apiErrors'
 import { canSimulate } from '../_lib/simGuardrails'
@@ -31,13 +32,6 @@ export const config = {
 
 function isPlainObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
-}
-
-function stableStringify(obj) {
-  if (obj === null || typeof obj !== 'object') return JSON.stringify(obj)
-  if (Array.isArray(obj)) return `[${obj.map(stableStringify).join(',')}]`
-  const keys = Object.keys(obj).sort()
-  return `{${keys.map((k) => `"${k}":${stableStringify(obj[k])}`).join(',')}}`
 }
 
 function normalizeSimulatePayload(rawBody) {
@@ -108,8 +102,9 @@ export default async function handler(req, res) {
   if (finalIdempotencyKey) {
     const existing = getJobRecordByIdempotencyKey(finalIdempotencyKey)
     if (existing) {
-      const existingParsed = JSON.parse(existing.request_json)
-      if (stableStringify(existingParsed) !== stableStringify(jobDefinition.payload)) {
+      const currentHash = hashJobPayload(jobDefinition.payload)
+      const existingHash = existing.request_hash || hashJobPayload(JSON.parse(existing.request_json))
+      if (existingHash !== currentHash) {
         appendAudit({ actor: auditActor(req), endpoint: '/api/jobs', action: 'create', result: 'idempotency_conflict' })
         return sendApiError(res, 409, ERROR_TYPES.VALIDATION, 'Cle idempotence deja utilisee avec un autre payload.', {
           action: 'Utilisez une nouvelle cle idempotence pour une requete differente.',

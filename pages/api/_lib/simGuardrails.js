@@ -3,6 +3,7 @@ const path = require('path')
 
 const NEIGHBOR_ACTIONS = new Set(['redistribute', 'neighbor_optimization'])
 const ACTIONS_REQUIRING_SLICE = new Set(['tilt', 'redistribute', 'neighbor_optimization', 'add_carrier', 'add_sector'])
+const ALLOWED_ACTIONS = new Set(['tilt', 'redistribute', 'neighbor_optimization', 'add_carrier', 'add_sector'])
 
 function num(v, d = 0) {
   const n = Number(v)
@@ -24,6 +25,7 @@ function canSimulate({ runtimeRoot, payload, observation = null, hasTimeFile = t
   const action = String(payload?.action || '').trim()
   if (!cell) reasons.push('Cellule manquante.')
   if (!action) reasons.push('Action manquante.')
+  if (action && !ALLOWED_ACTIONS.has(action)) reasons.push('Action non executable par le simulateur.')
 
   const baseline = loadJson(path.resolve(runtimeRoot, 'baseline.json'), {})
   const entry = baseline?.[cell]
@@ -35,6 +37,9 @@ function canSimulate({ runtimeRoot, payload, observation = null, hasTimeFile = t
   }
   if (ACTIONS_REQUIRING_SLICE.has(action) && !hasTimeFile) {
     reasons.push('Tranche temporelle invalide ou absente pour cette simulation.')
+  }
+  if (ACTIONS_REQUIRING_SLICE.has(action) && hasTimeFile && !observation) {
+    reasons.push('Observation KPI absente pour cette cellule sur la tranche selectionnee.')
   }
 
   if (NEIGHBOR_ACTIONS.has(action)) {

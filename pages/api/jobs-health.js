@@ -8,7 +8,7 @@ const { checkNs3Readiness } = require('../../simulation/ns3/adapter/ns3JobAdapte
 
 export default async function handler(req, res) {
   if (!requireAuthenticatedRequest(req, res)) return
-  if (!enforceRateLimit(req, res, { keyPrefix: 'jobs-health', maxRequests: 60, windowMs: 60_000 })) return
+  if (!enforceRateLimit(req, res, { keyPrefix: 'jobs-health', maxRequests: 120, windowMs: 60_000 })) return
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' })
 
   try {

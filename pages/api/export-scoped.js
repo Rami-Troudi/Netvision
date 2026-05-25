@@ -1,6 +1,7 @@
 import { enforceRateLimit, requireAuthenticatedRequest } from './_lib/security.js'
 import { appendAudit, auditActor } from './_lib/audit.js'
 import { ERROR_TYPES, sendApiError } from './_lib/apiErrors.js'
+import { getRuntimeDataRoot } from './_lib/simulationContract.js'
 
 function toCsv(rows = []) {
   if (!rows.length) return ''
@@ -29,6 +30,7 @@ export default async function handler(req, res) {
     time_window: payload.time_window || {},
     filters: payload.filters || {},
     data_mode: payload.data_mode || 'unknown',
+    source_runtime_root: getRuntimeDataRoot().root,
   }
   const envelope = { ...payload, audit: auditMeta }
 
