@@ -7,7 +7,7 @@ export default function NationalPanel({ summary, governorates, delegationVariati
   const warnings = reconciliation?.warnings || []
   return (
     <section className="panel-shell">
-      <div className="panel-heading"><div><p>Vue nationale</p><h1>Vue reseau Tunisie</h1></div><span className="live-pill">Tranche active</span></div>
+      <div className="panel-heading"><div><p>Vue nationale</p><h1>Vue réseau Tunisie</h1></div><span className="live-pill">Tranche active</span></div>
       <div className="kpi-grid">
         <KpiCard label="Cellules observees" value={summary.observed_cells} />
         <KpiCard label="Utilisateurs actifs" value={summary.active_users} />
@@ -19,7 +19,7 @@ export default function NationalPanel({ summary, governorates, delegationVariati
       <TrendChart label="Tendance nationale congestion/performance" points={[summary.congestion_rate * .7, summary.congestion_rate * .9, summary.congestion_rate, summary.congestion_rate * .85, summary.congestion_rate * 1.05]} />
       <DelegationVariationCard rows={delegationVariations} metric={metric} />
       <RankingTable title="Gouvernorats les plus impactes" rows={governorates.slice(0, 8)} metricLabel={metric.label} metricUnit={metric.unit} onSelect={onSelectGovernorate} />
-      {warnings.length ? <div className="geo-status"><strong>Qualite du rapprochement :</strong><span>{warnings.length} element a revoir dans les donnees administratives</span></div> : null}
+      {warnings.length ? <div className="geo-status"><strong>Qualité du rapprochement :</strong><span>{warnings.length} élément à revoir dans les données administratives</span></div> : null}
       <button className="primary-cta" onClick={() => governorates[0] && onSelectGovernorate(governorates[0])}>Inspecter le gouvernorat le plus impacte</button>
     </section>
   )

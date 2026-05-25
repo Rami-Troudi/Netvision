@@ -6,11 +6,11 @@ export default function SimulationImpactCard({ result }) {
   const after = result.after || result.predicted || {}
   return (
     <div className="simulation-impact">
-      <div className="section-title">Resultat indicatif</div>
-      <p className="impact-note">Impact avant / apres estime par scenario local.</p>
+      <div className="section-title">Résultat indicatif</div>
+      <p className="impact-note">Impact avant / après estimé par scénario local.</p>
       <div className="impact-grid">
         <Impact label="PRB" before={before.prb_load ?? before.load} after={after.prb_load ?? after.load} unit="%" />
-        <Impact label="Debit" before={normalizeThroughput(before.throughput)} after={normalizeThroughput(after.throughput)} unit="Mbps" />
+        <Impact label="Débit" before={normalizeThroughput(before.throughput)} after={normalizeThroughput(after.throughput)} unit="Mbps" />
         <Impact label="CQI" before={before.cqi} after={after.cqi} />
       </div>
       {result.engine || result.fidelity_level || result.runtime_seconds ? (
@@ -23,7 +23,7 @@ export default function SimulationImpactCard({ result }) {
       ) : null}
       {result.feasibility || result.credibility ? (
         <div className="assumption-list">
-          <strong>Credibilite du resultat</strong>
+          <strong>Crédibilité du résultat</strong>
           {result.feasibility ? <span>Faisabilite {result.feasibility.ok ? 'confirmee' : 'bloquee'}</span> : null}
           {result.credibility ? <span>Score credibilite {formatMetric(result.credibility.score)}%</span> : null}
           {Array.isArray(result.credibility?.reasons) && result.credibility.reasons.slice(0, 3).map((item) => <span key={item}>{item}</span>)}
@@ -31,7 +31,7 @@ export default function SimulationImpactCard({ result }) {
       ) : null}
       {Array.isArray(result.scenario_assumptions) && result.scenario_assumptions.length ? (
         <div className="assumption-list">
-          <strong>Hypotheses du scenario</strong>
+          <strong>Hypothèses du scénario</strong>
           {result.scenario_assumptions.slice(0, 3).map((item) => <span key={item}>{item}</span>)}
         </div>
       ) : null}
@@ -54,14 +54,14 @@ function localizeImpactNote(note) {
   return String(note || '')
     .replace(/Add sector to increase structural capacity envelope/gi, 'Ajouter un secteur pour augmenter la capacite structurelle.')
     .replace(/Add carrier to increase available capacity/gi, 'Ajouter une porteuse pour augmenter la capacite disponible.')
-    .replace(/Redistribute load/gi, 'Reequilibrer la charge')
+    .replace(/Redistribute load/gi, 'Rééquilibrer la charge')
     .replace(/Adjust antenna tilt/gi, 'Ajuster l inclinaison antennaire')
 }
 function localizeConfidence(confidence) {
-  return { low: 'faible', medium: 'moyenne', high: 'elevee' }[String(confidence || '').toLowerCase()] || confidence
+  return { low: 'faible', medium: 'moyenne', high: 'élevée' }[String(confidence || '').toLowerCase()] || confidence
 }
 function localizeCalibrationQuality(quality) {
-  return { low: 'faible', medium: 'moyenne', high: 'elevee' }[String(quality || '').toLowerCase()] || quality
+  return { low: 'faible', medium: 'moyenne', high: 'élevée' }[String(quality || '').toLowerCase()] || quality
 }
 function localizeFidelity(fidelity) {
   const key = String(fidelity || 'operations_v1').toLowerCase()

@@ -19,22 +19,22 @@ export function setNetvisionRole(role) {
 }
 
 export const OPERATOR_TABS = Object.freeze([
-  { id: 'overview', label: 'Vue reseau', short: 'VR' },
+  { id: 'overview', label: 'Vue réseau', short: 'VR' },
   { id: 'peak-hours', label: 'Heures critiques', short: 'HC' },
+  { id: 'forecast', label: 'Prévision QoS', short: 'PQ' },
   { id: 'qos', label: 'Qualité radio', short: 'QR' },
   { id: 'operations', label: 'Action cellule', short: 'AC' },
 ])
 
 export const ADMIN_TABS = Object.freeze([
-  { id: 'forecast', label: 'Prévision QoS - expérimental', short: 'PQ' },
   { id: 'analytics', label: 'Analyse', short: 'AN' },
-  { id: 'data', label: 'Donnees', short: 'DN' },
+  { id: 'data', label: 'Données', short: 'DN' },
   { id: 'system', label: 'Admin', short: 'AD' },
 ])
 
 export const ACTION_LABELS_FR = Object.freeze({
   tilt: 'Ajuster inclinaison / puissance',
-  redistribute: 'Reequilibrer la charge',
+  redistribute: 'Rééquilibrer la charge',
   neighbor_optimization: 'Optimiser les voisins',
   add_carrier: 'Ajouter une porteuse',
   add_sector: 'Ajouter un secteur',
@@ -43,10 +43,10 @@ export const ACTION_LABELS_FR = Object.freeze({
 export const STATE_LABELS_FR = Object.freeze({
   critical: 'Critique',
   watch: 'Sous surveillance',
-  degraded: 'Qualite degradee',
+  degraded: 'Qualité dégradée',
   healthy: 'Normal',
   no_data: 'Sans KPI',
-  unmatched: 'Non rapproche',
+  unmatched: 'Non rapproché',
   stable: 'Normal',
 })
 
@@ -57,8 +57,8 @@ export function stateLabelFr(state) {
 export function diagnosisLabelFr(issue = {}) {
   const key = String(issue.issue || '').toLowerCase()
   if (key.includes('capacity') || key.includes('congestion') || key.includes('load')) return 'Congestion capacitaire'
-  if (key.includes('radio') || key.includes('interference') || key.includes('edge') || key.includes('cqi')) return 'Qualite radio degradee'
-  if (key.includes('data') || key.includes('telemetry')) return 'Donnees insuffisantes'
-  if (key.includes('normal') || key.includes('acceptable')) return 'Charge elevee mais acceptable'
-  return 'Diagnostic radio a confirmer'
+  if (key.includes('radio') || key.includes('interference') || key.includes('edge') || key.includes('cqi')) return 'Qualité radio dégradée'
+  if (key.includes('data') || key.includes('telemetry')) return 'Données insuffisantes'
+  if (key.includes('normal') || key.includes('acceptable')) return 'Charge élevée mais acceptable'
+  return 'Diagnostic radio à confirmer'
 }

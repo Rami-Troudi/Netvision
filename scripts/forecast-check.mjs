@@ -1,19 +1,30 @@
-import { spawn } from 'child_process'
+import fs from 'fs/promises'
+import path from 'path'
 
-const child = spawn('node', ['-e', `
-  Promise.all([
-    fetch('http://127.0.0.1:3000/api/forecast', { headers: { 'x-dev-bypass-auth': '1' } }),
-    fetch('http://127.0.0.1:3000/api/drift', { headers: { 'x-dev-bypass-auth': '1' } })
-  ])
-  .then(async ([f, d]) => {
-    const fj = await f.json().catch(() => ({}))
-    const dj = await d.json().catch(() => ({}))
-    const ok = f.ok && d.ok
-    console.log(JSON.stringify({ ok, forecast: { status: f.status, available: fj.available, reason: fj.reason }, drift: { status: d.status, available: dj.available, reason: dj.reason } }, null, 2))
-    process.exit(ok ? 0 : 1)
-  })
-  .catch(e => { console.error(e?.message || String(e)); process.exit(1) })
-`], { stdio: 'inherit', shell: true })
+import { validateForecastArtifact } from '../src/analytics/qosForecast.mjs'
 
-child.on('exit', (code) => process.exit(code ?? 1))
+async function main() {
+  const outDir = path.resolve(process.cwd(), '.runtime', 'forecast')
+  const files = ['forecast-h1.json', 'forecast-h3.json']
+  const results = []
+  let failed = false
+  for (const file of files) {
+    const filePath = path.resolve(outDir, file)
+    try {
+      const artifact = JSON.parse(await fs.readFile(filePath, 'utf8'))
+      const validation = validateForecastArtifact(artifact)
+      results.push({ file: filePath, ok: validation.ok, errors: validation.errors, rows: artifact.rows?.length || 0 })
+      if (!validation.ok) failed = true
+    } catch (err) {
+      failed = true
+      results.push({ file: filePath, ok: false, errors: [err instanceof Error ? err.message : String(err)], rows: 0 })
+    }
+  }
+  console.log(JSON.stringify({ ok: !failed, results }, null, 2))
+  process.exit(failed ? 1 : 0)
+}
 
+main().catch((err) => {
+  console.error(err instanceof Error ? err.message : String(err))
+  process.exit(1)
+})

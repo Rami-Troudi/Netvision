@@ -38,6 +38,30 @@ test('import dry-run returns schema_diff contract', async () => {
   assert.ok(Array.isArray(res.body.schema_diff.missing_required))
 })
 
+test('import dry-run validates reference and kpi prerequisites explicitly', async () => {
+  const referenceReq = authReq({
+    method: 'POST',
+    body: { import_type: 'reference', csv_text: 'cell_name,azimuth\nTN1,120\n' },
+  })
+  const referenceRes = makeRes()
+  await importDryRunHandler(referenceReq, referenceRes)
+  assert.equal(referenceRes.statusCode, 200)
+  assert.deepEqual(referenceRes.body.schema_diff.missing_required, ['longitude', 'latitude'])
+  assert.equal(referenceRes.body.can_apply, false)
+  assert.ok(referenceRes.body.sample_warnings.some((warning) => warning.includes('Import référence bloqué')))
+
+  const kpiReq = authReq({
+    method: 'POST',
+    body: { import_type: 'kpi', csv_text: 'cell_name,comment\nTN1,x\n' },
+  })
+  const kpiRes = makeRes()
+  await importDryRunHandler(kpiReq, kpiRes)
+  assert.equal(kpiRes.statusCode, 200)
+  assert.ok(kpiRes.body.schema_diff.missing_required.includes('timestamp|date|time'))
+  assert.ok(kpiRes.body.schema_diff.missing_required.some((item) => item.startsWith('kpi(')))
+  assert.ok(kpiRes.body.sample_warnings.some((warning) => warning.includes('horodatage requis')))
+})
+
 test('import profiles supports upsert and list', async () => {
   const createReq = authReq({
     method: 'POST',

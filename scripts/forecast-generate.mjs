@@ -1,17 +1,33 @@
-import { spawn } from 'child_process'
+import fs from 'fs/promises'
+import path from 'path'
 
-const days = Math.max(1, Math.min(7, Number.parseInt(process.argv[2] || '1', 10) || 1))
+import { buildForecastForRuntime, loadRuntimeForForecast } from '../src/analytics/qosForecast.mjs'
 
-const child = spawn('node', ['-e', `
-  fetch('http://127.0.0.1:3000/api/forecast', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-dev-bypass-auth': '1' },
-    body: JSON.stringify({ days: ${days} })
-  })
-  .then(r => r.json().then(j => ({ ok: r.ok, status: r.status, body: j })))
-  .then(o => { console.log(JSON.stringify(o, null, 2)); process.exit(o.ok ? 0 : 1) })
-  .catch(e => { console.error(e?.message || String(e)); process.exit(1) })
-`], { stdio: 'inherit', shell: true })
+function dataMode() {
+  const value = String(process.env.DATA_MODE || '').trim().toLowerCase()
+  return value === 'mock' ? 'mock' : 'real'
+}
 
-child.on('exit', (code) => process.exit(code ?? 1))
+async function main() {
+  const mode = dataMode()
+  const root = path.resolve(process.cwd(), mode === 'mock' ? 'runtime_data_mock' : 'runtime_data')
+  const outDir = path.resolve(process.cwd(), '.runtime', 'forecast')
+  await fs.mkdir(outDir, { recursive: true })
+  const runtime = await loadRuntimeForForecast(root, mode, 24)
+  const requested = process.argv.slice(2).map((arg) => Number.parseInt(arg, 10)).filter((value) => [1, 3].includes(value))
+  const horizons = requested.length ? requested : [1, 3]
+  const outputs = []
+  for (const horizon of horizons) {
+    const artifact = buildForecastForRuntime(runtime, { horizon, includeLow: true, limit: 500 })
+    artifact.warnings = [...(runtime.warnings || []), ...(artifact.warnings || [])]
+    const filePath = path.resolve(outDir, `forecast-h${horizon}.json`)
+    await fs.writeFile(filePath, JSON.stringify(artifact, null, 2), 'utf8')
+    outputs.push({ horizon, file: filePath, rows: artifact.rows.length })
+  }
+  console.log(JSON.stringify({ ok: true, model: 'netvision-qos-forecast-rules-v1', outputs }, null, 2))
+}
 
+main().catch((err) => {
+  console.error(err instanceof Error ? err.message : String(err))
+  process.exit(1)
+})

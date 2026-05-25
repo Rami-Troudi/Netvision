@@ -18,7 +18,7 @@
     "qa:ns3:rationality": "node scripts/ns3-rationality-batch.mjs",
     "pw:doctor": "node scripts/playwright-doctor.mjs",
     "qa:browser": "node scripts/browser-qa-budget.mjs",
-    "forecast:generate": "node scripts/forecast-generate.mjs 1",
+    "forecast:generate": "node scripts/forecast-generate.mjs",
     "forecast:check": "node scripts/forecast-check.mjs",
     "verify:backend": "npm run test:contracts && npm run smoke:v2:core && npm run smoke:v2:sim",
     "ns3:check": "node scripts/ns3-prereq-check.mjs",

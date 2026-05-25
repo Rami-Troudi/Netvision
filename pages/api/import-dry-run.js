@@ -18,14 +18,18 @@ function buildSchemaDiff(headers = [], inferredMapping = {}, importType = 'refer
     .map(([field, header]) => ({ field, header }))
   const acceptedHeaders = new Set(accepted.map((item) => item.header))
   const unknown = headers.filter((header) => !acceptedHeaders.has(header))
-  const requiredReference = ['cell_name', 'longitude', 'latitude']
+  const missingRequired = []
+  if (!inferredMapping.cell_name) missingRequired.push('cell_name')
+  if (importType === 'reference') {
+    if (!inferredMapping.longitude) missingRequired.push('longitude')
+    if (!inferredMapping.latitude) missingRequired.push('latitude')
+  }
   const hasTimestamp = Boolean(inferredMapping.timestamp || inferredMapping.date || inferredMapping.time)
   const hasAnyKpi = Boolean(inferredMapping.load || inferredMapping.throughput || inferredMapping.cqi || inferredMapping.active_users || inferredMapping.rrc_users || inferredMapping.traffic || inferredMapping.ta)
-  const requiredKpi = ['cell_name']
-  if (!hasTimestamp) requiredKpi.push('timestamp|date|time')
-  if (!hasAnyKpi) requiredKpi.push('kpi(load|throughput|cqi|active_users)')
-  const required = importType === 'kpi' ? requiredKpi : requiredReference
-  const missingRequired = required.filter((field) => !Object.prototype.hasOwnProperty.call(inferredMapping || {}, field))
+  if (importType === 'kpi') {
+    if (!hasTimestamp) missingRequired.push('timestamp|date|time')
+    if (!hasAnyKpi) missingRequired.push('kpi(load|throughput|cqi|active_users|rrc_users|traffic|ta)')
+  }
   return { accepted, unknown, missing_required: missingRequired }
 }
 
@@ -72,11 +76,11 @@ export default async function handler(req, res) {
     const coverage = computeCoverage(preview.allRows || [], preview.inferredMapping || {})
     const warnings = []
     if (normalizedImportType === 'reference' && schemaDiff.missing_required.length) {
-      warnings.push('Import reference bloque: cellule + coordonnees (longitude, latitude) sont obligatoires.')
+      warnings.push('Import référence bloqué : cellule + coordonnées (longitude, latitude) sont obligatoires.')
     }
     if (normalizedImportType === 'kpi') {
-      if (schemaDiff.missing_required.includes('timestamp|date|time')) warnings.push('Import KPI bloque: horodatage requis (timestamp/date/time).')
-      if (schemaDiff.missing_required.includes('kpi(load|throughput|cqi|active_users)')) warnings.push('Import KPI bloque: au moins un KPI radio est requis.')
+      if (schemaDiff.missing_required.includes('timestamp|date|time')) warnings.push('Import KPI bloqué : horodatage requis (timestamp/date/time).')
+      if (schemaDiff.missing_required.includes('kpi(load|throughput|cqi|active_users|rrc_users|traffic|ta)')) warnings.push('Import KPI bloqué : au moins un KPI radio est requis.')
     }
     const response = {
       mode: 'dry_run',

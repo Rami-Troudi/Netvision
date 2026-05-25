@@ -5,6 +5,7 @@ import { chromium } from 'playwright'
 const BASE_URL = process.env.NEXT_BASE_URL || 'http://127.0.0.1:3000'
 const OUT_DIR = path.resolve(process.cwd(), '.runtime', 'qa')
 const REPORT_PATH = path.resolve(OUT_DIR, 'browser-qa-budget.json')
+const CORE_429_PATHS = ['/api/data', '/api/peak-hours', '/api/recommend', '/api/jobs', '/api/jobs-health', '/api/forecast']
 
 async function launchBrowser() {
   const preferredChannel = process.env.PW_CHANNEL || ''
@@ -64,6 +65,14 @@ async function main() {
   await page.getByRole('button', { name: 'Ouvrir Action cellule' }).click()
   await page.getByTestId('queue-simulation').waitFor({ timeout: 30_000 })
 
+  const forecastStart = Date.now()
+  await page.getByRole('button', { name: /Prévision QoS|Prevision QoS/ }).click()
+  await Promise.race([
+    page.getByText('Risque estimé').waitFor({ timeout: 30_000 }),
+    page.getByText('Données temporelles insuffisantes').waitFor({ timeout: 30_000 }),
+  ])
+  timings.forecast_open_ms = Date.now() - forecastStart
+
   const timelineStart = Date.now()
   const slider = page.getByLabel('Chronologie')
   for (let i = 0; i < 10; i += 1) {
@@ -75,13 +84,21 @@ async function main() {
   const body = await page.locator('body').innerText()
   const tolerated429Errors = consoleErrors.filter((text) => /429 \(Too Many Requests\)/i.test(text))
   const blockingConsoleErrors = consoleErrors.filter((text) => !/429 \(Too Many Requests\)/i.test(text))
+  const unique429 = Array.from(new Set(http429))
+  const blocking429 = unique429.filter((url) => {
+    const pathname = new URL(url).pathname
+    return CORE_429_PATHS.some((corePath) => pathname === corePath || pathname.startsWith(`${corePath}/`))
+  })
+  const tolerated429 = unique429.filter((url) => !blocking429.includes(url))
   const result = {
-    ok: blockingConsoleErrors.length === 0 && body.includes('Action cellule') && body.includes('TN1158_c01'),
+    ok: blockingConsoleErrors.length === 0 && blocking429.length === 0 && body.includes('Prévision') && body.includes('TN1158_c01'),
     base_url: BASE_URL,
     timings,
     console_errors: blockingConsoleErrors,
     tolerated_console_errors: tolerated429Errors,
-    http_429_urls: Array.from(new Set(http429)),
+    http_429_urls: unique429,
+    blocking_429_urls: blocking429,
+    tolerated_429_urls: tolerated429,
     checked_at: new Date().toISOString(),
   }
   await fs.writeFile(REPORT_PATH, JSON.stringify(result, null, 2), 'utf8')
