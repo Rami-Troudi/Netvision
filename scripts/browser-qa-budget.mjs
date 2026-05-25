@@ -21,6 +21,102 @@ async function launchBrowser() {
   }
 }
 
+function cleanText(text) {
+  return String(text || '').replace(/\s+/g, ' ').trim()
+}
+
+async function captureDebug(page, reason) {
+  const debugScreenshot = path.resolve(OUT_DIR, 'browser-qa-search-debug.png')
+  const debugText = path.resolve(OUT_DIR, 'browser-qa-search-debug.txt')
+  await page.screenshot({ path: debugScreenshot, fullPage: false }).catch(() => {})
+  const bodyText = await page.locator('body').innerText().catch(() => '')
+  await fs.writeFile(debugText, `${reason}\n\n${bodyText.slice(0, 6000)}`, 'utf8').catch(() => {})
+  return { debug_screenshot: debugScreenshot, debug_text: debugText }
+}
+
+async function selectSearchResult(page, query, matcher) {
+  const input = page.getByTestId('global-search-input')
+  await input.click()
+  await input.fill('')
+  await input.fill(query)
+
+  let visibleCandidates = 0
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    const candidateGroups = [
+      page.locator('.search-popover button'),
+      page.getByRole('option'),
+      page.getByText(query, { exact: false }),
+    ]
+
+    for (const locator of candidateGroups) {
+      const count = await locator.count().catch(() => 0)
+      visibleCandidates = Math.max(visibleCandidates, count)
+      for (let i = 0; i < count; i += 1) {
+        const candidate = locator.nth(i)
+        if (!(await candidate.isVisible().catch(() => false))) continue
+        const text = cleanText(await candidate.innerText().catch(() => ''))
+        if (matcher(text.toLowerCase())) {
+          await candidate.click({ timeout: 30_000 })
+          return { clicked: true, text }
+        }
+      }
+    }
+    await page.waitForTimeout(250)
+  }
+
+  const debug = await captureDebug(page, `Search result not found for ${query}; visible candidate count ${visibleCandidates}`)
+  return { clicked: false, reason: `Search result not found for ${query}`, ...debug }
+}
+
+async function clickButtonContaining(page, fragments, timeoutMs = 30_000) {
+  const deadline = Date.now() + timeoutMs
+  const normalize = (value) => cleanText(value)
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase()
+  const wanted = fragments.map(normalize)
+
+  while (Date.now() < deadline) {
+    const buttons = await page.locator('button').all()
+    for (const button of buttons) {
+      if (!(await button.isVisible().catch(() => false))) continue
+      const text = normalize(await button.innerText().catch(() => ''))
+      if (wanted.some((fragment) => text.includes(fragment))) {
+        await button.click({ timeout: 30_000 })
+        return { clicked: true, text }
+      }
+    }
+    await page.waitForTimeout(250)
+  }
+
+  const debug = await captureDebug(page, `Button not found for fragments: ${fragments.join(', ')}`)
+  return { clicked: false, reason: `Button not found for fragments: ${fragments.join(', ')}`, ...debug }
+}
+
+async function waitForDashboardData(page) {
+  await page.waitForFunction(() => {
+    const body = document.body.innerText || ''
+    const loading = body.includes('Chargement des donnees runtime') ||
+      body.includes('Chargement des données runtime') ||
+      body.includes('Chargement des donnÃ©es runtime')
+    const hasTimeline = /\b[1-9]\d*\s+tranches\b/i.test(body)
+    const hasDashboardShell = body.includes('Réseau mobile Tunisie') ||
+      body.includes('RÃ©seau mobile Tunisie') ||
+      body.includes('Vue réseau') ||
+      body.includes('Vue reseau')
+    return !loading && hasTimeline && hasDashboardShell
+  }, null, { timeout: 90_000 })
+  await page.locator('.netvision-map-container canvas').first().waitFor({ timeout: 90_000 }).catch(() => {})
+  await page.waitForTimeout(500)
+}
+
+async function failWithReport(browser, payload) {
+  await fs.writeFile(REPORT_PATH, JSON.stringify(payload, null, 2), 'utf8')
+  await browser.close()
+  console.error(JSON.stringify(payload, null, 2))
+  process.exit(1)
+}
+
 async function main() {
   await fs.mkdir(OUT_DIR, { recursive: true })
   const browser = await launchBrowser()
@@ -28,37 +124,33 @@ async function main() {
   const consoleErrors = []
   const http429 = []
   const timings = {}
+
   page.on('console', (msg) => {
     if (msg.type() === 'error') consoleErrors.push(msg.text())
   })
   page.on('pageerror', (err) => consoleErrors.push(err.message))
   page.on('response', (response) => {
-    if (response.status() === 429) {
-      http429.push(response.url())
-    }
+    if (response.status() === 429) http429.push(response.url())
   })
 
   const started = Date.now()
   await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 90_000 })
   await page.getByTestId('global-search-input').waitFor({ timeout: 60_000 })
+  await waitForDashboardData(page)
   timings.initial_render_ms = Date.now() - started
 
   const searchStart = Date.now()
-  await page.getByTestId('global-search-input').fill('TN1158_c01')
-  const options = page.locator('.search-popover button')
-  await options.first().waitFor({ timeout: 30_000 })
-  const optionCount = await options.count()
-  let clicked = false
-  for (let i = 0; i < optionCount; i += 1) {
-    const candidate = options.nth(i)
-    const text = (await candidate.innerText()).toLowerCase()
-    if (text.includes('tn1158_c01')) {
-      await candidate.click({ timeout: 30_000 })
-      clicked = true
-      break
-    }
+  const searchResult = await selectSearchResult(page, 'TN1158_c01', (text) => text.includes('tn1158_c01'))
+  if (!searchResult.clicked) {
+    await failWithReport(browser, {
+      ok: false,
+      base_url: BASE_URL,
+      error: searchResult.reason,
+      debug_screenshot: searchResult.debug_screenshot,
+      debug_text: searchResult.debug_text,
+      checked_at: new Date().toISOString(),
+    })
   }
-  if (!clicked) await options.first().click({ timeout: 30_000 })
   await page.getByRole('button', { name: 'Ouvrir Action cellule' }).waitFor({ timeout: 30_000 })
   timings.search_to_cell_ms = Date.now() - searchStart
 
@@ -66,15 +158,27 @@ async function main() {
   await page.getByTestId('queue-simulation').waitFor({ timeout: 30_000 })
 
   const forecastStart = Date.now()
-  await page.getByRole('button', { name: /Prévision QoS|Prevision QoS/ }).click()
-  await Promise.race([
-    page.getByText('Risque estimé').waitFor({ timeout: 30_000 }),
-    page.getByText('Données temporelles insuffisantes').waitFor({ timeout: 30_000 }),
-  ])
-  if (await page.getByText('Risque estimé').isVisible().catch(() => false)) {
+  const forecastTab = await clickButtonContaining(page, ['Prévision QoS', 'Prevision QoS'])
+  if (!forecastTab.clicked) {
+    await failWithReport(browser, {
+      ok: false,
+      base_url: BASE_URL,
+      error: forecastTab.reason,
+      debug_screenshot: forecastTab.debug_screenshot,
+      debug_text: forecastTab.debug_text,
+      checked_at: new Date().toISOString(),
+    })
+  }
+  await page.waitForFunction(() => {
+    const body = (document.body.innerText || '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase()
+    return body.includes('risque estime') ||
+      body.includes('donnees temporelles insuffisantes') ||
+      body.includes('prevision indicative')
+  }, null, { timeout: 30_000 })
+  if (await page.getByText(/Risque estim/i).isVisible().catch(() => false)) {
     const firstForecastRow = page.locator('.site-table-card tbody tr').first()
     await firstForecastRow.click({ timeout: 30_000 })
-    await page.getByRole('button', { name: 'Ouvrir Qualité radio' }).waitFor({ timeout: 30_000 })
+    await page.getByRole('button', { name: /Ouvrir Qualit/i }).waitFor({ timeout: 30_000 })
   }
   timings.forecast_open_ms = Date.now() - forecastStart
 
@@ -95,8 +199,12 @@ async function main() {
     return CORE_429_PATHS.some((corePath) => pathname === corePath || pathname.startsWith(`${corePath}/`))
   })
   const tolerated429 = unique429.filter((url) => !blocking429.includes(url))
+  const normalizedBody = body.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase()
   const result = {
-    ok: blockingConsoleErrors.length === 0 && blocking429.length === 0 && body.includes('Prévision') && body.includes('TN1158_c01'),
+    ok: blockingConsoleErrors.length === 0 &&
+      blocking429.length === 0 &&
+      normalizedBody.includes('prevision') &&
+      normalizedBody.includes('tn1158_c01'),
     base_url: BASE_URL,
     timings,
     console_errors: blockingConsoleErrors,

@@ -94,7 +94,7 @@ function ForecastPanel({ scope, selectedCell, onSelectCell, adminToolsEnabled, w
     {!forecastState.loading && !rows.length ? <div className="empty-state" role="note">Données temporelles insuffisantes pour produire une prévision fiable.</div> : null}
     {rows.length ? <div className="site-table-card"><div className="section-title">Risque estimé <span>{rows.length}</span></div><table><thead><tr><th>Cellule</th><th>Site</th><th>Risque</th><th>Cause probable</th><th>Confiance</th><th>Évidence</th></tr></thead><tbody>{rows.map((row) => <tr key={row.cell_name} onClick={() => setSelectedForecastCell(row.cell_name)}><td>{row.cell_name}</td><td>{row.site_name || '-'}</td><td>{row.risk_score}</td><td>{row.predicted_issue}</td><td>{confidenceLabelFr(row.confidence)}</td><td>{(row.evidence || []).slice(0, 1).join(' ')}</td></tr>)}</tbody></table></div> : null}
     {selectedRow ? <div className="site-table-card">
-      <div className="section-title">Analyse assistée</div>
+      <div className="section-title">Signaux observés</div>
       <div className="diagnosis-box">
         <strong>{selectedRow.cell_name}</strong> - {selectedRow.insight?.summary}
         <div className="diagnosis-evidence">{selectedRow.insight?.why_it_matters}</div>
@@ -302,7 +302,7 @@ function OperationsPanel({ selectedCell, currentTime, workerState, backendHealth
       ? (typeof workerState === 'string' && workerState !== 'unavailable' ? workerState : 'Simulation ns-3 indisponible: verifier WSL Ubuntu, ns-3 et Redis dans Admin.')
       : 'Simulation indisponible : verifier les services dans le mode Admin.'
   if (!selectedCell) {
-    return <section className="panel-shell cockpit-panel"><div className="panel-heading"><div><p>Action cellule</p><h1>Sélectionner une cellule</h1></div><StatusBadge status="watch" /></div><div className="empty-state" role="note">Recherchez une cellule ou cliquez un site dans Qualité radio pour ouvrir les recommandations et les simulations.</div>{alerts?.length ? <div className="site-table-card"><div className="section-title">Cellules prioritaires</div><table><caption className="sr-only">Cellules à traiter</caption><tbody>{alerts.slice(0, 8).map((cell) => <tr key={cell.cell_name} onClick={() => onSelectCell?.(cell.cell_name)}><td>{cell.cell_name}</td><td>{stateLabel(getCellState(cell))}</td><td>{formatMetric(cell.prb_load)}%</td></tr>)}</tbody></table></div> : null}</section>
+    return <section className="panel-shell cockpit-panel"><div className="panel-heading"><div><p>Action cellule</p><h1>Sélectionner une cellule</h1></div><StatusBadge status="watch" /></div><div className="empty-state" role="note">Recherchez une cellule ou cliquez un site dans Qualité radio pour ouvrir les propositions opérationnelles et les simulations.</div>{alerts?.length ? <div className="site-table-card"><div className="section-title">Cellules prioritaires</div><table><caption className="sr-only">Cellules à traiter</caption><tbody>{alerts.slice(0, 8).map((cell) => <tr key={cell.cell_name} onClick={() => onSelectCell?.(cell.cell_name)}><td>{cell.cell_name}</td><td>{stateLabel(getCellState(cell))}</td><td>{formatMetric(cell.prb_load)}%</td></tr>)}</tbody></table></div> : null}</section>
   }
   return <CellOperationalPanel cell={selectedCell} currentTime={currentTime} queueReady={queueReady} queueDetail={simulationDetail} backendHealth={backendHealth} disabledActions={jobsHealth?.slo?.disabled_actions || []} />
 }

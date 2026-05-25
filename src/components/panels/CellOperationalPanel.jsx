@@ -42,7 +42,7 @@ export default function CellOperationalPanel({ cell, currentTime, queueReady = f
           setRecState('ready')
         }
       } catch (err) {
-        if (!cancelled) setRecState(err.message || 'Recommandation indisponible')
+        if (!cancelled) setRecState(err.message || 'Proposition opérationnelle indisponible')
       }
     }
     loadRecommendation()
@@ -170,10 +170,10 @@ export default function CellOperationalPanel({ cell, currentTime, queueReady = f
         <KpiCard label="Santé" value={cell?.health || 0} unit="%" />
       </div>
       <div className="diagnosis-box"><strong>Diagnostic :</strong> {diagnoseCell(cell)}</div>
-      <div className="section-title">Action recommandee</div>
+      <div className="section-title">Action proposée</div>
       {recState === 'loading' ? <div className="empty-state">Recherche de la meilleure action...</div> : null}
       {typeof recState === 'string' && !['idle', 'loading', 'ready'].includes(recState) ? <div className="empty-state warning">{recState}</div> : null}
-      <div className="recommendation-list">{recommendations.length ? recommendations.slice(0, 1).map((rec, idx) => <RecommendationCard key={idx} recommendation={rec} simulationReady={queueReady} unavailableReason={queueDetail} onSimulate={(simAction) => { setAction(simAction); runQueuedSimulation(simAction) }} />) : recState === 'ready' ? <div className="empty-state" role="note">Aucune action automatique fiable pour cette cellule.</div> : null}</div>
+      <div className="recommendation-list">{recommendations.length ? recommendations.slice(0, 1).map((rec, idx) => <RecommendationCard key={idx} recommendation={rec} simulationReady={queueReady} unavailableReason={queueDetail} onSimulate={(simAction) => { setAction(simAction); runQueuedSimulation(simAction) }} />) : recState === 'ready' ? <div className="empty-state" role="note">Aucune proposition opérationnelle fiable pour cette cellule.</div> : null}</div>
       <div className="simulation-control">
         <label htmlFor="sim-action" className="sr-only">Action simulation</label>
         <select id="sim-action" value={action} onChange={(e) => setAction(e.target.value)}>{SIMULATOR_ACTIONS.map((item) => <option key={item.id} value={item.id} disabled={disabledBySlo.has(item.id)}>{item.label}{disabledBySlo.has(item.id) ? ' (indisponible)' : ''}</option>)}</select>

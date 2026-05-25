@@ -1,14 +1,36 @@
 import { useState, useEffect } from 'react'
-import { fetchJson } from '../admin/adminData'
+import { fetchJson } from '../admin/adminData.js'
 
-export function useSystemEndpoints() {
+export function buildSystemEndpointChecks({ adminToolsEnabled = false, activeTab = 'overview', hasActiveSimulationJob = false } = {}) {
+  const shouldCheckAdminHealth = Boolean(adminToolsEnabled || activeTab === 'system')
+  const shouldCheckJobsHealth = Boolean(adminToolsEnabled || activeTab === 'operations' || hasActiveSimulationJob)
+  const checks = []
+  if (shouldCheckAdminHealth) {
+    checks.push({ name: 'data', url: '/api/data/stats.json' })
+    checks.push({ name: 'backend', url: '/api/backend-health' })
+  }
+  if (shouldCheckJobsHealth) checks.push({ name: 'jobsHealth', url: '/api/jobs-health' })
+  return checks
+}
+
+export function useSystemEndpoints(options = {}) {
   const [endpointStatus, setEndpointStatus] = useState({})
   const [workerState, setWorkerState] = useState('ready')
   const [jobsHealth, setJobsHealth] = useState(null)
+  const { adminToolsEnabled = false, activeTab = 'overview', hasActiveSimulationJob = false } = options
 
   useEffect(() => {
     let cancelled = false
     async function probeEndpoints() {
+      const plannedChecks = buildSystemEndpointChecks({ adminToolsEnabled, activeTab, hasActiveSimulationJob })
+      if (!plannedChecks.length) {
+        if (!cancelled) {
+          setEndpointStatus({})
+          setJobsHealth(null)
+          setWorkerState('ready')
+        }
+        return
+      }
       async function check(name, url) {
         try {
           const res = await fetch(url, { cache: 'no-store' })
@@ -20,19 +42,12 @@ export function useSystemEndpoints() {
           return [name, { wired: true, reachable: false, degraded: true, detail: err.message || String(err) }]
         }
       }
-      const coreChecks = [
-        check('data', '/api/data/stats.json'),
-        check('backend', '/api/backend-health'),
-      ]
-      const optionalChecks = [
-        check('jobsHealth', '/api/jobs-health'),
-      ]
-      const pairs = await Promise.all([...coreChecks, ...optionalChecks])
+      const pairs = await Promise.all(plannedChecks.map((item) => check(item.name, item.url)))
       if (!cancelled) {
         const next = Object.fromEntries(pairs)
         setEndpointStatus(next)
         setJobsHealth(next.jobsHealth?.payload || null)
-        setWorkerState(next.jobsHealth?.reachable && !next.jobsHealth?.degraded ? 'ready' : (next.jobsHealth?.detail || 'unavailable'))
+        setWorkerState(next.jobsHealth ? (next.jobsHealth.reachable && !next.jobsHealth.degraded ? 'ready' : (next.jobsHealth.detail || 'unavailable')) : 'ready')
       }
     }
     probeEndpoints()
@@ -41,7 +56,7 @@ export function useSystemEndpoints() {
       cancelled = true
       window.clearInterval(timer)
     }
-  }, [])
+  }, [adminToolsEnabled, activeTab, hasActiveSimulationJob])
 
   return { endpointStatus, workerState, jobsHealth }
 }

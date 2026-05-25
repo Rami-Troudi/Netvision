@@ -1,7 +1,8 @@
-import { normalizeDelegationName, normalizeGovernorateName } from './adminNaming'
+import { normalizeDelegationName, normalizeGovernorateName } from './adminNaming.js'
 
 export function buildSearchIndex(registry, cells) {
   const items = []
+  const seenSites = new Set()
   for (const gov of registry?.governorates || []) {
     const name = normalizeGovernorateName(gov.display_name || gov.gov_name || gov.gov_id, 'Gouvernorat inconnu')
     items.push({ type: 'governorate', label: `${name} - Gouvernorat`, searchName: name, id: gov.gov_id, gov })
@@ -12,7 +13,10 @@ export function buildSearchIndex(registry, cells) {
     items.push({ type: 'delegation', label: `${name} - Delegation, ${gov}`, searchName: name, id: deleg.deleg_id, deleg })
   }
   for (const cell of cells || []) {
-    if (cell.site_name) items.push({ type: 'site', label: `${cell.site_name} - Site, ${normalizeDelegationName(cell.admin?.deleg_name, 'Non associee')}`, searchName: cell.site_name, id: cell.site_name, cell })
+    if (cell.site_name && !seenSites.has(cell.site_name)) {
+      seenSites.add(cell.site_name)
+      items.push({ type: 'site', label: `${cell.site_name} - Site, ${normalizeDelegationName(cell.admin?.deleg_name, 'Non associee')}`, searchName: cell.site_name, id: cell.site_name, cell })
+    }
     items.push({ type: 'cell', label: `${cell.cell_name} - Cellule`, searchName: cell.cell_name, id: cell.cell_name, cell })
   }
   return items

@@ -11,6 +11,8 @@ import {
   normalizeThroughputKbps,
 } from '../../src/utils/v2Contracts.mjs'
 import { deriveMapState } from '../../src/components/admin-map/mapState.mjs'
+import { buildSearchIndex, searchAdmin } from '../../src/admin/adminSearch.js'
+import { buildSystemEndpointChecks } from '../../src/hooks/useDashboardData.js'
 
 test('normalizes old and new runtime cell fields into the V2 operational cell contract', () => {
   const cell = normalizeOperationalCell(
@@ -162,4 +164,26 @@ test('derives deterministic map state from scope and controls', () => {
   assert.equal(state.visibility.heatmap, true)
   assert.equal(state.visibility.labels, true)
   assert.ok(state.hoverLayers.includes('radio-sites'))
+})
+
+test('deduplicates site search entries while keeping one result per cell', () => {
+  const cells = [
+    { cell_name: 'TN1158_c01', site_name: 'TN1158_s01', admin: { deleg_name: 'El Menzah' } },
+    { cell_name: 'TN1158_c06', site_name: 'TN1158_s01', admin: { deleg_name: 'El Menzah' } },
+    { cell_name: 'TN1158_c02', site_name: 'TN1158_s02', admin: { deleg_name: 'El Menzah' } },
+  ]
+  const index = buildSearchIndex({ governorates: [], delegations: [] }, cells)
+  assert.deepEqual(index.filter((item) => item.type === 'site').map((item) => item.id), ['TN1158_s01', 'TN1158_s02'])
+  assert.deepEqual(index.filter((item) => item.type === 'cell').map((item) => item.id), ['TN1158_c01', 'TN1158_c06', 'TN1158_c02'])
+
+  const siteResults = searchAdmin('TN1158_s01', index, 8).filter((item) => item.type === 'site')
+  assert.equal(siteResults.length, 1)
+  assert.equal(siteResults[0].cell.cell_name, 'TN1158_c01')
+})
+
+test('limits system health polling to admin or simulation contexts', () => {
+  assert.deepEqual(buildSystemEndpointChecks({ adminToolsEnabled: false, activeTab: 'overview', hasActiveSimulationJob: false }).map((item) => item.name), [])
+  assert.deepEqual(buildSystemEndpointChecks({ adminToolsEnabled: false, activeTab: 'operations', hasActiveSimulationJob: false }).map((item) => item.name), ['jobsHealth'])
+  assert.deepEqual(buildSystemEndpointChecks({ adminToolsEnabled: false, activeTab: 'overview', hasActiveSimulationJob: true }).map((item) => item.name), ['jobsHealth'])
+  assert.deepEqual(buildSystemEndpointChecks({ adminToolsEnabled: true, activeTab: 'system', hasActiveSimulationJob: false }).map((item) => item.name), ['data', 'backend', 'jobsHealth'])
 })

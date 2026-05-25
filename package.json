@@ -18,6 +18,7 @@
     "qa:ns3:rationality": "node scripts/ns3-rationality-batch.mjs",
     "pw:doctor": "node scripts/playwright-doctor.mjs",
     "qa:browser": "node scripts/browser-qa-budget.mjs",
+    "ui:audit": "node scripts/ui-audit-album.mjs",
     "forecast:generate": "node scripts/forecast-generate.mjs",
     "forecast:check": "node scripts/forecast-check.mjs",
     "forecast:evaluate": "node scripts/forecast-evaluate.mjs",

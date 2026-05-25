@@ -10,7 +10,7 @@ const NON_SIM_ACTION_LABELS_FR = Object.freeze({
 })
 
 export function normalizeRecommendation(raw = {}) {
-  const title = String(raw.action_name || raw.action || raw.title || 'Recommendation').trim()
+  const title = String(raw.action_name || raw.action || raw.title || 'Action proposée').trim()
   const simAction = mapRecommendationToSimulatorAction(title)
   const displayTitle = ACTION_LABELS_FR[simAction] || NON_SIM_ACTION_LABELS_FR[title] || title
   return {
@@ -74,7 +74,7 @@ export async function fetchRecommendations({ cell, currentTime }) {
       timestamp: currentTime?.timestamp,
     }),
   })
-  const payload = await readJsonResponse(res, 'Recommendation request failed')
+  const payload = await readJsonResponse(res, 'Proposition opérationnelle indisponible')
   const raw = Array.isArray(payload?.recommended_actions) ? payload.recommended_actions : []
   return {
     payload,

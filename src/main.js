@@ -39,10 +39,12 @@ export default function NetVisionDashboard() {
   const [driftState, setDriftState] = useState({ available: false, rows: [], summary: {} })
   const [watchlist, setWatchlist] = useState([])
   const [savedViews, setSavedViews] = useState([])
-
-  const { endpointStatus, workerState, jobsHealth } = useSystemEndpoints()
+  const adminToolsEnabled = interfaceRole === 'admin' || isAdminToolsEnabled()
+  const showRoleSwitch = typeof window !== 'undefined' && (process.env.NODE_ENV !== 'production' || adminToolsEnabled)
+  const visibleTabs = useMemo(() => adminToolsEnabled ? [...COCKPIT_TABS, ...ADMIN_COCKPIT_TABS] : COCKPIT_TABS, [adminToolsEnabled])
+  const { endpointStatus, workerState, jobsHealth } = useSystemEndpoints({ adminToolsEnabled, activeTab })
   const { peakRows, peakPayload } = usePeakHours({ data, scope, busyMetric, dataMode })
-  
+
   const [previousObservations, setPreviousObservations] = useState({})
   const [delegationVariationRows, setDelegationVariationRows] = useState([])
   const [demoStep, setDemoStep] = useState(null)
@@ -53,10 +55,6 @@ export default function NetVisionDashboard() {
   const loadingSliceRef = useRef(false)
   const pendingSliceIndexRef = useRef(null)
   const sliceCacheRef = useRef(new Map())
-  const adminToolsEnabled = interfaceRole === 'admin' || isAdminToolsEnabled()
-  const showRoleSwitch = typeof window !== 'undefined' && (process.env.NODE_ENV !== 'production' || adminToolsEnabled)
-  const visibleTabs = useMemo(() => adminToolsEnabled ? [...COCKPIT_TABS, ...ADMIN_COCKPIT_TABS] : COCKPIT_TABS, [adminToolsEnabled])
-
   useEffect(() => {
     if (!adminToolsEnabled && ['analytics', 'data', 'system'].includes(activeTab)) setActiveTab('overview')
   }, [adminToolsEnabled, activeTab])
@@ -65,9 +63,13 @@ export default function NetVisionDashboard() {
     let cancelled = false
     fetchJson('/api/data-mode').then((payload) => !cancelled && setDataMode(payload.mode || 'real')).catch(() => {})
     loadDashboardData().then((payload) => { if (!cancelled) setData(payload) }).catch((err) => { if (!cancelled) setLoadError(err.message || String(err)) })
-    fetchJson('/api/backend-health').then((payload) => !cancelled && setBackendHealth(payload)).catch(() => !cancelled && setBackendHealth({ status: 'unavailable' }))
     return () => { cancelled = true }
   }, [])
+
+  useEffect(() => {
+    if (endpointStatus.backend?.payload) setBackendHealth(endpointStatus.backend.payload)
+    else if (!adminToolsEnabled) setBackendHealth(null)
+  }, [adminToolsEnabled, endpointStatus.backend?.payload])
 
   useEffect(() => {
     if (!adminToolsEnabled) return
