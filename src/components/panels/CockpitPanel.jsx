@@ -25,7 +25,7 @@ export default function CockpitPanel(props) {
   return <OverviewPanel {...props} />
 }
 
-function ForecastPanel({ scope, selectedCell, onSelectCell, adminToolsEnabled }) {
+function ForecastPanel({ scope, selectedCell, onSelectCell, adminToolsEnabled, workerState, jobsHealth, onTabChange }) {
   const [horizon, setHorizon] = useState(1)
   const [highOnly, setHighOnly] = useState(true)
   const [forecastState, setForecastState] = useState({ ok: true, rows: [], summary: {}, warnings: [], loading: true })
@@ -92,12 +92,16 @@ function ForecastPanel({ scope, selectedCell, onSelectCell, adminToolsEnabled })
     {forecastState.loading ? <div className="empty-state" role="status">Calcul de la prévision...</div> : null}
     {(forecastState.warnings || []).map((warning) => <div key={warning} className="empty-state warning" role="note">{warning}</div>)}
     {!forecastState.loading && !rows.length ? <div className="empty-state" role="note">Données temporelles insuffisantes pour produire une prévision fiable.</div> : null}
-    {rows.length ? <div className="site-table-card"><div className="section-title">Risque estimé <span>{rows.length}</span></div><table><thead><tr><th>Cellule</th><th>Site</th><th>Risque</th><th>Cause probable</th><th>Confiance</th><th>Évidence</th></tr></thead><tbody>{rows.map((row) => <tr key={row.cell_name} onClick={() => { setSelectedForecastCell(row.cell_name); onSelectCell?.(row.cell_name) }}><td>{row.cell_name}</td><td>{row.site_name || '-'}</td><td>{row.risk_score}</td><td>{row.predicted_issue}</td><td>{confidenceLabelFr(row.confidence)}</td><td>{(row.evidence || []).slice(0, 1).join(' ')}</td></tr>)}</tbody></table></div> : null}
+    {rows.length ? <div className="site-table-card"><div className="section-title">Risque estimé <span>{rows.length}</span></div><table><thead><tr><th>Cellule</th><th>Site</th><th>Risque</th><th>Cause probable</th><th>Confiance</th><th>Évidence</th></tr></thead><tbody>{rows.map((row) => <tr key={row.cell_name} onClick={() => setSelectedForecastCell(row.cell_name)}><td>{row.cell_name}</td><td>{row.site_name || '-'}</td><td>{row.risk_score}</td><td>{row.predicted_issue}</td><td>{confidenceLabelFr(row.confidence)}</td><td>{(row.evidence || []).slice(0, 1).join(' ')}</td></tr>)}</tbody></table></div> : null}
     {selectedRow ? <div className="site-table-card">
       <div className="section-title">Analyse assistée</div>
       <div className="diagnosis-box">
         <strong>{selectedRow.cell_name}</strong> - {selectedRow.insight?.summary}
         <div className="diagnosis-evidence">{selectedRow.insight?.why_it_matters}</div>
+      </div>
+      <div className="export-actions">
+        <button className="primary-cta" type="button" onClick={() => onSelectCell?.(selectedRow.cell_name, { activeTab: 'qos' })}>Ouvrir Qualité radio</button>
+        {(selectedCell?.cell_name === selectedRow.cell_name && jobsHealth?.ready === true && workerState === 'ready') ? <button className="ghost-button" type="button" onClick={() => onTabChange?.('operations')}>Préparer Action cellule</button> : null}
       </div>
       <div className="kpi-grid compact">
         <KpiCard label="PRB actuel" value={selectedRow.current_kpis?.prb_load || 0} unit="%" />

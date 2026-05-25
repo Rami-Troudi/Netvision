@@ -71,6 +71,11 @@ async function main() {
     page.getByText('Risque estimé').waitFor({ timeout: 30_000 }),
     page.getByText('Données temporelles insuffisantes').waitFor({ timeout: 30_000 }),
   ])
+  if (await page.getByText('Risque estimé').isVisible().catch(() => false)) {
+    const firstForecastRow = page.locator('.site-table-card tbody tr').first()
+    await firstForecastRow.click({ timeout: 30_000 })
+    await page.getByRole('button', { name: 'Ouvrir Qualité radio' }).waitFor({ timeout: 30_000 })
+  }
   timings.forecast_open_ms = Date.now() - forecastStart
 
   const timelineStart = Date.now()

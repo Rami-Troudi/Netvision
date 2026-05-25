@@ -1,13 +1,19 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
+import fs from 'node:fs/promises'
+import path from 'node:path'
 
 import {
   FORECAST_MODEL_VERSION,
   buildForecastForRuntime,
+  parseTimestamp,
   validateForecastArtifact,
 } from '../../src/analytics/qosForecast.mjs'
 import { buildInsightNarrative } from '../../src/analytics/qosInsightNarratives.mjs'
 import forecastHandler from '../../pages/api/forecast.js'
+const execFileAsync = promisify(execFile)
 
 function runtimeFixture({ slices = 5 } = {}) {
   const timestamps = Array.from({ length: slices }, (_, idx) => ({
@@ -91,6 +97,7 @@ test('forecast scope filtering and horizon validation are deterministic', () => 
   })
   assert.equal(artifact.horizon, 3)
   assert.deepEqual(artifact.rows.map((row) => row.cell_name), ['TN1158_c02'])
+  assert.equal(artifact.summary.total_cells, 1)
   assert.throws(() => buildForecastForRuntime(runtimeFixture(), { horizon: 2 }), /horizon/)
 })
 
@@ -141,4 +148,35 @@ test('forecast API returns the public schema and validates horizon', async () =>
   await forecastHandler(badReq, badRes)
   assert.equal(badRes.statusCode, 400)
   assert.ok(badRes.body.error)
+})
+
+test('timestamp parser supports dd-mm, iso and parseable strings', () => {
+  assert.ok(parseTimestamp('01-12-2025 00:00') instanceof Date)
+  assert.ok(parseTimestamp('2025-12-01T00:00:00Z') instanceof Date)
+  assert.ok(parseTimestamp('Mon, 01 Dec 2025 00:00:00 GMT') instanceof Date)
+})
+
+test('zero active_users is not treated as missing KPI data', () => {
+  const fixture = runtimeFixture()
+  fixture.timeSlices = fixture.timeSlices.map((slice) => ({
+    ...slice,
+    observations: {
+      ...slice.observations,
+      TN1158_c01: { ...slice.observations.TN1158_c01, active_users: 0 },
+    },
+  }))
+  const artifact = buildForecastForRuntime(fixture, { horizon: 1, includeLow: true })
+  const row = artifact.rows.find((item) => item.cell_name === 'TN1158_c01')
+  assert.ok(row.trend_features.missing_kpi_ratio < 0.3)
+})
+
+test('forecast evaluation script writes a valid metrics file', async () => {
+  process.env.DATA_MODE = 'mock'
+  await execFileAsync('node', ['scripts/forecast-evaluate.mjs'], { cwd: process.cwd() })
+  const outputPath = path.resolve(process.cwd(), '.runtime', 'forecast', 'forecast-evaluation.json')
+  const payload = JSON.parse(await fs.readFile(outputPath, 'utf8'))
+  assert.equal(payload.ok, true)
+  assert.ok(Number.isFinite(payload.precision))
+  assert.ok(Number.isFinite(payload.recall))
+  assert.ok(Number.isFinite(payload.sample_count))
 })

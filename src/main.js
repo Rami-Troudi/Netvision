@@ -90,12 +90,12 @@ export default function NetVisionDashboard() {
   useEffect(() => { localStorage.setItem('netvision.savedViews', JSON.stringify(savedViews)) }, [savedViews])
 
   useEffect(() => {
-    if (!adminToolsEnabled || !restorationFlags.forecast || activeTab !== 'system') {
+    if (!restorationFlags.forecast || !['forecast', 'system'].includes(activeTab)) {
       setForecastState({ available: false, rows: [], assumptions: [], confidence: 'low' })
       return
     }
     fetchJson('/api/forecast?limit=10').then((p) => setForecastState(p)).catch(() => setForecastState({ available: false, rows: [], reason: 'API forecast indisponible' }))
-  }, [adminToolsEnabled, restorationFlags.forecast, activeTab])
+  }, [restorationFlags.forecast, activeTab])
   useEffect(() => {
     if (!adminToolsEnabled || !restorationFlags.drift || !['forecast', 'system'].includes(activeTab)) {
       setDriftState({ available: false, rows: [], summary: {} })
