@@ -22,7 +22,7 @@ export default function TimelineBar({
   const sliderLabel = current?.timestamp ? `Position temporelle ${currentIndex + 1} sur ${Math.max(1, timeIndex.length)}, ${current.timestamp}` : `Position temporelle ${currentIndex + 1} sur ${Math.max(1, timeIndex.length)}`
   return (
     <div className="timeline-strip">
-      <button data-testid="timeline-prev" onClick={onPrev} disabled={currentIndex <= 0}>Precedent</button>
+      <button data-testid="timeline-prev" onClick={onPrev} disabled={currentIndex <= 0}>Précédent</button>
       <label htmlFor="timeline-slider" className="sr-only">Chronologie</label>
       <input id="timeline-slider" aria-label="Chronologie" aria-valuetext={sliderLabel} type="range" min="0" max={Math.max(0, timeIndex.length - 1)} value={currentIndex} onChange={(e) => onChange(Number(e.target.value))} />
       <button data-testid="timeline-play" onClick={onTogglePlay} disabled={!timeIndex.length}>{isPlaying ? 'Pause' : 'Lecture'}</button>
@@ -30,11 +30,11 @@ export default function TimelineBar({
       <select id="timeline-speed" data-testid="timeline-speed" aria-label="Vitesse de lecture" value={speedMs} onChange={(e) => onSpeedChange(Number(e.target.value))}>
         {SPEED_OPTIONS.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
       </select>
-      <label htmlFor="timeline-start-mode" className="sr-only">Demarrer depuis</label>
-      <select id="timeline-start-mode" data-testid="timeline-start-mode" aria-label="Demarrer depuis" defaultValue="current" disabled={!timeIndex.length} onChange={(e) => onStartFrom(e.target.value)}>
+      <label htmlFor="timeline-start-mode" className="sr-only">Démarrer depuis</label>
+      <select id="timeline-start-mode" data-testid="timeline-start-mode" aria-label="Démarrer depuis" defaultValue="current" disabled={!timeIndex.length} onChange={(e) => onStartFrom(e.target.value)}>
         <option value="current">Depuis cette tranche</option>
-        <option value="start">Depuis le debut</option>
-        <option value="end">Depuis la derniere tranche</option>
+        <option value="start">Depuis le début</option>
+        <option value="end">Depuis la dernière tranche</option>
       </select>
       <strong>{current?.timestamp || 'Aucune tranche'}</strong>
       <span>{timeIndex.length} tranches</span>

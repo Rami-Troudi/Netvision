@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+﻿import { useEffect, useMemo, useRef, useState } from 'react'
 import KpiCard from '../dashboard/KpiCard'
 import RecommendationCard from './RecommendationCard'
 import SimulationImpactCard from './SimulationImpactCard'
 import { diagnoseCell } from '../../admin/adminAggregation'
 import { SIMULATOR_ACTIONS, SIMULATION_FIDELITY_LEVELS, paramsForSimulatorAction } from '../../utils/v2Contracts.mjs'
 import { fetchRecommendations, pollJobUntilTerminal, queueSimulation } from '../../services/operationalApi.mjs'
+import { SectionCard } from './shared/PanelPrimitives'
 
 export default function CellOperationalPanel({ cell, currentTime, queueReady = false, queueDetail = '', disabledActions = [] }) {
   const [recommendations, setRecommendations] = useState([])
@@ -56,8 +57,7 @@ export default function CellOperationalPanel({ cell, currentTime, queueReady = f
 
   const selectedAction = useMemo(() => SIMULATOR_ACTIONS.find((item) => item.id === action), [action])
   const disabledBySlo = useMemo(() => {
-    const byAction = new Map((disabledActions || []).map((entry) => [entry.action, entry.reason || 'Action temporairement désactivée']))
-    return byAction
+    return new Map((disabledActions || []).map((entry) => [entry.action, entry.reason || 'Action temporairement désactivée']))
   }, [disabledActions])
 
   useEffect(() => {
@@ -69,34 +69,23 @@ export default function CellOperationalPanel({ cell, currentTime, queueReady = f
   }
 
   function buildParamsForSubmit() {
-    if (action === 'tilt') {
-      return {
-        degrees: Number(params.degrees ?? 2),
-        power_delta_db: Number(params.power_delta_db ?? 0),
-      }
-    }
+    if (action === 'tilt') return { degrees: Number(params.degrees ?? 2), power_delta_db: Number(params.power_delta_db ?? 0) }
     if (action === 'redistribute') {
       const next = { ratio: Number(params.ratio ?? 0.15) }
       const target = String(params.target || '').trim()
       if (target) next.target = target
       return next
     }
-    if (action === 'neighbor_optimization') {
-      return { interference_relief: Number(params.interference_relief ?? 0.12) }
-    }
-    if (action === 'add_carrier') {
-      return { band: normalizeBandValue(params.band ?? cell?.frequency_band ?? 3) }
-    }
-    if (action === 'add_sector') {
-      return { target_sectors: Number(params.target_sectors ?? 4) || 4 }
-    }
+    if (action === 'neighbor_optimization') return { interference_relief: Number(params.interference_relief ?? 0.12) }
+    if (action === 'add_carrier') return { band: normalizeBandValue(params.band ?? cell?.frequency_band ?? 3) }
+    if (action === 'add_sector') return { target_sectors: Number(params.target_sectors ?? 4) || 4 }
     return paramsForSimulatorAction(action, cell)
   }
 
   async function runQueuedSimulation(nextAction = action, overrideParams = null) {
     if (!cell?.cell_name) return
     if (disabledBySlo.has(nextAction)) {
-      setSimState(`Action indisponible: ${disabledBySlo.get(nextAction)}`)
+      setSimState(`Action indisponible : ${disabledBySlo.get(nextAction)}`)
       return
     }
     if (!queueReady) {
@@ -106,28 +95,14 @@ export default function CellOperationalPanel({ cell, currentTime, queueReady = f
     setSimState('queued')
     setSimulation(null)
     try {
-        const queued = await queueSimulation({ cell, action: nextAction, currentTime, params: overrideParams || buildParamsForSubmit(), fidelityLevel })
+      const queued = await queueSimulation({ cell, action: nextAction, currentTime, params: overrideParams || buildParamsForSubmit(), fidelityLevel })
       const jobId = String(queued?.jobId || '').trim()
       if (!jobId) throw new Error('Identifiant job manquant')
       setActiveJobId(jobId)
-      upsertJob({
-        jobId,
-        action: nextAction,
-        status: queued?.status || 'pending',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        error: '',
-        result: null,
-      })
+      upsertJob({ jobId, action: nextAction, status: queued?.status || 'pending', created_at: new Date().toISOString(), updated_at: new Date().toISOString(), error: '', result: null })
       setSimState('running')
       const finalJob = await pollJobUntilTerminal(jobId, {
-        onUpdate: (payload) => upsertJob({
-          jobId,
-          status: payload.status || 'pending',
-          updated_at: payload.updated_at || '',
-          error: payload.error || '',
-          result: payload.result || null,
-        }),
+        onUpdate: (payload) => upsertJob({ jobId, status: payload.status || 'pending', updated_at: payload.updated_at || '', error: payload.error || '', result: payload.result || null }),
       })
       if (!mountedRef.current || !finalJob) return
       if (finalJob.status === 'failed') throw new Error(finalJob.error || 'Échec simulation en file')
@@ -159,28 +134,36 @@ export default function CellOperationalPanel({ cell, currentTime, queueReady = f
   }
 
   return (
-    <section className="panel-shell cell-panel" aria-busy={recState === 'loading' || simState === 'queued' || simState === 'running'}>
-      <div className="panel-heading"><div><p>Action cellule</p><h1>{cell?.cell_name || 'Sélectionner cellule'}</h1></div><span className="live-pill">Correction simulée</span></div>
-      <div className="kpi-grid compact">
-        <KpiCard label="Charge PRB" value={cell?.prb_load || 0} unit="%" hint="Mesure la pression capacitaire radio." />
-        <KpiCard label="Débit" value={cell?.throughput || 0} unit="Mbps" hint="Mesure l’expérience utilisateur." />
-        <KpiCard label="CQI" value={cell?.cqi || 0} hint="Indique la qualité radio perçue." />
-        <KpiCard label="Utilisateurs actifs" value={cell?.active_users || 0} hint="Montre la demande instantanée." />
-        <KpiCard label="TA" value={cell?.ta || 0} hint="Aide à détecter bord de cellule/couverture." />
-        <KpiCard label="Santé" value={cell?.health || 0} unit="%" />
-      </div>
-      <div className="diagnosis-box"><strong>Diagnostic :</strong> {diagnoseCell(cell)}</div>
-      <div className="section-title">Action proposée</div>
-      {recState === 'loading' ? <div className="empty-state">Recherche de la meilleure action...</div> : null}
-      {typeof recState === 'string' && !['idle', 'loading', 'ready'].includes(recState) ? <div className="empty-state warning">{recState}</div> : null}
-      <div className="recommendation-list">{recommendations.length ? recommendations.slice(0, 1).map((rec, idx) => <RecommendationCard key={idx} recommendation={rec} simulationReady={queueReady} unavailableReason={queueDetail} onSimulate={(simAction) => { setAction(simAction); runQueuedSimulation(simAction) }} />) : recState === 'ready' ? <div className="empty-state" role="note">Aucune proposition opérationnelle fiable pour cette cellule.</div> : null}</div>
-      <div className="simulation-control">
-        <label htmlFor="sim-action" className="sr-only">Action simulation</label>
-        <select id="sim-action" value={action} onChange={(e) => setAction(e.target.value)}>{SIMULATOR_ACTIONS.map((item) => <option key={item.id} value={item.id} disabled={disabledBySlo.has(item.id)}>{item.label}{disabledBySlo.has(item.id) ? ' (indisponible)' : ''}</option>)}</select>
-        <label htmlFor="sim-fidelity" className="sr-only">Niveau simulation</label>
-        <select id="sim-fidelity" value={fidelityLevel} onChange={(e) => setFidelityLevel(e.target.value)}>{SIMULATION_FIDELITY_LEVELS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select>
-        <button data-testid="queue-simulation" aria-describedby={!queueReady ? 'queue-unavailable-reason' : undefined} className="primary-cta" disabled={!queueReady || disabledBySlo.has(action)} onClick={() => runQueuedSimulation(action, buildParamsForSubmit())}>Simuler : {selectedAction?.label || action}</button>
-      </div>
+    <section className="panel-shell cell-panel simulation-action-panel" aria-busy={recState === 'loading' || simState === 'queued' || simState === 'running'}>
+      <SectionCard title="Contexte cellule" className="simulation-context-card">
+        <div className="kpi-grid compact simulation-kpis">
+          <KpiCard label="Charge PRB" value={cell?.prb_load || 0} unit="%" hint="Mesure la pression capacitaire radio." />
+          <KpiCard label="Débit" value={cell?.throughput || 0} unit="Mbps" hint="Mesure l’expérience utilisateur." />
+          <KpiCard label="CQI" value={cell?.cqi || 0} hint="Indique la qualité radio perçue." />
+        </div>
+        <p className="diagnosis-summary"><strong>Diagnostic :</strong> {diagnoseCell(cell)}</p>
+      </SectionCard>
+
+      <SectionCard title="Action à tester">
+        {recState === 'loading' ? <div className="empty-state">Recherche d’une proposition opérationnelle...</div> : null}
+        {typeof recState === 'string' && !['idle', 'loading', 'ready'].includes(recState) ? <div className="empty-state warning">{recState}</div> : null}
+        <div className="recommendation-list">
+          {recommendations.length
+            ? recommendations.slice(0, 1).map((rec, idx) => <RecommendationCard key={idx} recommendation={rec} simulationReady={queueReady} unavailableReason={queueDetail} showActionButton={false} />)
+            : recState === 'ready' ? <div className="empty-state" role="note">Aucune proposition opérationnelle fiable pour cette cellule.</div> : null}
+        </div>
+      </SectionCard>
+
+      <SectionCard title="Paramètres du scénario">
+        <div className="simulation-control">
+          <label htmlFor="sim-action" className="sr-only">Action simulation</label>
+          <select id="sim-action" value={action} onChange={(e) => setAction(e.target.value)}>{SIMULATOR_ACTIONS.map((item) => <option key={item.id} value={item.id} disabled={disabledBySlo.has(item.id)}>{item.label}{disabledBySlo.has(item.id) ? ' (indisponible)' : ''}</option>)}</select>
+          <label htmlFor="sim-fidelity" className="sr-only">Niveau simulation</label>
+          <select id="sim-fidelity" value={fidelityLevel} onChange={(e) => setFidelityLevel(e.target.value)}>{SIMULATION_FIDELITY_LEVELS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select>
+          <button data-testid="queue-simulation" aria-describedby={!queueReady ? 'queue-unavailable-reason' : undefined} className="primary-cta" disabled={!queueReady || disabledBySlo.has(action)} onClick={() => runQueuedSimulation(action, buildParamsForSubmit())}>Simuler : {selectedAction?.label || action}</button>
+        </div>
+      </SectionCard>
+
       {disabledBySlo.has(action) ? <div className="empty-state warning" role="status">Cette action est temporairement désactivée : {disabledBySlo.get(action)}</div> : null}
       <div className="simulation-params">
         {action === 'tilt' ? <>
@@ -214,6 +197,7 @@ export default function CellOperationalPanel({ cell, currentTime, queueReady = f
       {simState !== 'idle' && simState !== 'complete' && simState !== 'queued' && simState !== 'running' ? <div className="empty-state warning">{simState}</div> : null}
       <div className="section-title">Historique simulations</div>
       {jobs.length ? <div className="job-queue" role="status" aria-live="polite">{jobs.map((job) => <div key={job.jobId} className="job-row"><strong>{SIMULATOR_ACTIONS.find((item) => item.id === job.action)?.label || 'Simulation'}</strong><span>{jobStatusLabel(job.status)}</span><em>{jobDetailLabel(job)}</em></div>)}</div> : <div className="empty-state" role="note">Aucune simulation lancée sur cette cellule.</div>}
+      {activeJobId ? <span className="sr-only">Dernier job suivi : {activeJobId}</span> : null}
       {simState === 'complete' ? <SimulationImpactCard result={simulation} /> : null}
     </section>
   )

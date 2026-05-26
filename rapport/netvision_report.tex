@@ -1,0 +1,466 @@
+\documentclass[12pt,a4paper,oneside]{report}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[french]{babel}
+\usepackage{geometry}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{setspace}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{longtable}
+\usepackage{tabularx}
+\usepackage{enumitem}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{microtype}
+\usepackage{ragged2e}
+
+\geometry{top=2.4cm,bottom=2.4cm,left=2.6cm,right=2.2cm}
+\onehalfspacing
+\setlength{\parindent}{0.5cm}
+\setlength{\parskip}{0.25em}
+\setlength{\headheight}{15pt}
+\setlength{\emergencystretch}{3em}
+\graphicspath{{figures/screenshots/}{rapport/figures/screenshots/}}
+
+\definecolor{nvOrange}{HTML}{F26A21}
+\definecolor{nvDark}{HTML}{1D2733}
+\definecolor{nvBlue}{HTML}{1F4E79}
+\definecolor{nvGray}{HTML}{F4F6F8}
+\definecolor{nvLine}{HTML}{D9DEE5}
+\definecolor{nvMuted}{HTML}{5B6775}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=nvBlue,
+    citecolor=nvBlue,
+    urlcolor=nvOrange,
+    pdftitle={Rapport technique NetVision Digital Twin},
+    pdfauthor={Equipe projet NetVision}
+}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\textit{NetVision Digital Twin}}
+\fancyhead[R]{\small\textit{Rapport technique}}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+\titleformat{\chapter}[display]
+  {\normalfont\huge\bfseries\color{nvDark}}
+  {\colorbox{nvOrange}{\parbox[c][0.9cm][c]{1.3cm}{\centering\color{white}\Large\thechapter}}}
+  {0.8em}
+  {\Huge}
+  [\vspace{0.2em}\titlerule]
+
+\titleformat{\section}{\normalfont\Large\bfseries\color{nvBlue}}{\thesection}{0.8em}{}
+\titleformat{\subsection}{\normalfont\large\bfseries\color{nvDark}}{\thesubsection}{0.8em}{}
+\titleformat{\subsubsection}{\normalfont\normalsize\bfseries\color{nvMuted}}{\thesubsubsection}{0.8em}{}
+
+\lstdefinestyle{netvision}{
+  basicstyle=\ttfamily\small,
+  backgroundcolor=\color{nvGray},
+  frame=single,
+  rulecolor=\color{nvLine},
+  breaklines=true,
+  columns=fullflexible,
+  keywordstyle=\color{nvBlue}\bfseries,
+  commentstyle=\color{nvMuted},
+  stringstyle=\color{nvOrange}
+}
+\lstset{style=netvision}
+
+\newcommand{\ProjectTitle}{NetVision Digital Twin : tableau de bord de supervision RAN, d'analyse QoS et de simulation opérationnelle}
+\newcommand{\ProjectSubtitle}{Rapport technique basé sur la solution exécutée localement}
+\newcommand{\FigureScreenshot}[4]{
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=#1\textwidth]{#2}
+    \caption{#3}
+    \label{#4}
+\end{figure}
+}
+
+\begin{document}
+
+\begin{titlepage}
+\thispagestyle{empty}
+\begin{center}
+\vspace*{0.8cm}
+{\Large \textbf{Projet NetVision}}\\[0.3cm]
+{\large Supervision radio et aide à la décision pour réseau mobile}\\[1.2cm]
+
+\rule{0.88\textwidth}{0.6pt}\\[0.9cm]
+{\Huge \bfseries \ProjectTitle}\\[0.4cm]
+{\Large \ProjectSubtitle}\\[0.9cm]
+\rule{0.88\textwidth}{0.6pt}\\[1.2cm]
+
+\begin{tabular}{>{\bfseries}p{4.5cm}p{8cm}}
+Périmètre & Application locale NetVision inspectée et exécutée sur le poste de travail \\
+Dépôt analysé & odc-rami-ui-refactor, branche locale principale \\
+Stack principale & Next.js, React, MapLibre, API routes Next.js, FastAPI optionnel, Redis/BullMQ, ns-3 via WSL \\
+Mode de données capturé & mock, avec distinction explicite vis-à-vis du mode réel \\
+Date de validation & 24 mai 2026 \\
+\end{tabular}
+
+\vfill
+{\large Rapport rédigé en français à partir du code source, des API locales et de captures réelles du tableau de bord.}
+\end{center}
+\end{titlepage}
+
+\pagenumbering{roman}
+
+\chapter*{Remerciements}
+\addcontentsline{toc}{chapter}{Remerciements}
+Ce rapport synthétise le travail réalisé autour de NetVision, une solution locale d'observation et d'aide à la décision pour un réseau radio mobile. Il tient compte de l'état réel de l'application inspectée, des services disponibles au moment de la validation, ainsi que des limites encore présentes. L'objectif n'est pas de présenter une vision idéalisée du produit, mais de documenter fidèlement ce qui fonctionne, ce qui est optionnel et ce qui reste à renforcer.
+
+\chapter*{Résumé}
+\addcontentsline{toc}{chapter}{Résumé}
+NetVision est une application web locale destinée à aider un ingénieur radio à surveiller un réseau mobile, identifier les zones de congestion, analyser les indicateurs de qualité radio et lancer des simulations opérationnelles sur une cellule sélectionnée. La solution repose sur une interface Next.js/React, une carte MapLibre de la Tunisie, des données runtime structurées en fichiers JSON, des routes API Next.js, un backend FastAPI optionnel pour les recommandations, ainsi qu'une file de jobs Redis/BullMQ pour les simulations asynchrones.
+
+La version inspectée met l'accent sur un parcours opérateur : vue réseau, heures critiques, qualité radio et action cellule. Les outils d'administration, d'import/export, de qualité des données et d'état système sont accessibles en mode administrateur. La simulation ns-3 est intégrée comme moteur asynchrone principal pour les travaux de type \emph{what-if}. Elle ne doit pas être interprétée comme un jumeau radio parfaitement calibré : les résultats sont encadrés par des garde-fous, des hypothèses et une couche de crédibilité. Les captures insérées dans ce rapport proviennent de l'application exécutée localement.
+
+\chapter*{Synthèse technique}
+\addcontentsline{toc}{chapter}{Synthèse technique}
+Le projet fournit un socle opérationnel solide pour l'analyse RAN locale : chargement de données, agrégation par gouvernorat, délégation, site et cellule, visualisation cartographique, chronologie horaire, tableaux KPI, diagnostics multi-indicateurs et simulation asynchrone. Les services FastAPI, Redis/BullMQ et ns-3 sont présents et vérifiés dans l'environnement local utilisé pour ce rapport. Certaines briques restent toutefois à considérer comme expérimentales ou perfectibles : calibration radio avancée, fidélité physique ns-3, industrialisation de l'import, authentification de production et qualification exhaustive en conditions réelles.
+
+\chapter*{Liste des acronymes}
+\addcontentsline{toc}{chapter}{Liste des acronymes}
+\begin{longtable}{p{3cm}p{11cm}}
+\toprule
+\textbf{Acronyme} & \textbf{Signification} \\
+\midrule
+API & Interface de programmation applicative \\
+CQI & Channel Quality Indicator, indicateur de qualité radio \\
+EPC & Evolved Packet Core \\
+KPI & Indicateur clé de performance \\
+LTE & Long Term Evolution \\
+NOC & Centre d'exploitation réseau \\
+PRB & Physical Resource Block \\
+QoE & Qualité d'expérience perçue par l'utilisateur \\
+QoS & Qualité de service mesurée par le réseau \\
+RAN & Radio Access Network \\
+Redis & Base mémoire utilisée ici pour la file de jobs BullMQ \\
+TA & Timing Advance \\
+UE & User Equipment, terminal utilisateur \\
+WSL & Windows Subsystem for Linux \\
+\bottomrule
+\end{longtable}
+
+\listoffigures
+\listoftables
+\tableofcontents
+\clearpage
+\pagenumbering{arabic}
+
+\chapter{Introduction générale}
+La supervision d'un réseau radio mobile exige de croiser plusieurs familles de données : charge radio, débit, nombre d'utilisateurs, qualité de lien, localisation des cellules, évolution temporelle et récurrence des congestions. Une cellule avec un PRB élevé n'est pas nécessairement problématique si le débit et la qualité radio restent corrects. À l'inverse, un PRB élevé accompagné d'un débit faible peut signaler une pression capacitaire, tandis qu'un débit faible avec un CQI faible oriente davantage vers un problème de qualité radio, de couverture ou d'interférence.
+
+NetVision répond à ce besoin par une interface locale orientée ingénieur radio. Elle fournit une lecture nationale et régionale du réseau, une analyse des heures critiques, une inspection QoS au niveau cellule, puis un espace d'action permettant de simuler des corrections possibles. Le produit observé n'est pas un simple tableau de démonstration : il inclut des routes API, un modèle de données runtime, des contrôles de robustesse, un mode administrateur et une file de jobs pour les simulations.
+
+Ce rapport décrit la solution réellement présente dans le dépôt et vérifiée localement. Les fonctionnalités non finalisées ou dépendantes de services optionnels sont signalées explicitement.
+
+\chapter{Contexte général et problématique}
+\section{Contexte du projet}
+Les réseaux mobiles tunisiens couvrent un territoire hétérogène composé de zones urbaines denses, de zones périurbaines et de délégations à charge plus variable. Dans ce contexte, la supervision RAN ne peut pas se limiter à des courbes KPI isolées. Elle doit permettre de localiser les zones affectées, de comprendre les causes probables et de prioriser les actions techniques.
+
+NetVision vise ce type d'usage. L'application combine une carte administrative, des cellules radio géolocalisées, une chronologie horaire et des panels d'analyse. Elle est pensée pour un usage local-first : le tableau de bord continue à fonctionner sur les données runtime même si certains services optionnels sont indisponibles.
+
+\section{Problématique}
+L'ingénieur radio doit répondre rapidement à quatre questions :
+\begin{enumerate}[label=\arabic*.]
+    \item Où se situent les congestions ou les zones sous surveillance ?
+    \item Les problèmes sont-ils ponctuels ou liés à des heures critiques récurrentes ?
+    \item Les KPI indiquent-ils une pression capacitaire, une qualité radio dégradée ou une charge acceptable ?
+    \item Quelle action opérationnelle peut être testée avant décision ?
+\end{enumerate}
+
+Sans un outil intégré, ces questions nécessitent souvent plusieurs exports, cartes et scripts. NetVision cherche à réduire cette fragmentation.
+
+\section{Objectifs}
+Les objectifs fonctionnels constatés sont les suivants :
+\begin{itemize}
+    \item visualiser l'état réseau à l'échelle nationale, gouvernorat, délégation et cellule ;
+    \item suivre les tranches horaires et les variations de charge ;
+    \item afficher des KPI pratiques : PRB, débit, CQI, utilisateurs actifs, TA et santé ;
+    \item rechercher et sélectionner une cellule comme \texttt{TN1158\_c01} ;
+    \item accéder au parcours qualité radio puis action cellule ;
+    \item lancer des simulations asynchrones lorsque les préconditions sont satisfaites ;
+    \item réserver les outils de données, diagnostics et exports au mode administrateur.
+\end{itemize}
+
+\section{Solution proposée}
+La solution proposée est une application web Next.js exécutée localement. Le coeur de l'expérience est le cockpit opérateur. Les données sont lues depuis \texttt{runtime\_data} ou \texttt{runtime\_data\_mock}, normalisées côté frontend, puis agrégées dans des panels et une carte MapLibre.
+
+Les services complémentaires sont séparés :
+\begin{itemize}
+    \item FastAPI fournit un moteur de recommandations déterministes et des exports ;
+    \item Redis/BullMQ gère les jobs asynchrones ;
+    \item ns-3 via WSL fournit un moteur expérimental de simulation \emph{what-if}.
+\end{itemize}
+
+\section{Périmètre réel et limites}
+Le périmètre réel couvre la supervision, la lecture QoS, l'import/export administrateur, les contrôles de santé et la simulation asynchrone. Les limites principales sont la dépendance à la qualité des données d'entrée, le caractère encore approximatif des simulations radio, l'absence d'authentification de production complète dans l'environnement local et la nécessité de calibrer davantage les résultats ns-3 avant tout usage décisionnel strict.
+
+\chapter{Fondements théoriques RAN}
+\section{Cellule, site et secteur}
+Un site radio regroupe généralement plusieurs secteurs. Chaque secteur correspond à une cellule logique orientée par un azimut, une bande de fréquence et des paramètres radio. Dans NetVision, l'entité centrale d'action est la cellule, car elle possède un nom, une localisation, un site, une bande, un azimut et des KPI observés.
+
+\section{PRB Load}
+Le PRB Load mesure l'utilisation des ressources radio disponibles. Un PRB élevé indique une charge importante, mais il ne suffit pas à conclure à une mauvaise QoS. Il doit être croisé avec le débit, le CQI et le nombre d'utilisateurs.
+
+\section{Débit}
+Le débit reflète la capacité utile perçue. Un débit faible avec un PRB élevé et un CQI acceptable oriente vers une pression capacitaire. Un débit faible avec un CQI faible suggère plutôt une qualité radio dégradée, une couverture insuffisante ou une interférence.
+
+\section{CQI}
+Le CQI indique la qualité du lien radio. Un CQI faible réduit l'efficacité spectrale et peut dégrader le débit même lorsque la charge n'est pas extrême. NetVision utilise le CQI comme indice de diagnostic radio, pas comme unique verdict.
+
+\section{Utilisateurs actifs et Timing Advance}
+Les utilisateurs actifs renseignent la demande instantanée. Le Timing Advance aide à interpréter la distance approximative des terminaux et peut contribuer à détecter des effets de bord de cellule ou de couverture étendue.
+
+\section{Heure critique et congestion récurrente}
+Une heure critique correspond à une période où la charge, le nombre d'utilisateurs ou le taux de congestion atteignent un maximum. Une congestion récurrente aux heures de pointe indique un problème plus structurel qu'un incident isolé.
+
+\section{Diagnostic multi-KPI}
+Le diagnostic retenu par NetVision suit une logique multi-indicateurs :
+\begin{itemize}
+    \item PRB élevé, débit faible, CQI acceptable : congestion capacitaire probable ;
+    \item PRB élevé, débit faible, CQI faible : qualité radio ou interférence probable ;
+    \item PRB élevé, débit et CQI corrects : charge élevée mais acceptable ;
+    \item données absentes ou incohérentes : diagnostic insuffisant.
+\end{itemize}
+
+\chapter{Spécification et conception}
+\section{Acteurs}
+Le premier acteur est l'ingénieur radio ou NOC qui consulte l'état réseau, sélectionne une cellule et évalue une action. Le second acteur est l'administrateur local qui gère le mode de données, l'import, l'export, les diagnostics système et la qualité du référentiel.
+
+\section{Besoins fonctionnels}
+Les besoins fonctionnels sont synthétisés dans le tableau \ref{tab:besoins-fonctionnels}.
+
+\begin{table}[H]
+\centering
+\caption{Besoins fonctionnels couverts par NetVision}
+\label{tab:besoins-fonctionnels}
+\begin{tabularx}{\textwidth}{p{4cm}X}
+\toprule
+\textbf{Besoin} & \textbf{Réalisation observée} \\
+\midrule
+Vue réseau & Carte nationale, agrégats, tableaux de priorisation et légende de congestion. \\
+Heures critiques & Panel dédié avec profil 24h et zones à traiter selon la métrique sélectionnée. \\
+Qualité radio & KPI cellule, diagnostic multi-KPI et contexte site/délégation. \\
+Action cellule & Recommandation, paramètres d'action, fidélité de simulation et résultat avant/après. \\
+Administration & Mode \texttt{?admin=1}, qualité des données, import dry-run, exports et état système. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Besoins non fonctionnels}
+Les besoins non fonctionnels retenus sont la lisibilité opérateur, la disponibilité locale, la séparation entre services core et services optionnels, la validation des entrées, l'absence de fallback silencieux pour la simulation et la traçabilité des erreurs.
+
+\section{Architecture globale}
+L'architecture peut être résumée ainsi :
+\begin{lstlisting}
+Navigateur
+  -> Next.js / React
+  -> API routes Next.js
+  -> runtime_data ou runtime_data_mock
+  -> FastAPI optionnel pour recommandations
+  -> Redis/BullMQ + worker pour jobs
+  -> ns-3 via WSL pour simulation asynchrone
+\end{lstlisting}
+
+\section{Architecture frontend}
+Le frontend est porté par \texttt{pages/index.js}, qui charge dynamiquement \texttt{src/main.js}. Le cockpit assemble plusieurs composants : en-tête, rail d'onglets, fil d'ariane, chronologie, carte MapLibre et panels métier. Les onglets opérateur sont : Vue réseau, Heures critiques, Qualité radio et Action cellule. Les onglets Données et Admin sont visibles uniquement en mode administrateur.
+
+\section{Architecture backend}
+Les routes API Next.js constituent la couche backend principale du tableau de bord. Elles servent les données runtime, l'état des jobs, les exports, l'import dry-run, les profils d'import et l'état des services. Le backend FastAPI est présent comme service optionnel de recommandations et d'exports spécialisés.
+
+\section{Modèle de données}
+Le répertoire \texttt{runtime\_data} contient le référentiel réel local : \texttt{baseline.json}, \texttt{time\_index.json}, fichiers horaires dans \texttt{time\_data}, index administratif, graphes de voisinage et profils d'heures critiques. Le répertoire \texttt{runtime\_data\_mock} contient un jeu plus large utilisé pour les démonstrations et la QA.
+
+\begin{table}[H]
+\centering
+\caption{État des jeux runtime inspectés}
+\label{tab:runtime-data}
+\begin{tabularx}{\textwidth}{p{3.4cm}p{2.2cm}p{2.4cm}p{2.4cm}X}
+\toprule
+\textbf{Jeu} & \textbf{Cellules} & \textbf{Tranches} & \textbf{Délégations} & \textbf{Observation} \\
+\midrule
+\texttt{runtime\_data} & 792 & 24 & 263 & Données réelles locales sur une journée horaire. \\
+\texttt{runtime\_data\_mock} & 2 640 & 720 & 263 & Données mock sur 30 jours horaires, utilisées pour les captures. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\chapter{Réalisation technique}
+\section{Chargement et agrégation des données}
+Le chargement initial lit les fichiers runtime via \texttt{/api/data/*}. Les cellules sont normalisées puis agrégées par gouvernorat, délégation et site. La chronologie charge les tranches horaires à la demande et met en cache les slices voisines afin de limiter les rechargements.
+
+\section{Carte et navigation}
+La carte utilise MapLibre avec des couches administratives et des points cellules. L'état de carte est dérivé du périmètre courant, de la métrique et des options d'affichage. Les interactions permettent de passer du national vers un gouvernorat, une délégation ou une cellule. En cas de problème WebGL, la solution prévoit une dégradation vers une lecture par tableau.
+
+\section{Panels opérateur}
+Le panel Vue réseau donne une synthèse nationale ou régionale. Le panel Heures critiques montre les fenêtres de charge. Le panel Qualité radio détaille les KPI d'une cellule. Le panel Action cellule propose une simulation asynchrone si la file de jobs, les données et le moteur sont disponibles.
+
+\section{Import, export et administration}
+Le mode administrateur expose les fonctions de qualité des données, d'import dry-run, de profils d'import, de restauration runtime et d'export. Les exports incluent des métadonnées d'audit comme le périmètre, le mode de données, la fenêtre temporelle et la date de génération.
+
+\section{Recommandation et simulation}
+Le moteur de recommandations est déterministe et fondé sur des règles. Il ne s'agit pas d'un modèle d'apprentissage automatique opaque. Les actions simulables alignées sur le périmètre actuel sont : ajustement d'inclinaison, rééquilibrage de charge, optimisation des voisins, ajout de porteuse et ajout de secteur.
+
+La simulation ns-3 est intégrée comme moteur principal des jobs asynchrones. Le flux réel est :
+\begin{lstlisting}
+UI -> /api/jobs -> Redis/BullMQ -> jobWorker.js
+   -> ns3JobAdapter.js -> build_scenario.mjs
+   -> WSL Ubuntu -> netvision-ran-sim
+   -> metrics.json -> ns3ResultAdapter.js -> resultat NetVision
+\end{lstlisting}
+
+Cette simulation reste un modèle \emph{what-if} V1. Elle compare un état avant/après dans un scénario local borné : cellule cible, voisinage, utilisateurs synthétiques et demande inférée. Les sorties sont rejetées si elles violent des garde-fous de plausibilité. La calibration avancée reste une perspective.
+
+\section{Solution de robustesse et de fiabilité}
+La robustesse du système repose sur plusieurs choix :
+\begin{itemize}
+    \item architecture local-first : le coeur du dashboard fonctionne avec les fichiers runtime ;
+    \item contrats explicites : \texttt{baseline.json}, \texttt{time\_index.json}, fichiers horaires et index administratif ;
+    \item séparation core/optionnel : FastAPI, Redis/BullMQ et ns-3 sont vérifiés mais isolés du chargement principal ;
+    \item health checks : \texttt{/api/backend-health} et \texttt{/api/jobs-health} exposent l'état des services ;
+    \item garde-fous jobs : validation des actions, du moteur, des fichiers horaires et des préconditions cellule/action ;
+    \item qualité des données : rapprochement administratif, cellules appariées, ratio KPI et avertissements ;
+    \item distinction mock/réel : l'API \texttt{/api/data-mode} indique le mode actif ;
+    \item absence de fallback silencieux : une simulation ns-3 indisponible doit être signalée explicitement.
+\end{itemize}
+
+\chapter{Résultats et validation}
+\section{Captures de l'interface}
+Les figures suivantes proviennent de l'application exécutée localement sur \texttt{http://127.0.0.1:3000}. Le mode actif pendant la capture était \texttt{mock}.
+
+\FigureScreenshot{0.95}{screenshot_01_accueil_dashboard.png}{Vue principale du tableau de bord NetVision au chargement.}{fig:dashboard-main}
+
+La figure \ref{fig:dashboard-main} montre le cockpit opérateur avec les onglets principaux, la carte et les premiers indicateurs synthétiques.
+
+\FigureScreenshot{0.95}{screenshot_02_vue_nationale.png}{Vue réseau nationale avec carte, légende et synthèse KPI.}{fig:vue-nationale}
+
+La figure \ref{fig:vue-nationale} confirme la présence de la carte de Tunisie, des états radio et de la lecture nationale.
+
+\FigureScreenshot{0.95}{screenshot_03_heures_critiques.png}{Onglet Heures critiques et analyse des fenêtres de charge.}{fig:heures-critiques}
+
+\FigureScreenshot{0.95}{screenshot_04_selection_cellule_qos.png}{Sélection de la cellule \texttt{TN1158\_c01} et panel Qualité radio.}{fig:qos-cellule}
+
+La figure \ref{fig:qos-cellule} illustre le parcours voulu : recherche cellule, périmètre cellule, KPI et diagnostic pratique.
+
+\FigureScreenshot{0.95}{screenshot_05_action_cellule.png}{Espace Action cellule avec recommandation et paramètres de simulation.}{fig:action-cellule}
+
+\FigureScreenshot{0.95}{screenshot_06_admin_vue_reseau.png}{Mode administrateur activé par \texttt{?admin=1}.}{fig:admin-reseau}
+
+\FigureScreenshot{0.95}{screenshot_07_donnees_qualite_import_export.png}{Panel Données : qualité runtime, import et export.}{fig:data-quality}
+
+\FigureScreenshot{0.95}{screenshot_08_systeme_sante_services.png}{Panel Admin : état des services et diagnostics système.}{fig:system-health}
+
+\section{Validation technique}
+Les contrôles suivants ont été exécutés localement au moment de la rédaction.
+
+\begin{table}[H]
+\centering
+\caption{Synthèse de validation}
+\label{tab:validation}
+\begin{tabularx}{\textwidth}{p{4.4cm}p{3cm}X}
+\toprule
+\textbf{Contrôle} & \textbf{Résultat} & \textbf{Commentaire} \\
+\midrule
+Chargement dashboard & Réussi & \texttt{http://127.0.0.1:3000/} répond avec code 200. \\
+Mode de données & Réussi & \texttt{/api/data-mode} indique \texttt{mock}. \\
+Backend FastAPI & Réussi & \texttt{/api/backend-health} signale le backend disponible avec 792 cellules chargées. \\
+Redis & Réussi & \texttt{redis-cli} répond \texttt{PONG} sur les ports 6381 et 6379. \\
+File simulation/ns-3 & Réussi & \texttt{/api/jobs-health} indique Redis et ns-3 prêts. \\
+Contrats API & Réussi & \texttt{npm run test:contracts} passe avec 33 tests. \\
+Smoke core & Réussi & \texttt{npm run smoke:v2:core} passe avec 6 contrôles sur 6. \\
+Smoke simulation & Réussi & \texttt{npm run smoke:v2:sim} passe avec 4 contrôles sur 4, incluant les cinq actions ns-3. \\
+Prérequis ns-3 & Réussi & \texttt{npm run ns3:check} passe avec 7 contrôles sur 7. \\
+Build production & Réussi & \texttt{npm run build} compile l'application Next.js. \\
+Captures navigateur & Réussi & 8 captures réelles enregistrées dans le rapport. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Limites observées pendant la validation}
+La capture a été faite en mode \texttt{mock}, ce qui est adapté à la démonstration et aux tests d'ergonomie. Le mode réel existe avec 792 cellules et 24 tranches horaires, mais les figures du rapport reflètent le mode actif dans l'application. Les simulations ns-3 étaient disponibles dans l'environnement local ; néanmoins, leur précision radio dépend encore de la qualité du scénario, des métadonnées antenne et de la calibration.
+
+\chapter{Gestion du projet}
+\section{Méthodologie}
+Le projet a été conduit par itérations : clarification du parcours opérateur, nettoyage de l'interface, séparation admin/opérateur, renforcement des contrats API, migration progressive vers ns-3 et ajout de contrôles de robustesse.
+
+\section{Phases de travail}
+\begin{enumerate}[label=\arabic*.]
+    \item Structuration du cockpit autour du parcours ingénieur radio.
+    \item Normalisation des données runtime et de l'index administratif.
+    \item Amélioration de la carte et de la chronologie.
+    \item Ajout de la file de jobs Redis/BullMQ et des validations d'entrée.
+    \item Intégration ns-3 comme moteur asynchrone.
+    \item Ajout des panels administrateur, import/export et santé système.
+    \item Validation par tests de contrats, build et navigation réelle.
+\end{enumerate}
+
+\section{Difficultés rencontrées}
+Les principales difficultés concernent l'alignement entre les données radio et les frontières administratives, la gestion de la performance en lecture cartographique, la fiabilité des jobs asynchrones, la distinction entre fonctionnalités démonstratives et fonctionnalités réellement exploitables, ainsi que la tentation de présenter la simulation comme plus précise qu'elle ne l'est réellement.
+
+\section{Décisions techniques}
+Les décisions importantes sont les suivantes : garder une architecture locale sans Docker obligatoire, isoler FastAPI comme service optionnel, utiliser Redis/BullMQ pour les simulations longues, conserver les API Next.js comme façade principale, rendre les outils techniques visibles seulement en mode administrateur et documenter les limites de ns-3 comme un moteur \emph{what-if} à calibrer.
+
+\chapter{Limites et perspectives}
+\section{Limites actuelles}
+La solution dépend de fichiers runtime correctement générés. Les données antenne avancées, comme les hauteurs exactes, diagrammes réels, tilt effectif et paramètres de handover, ne sont pas toujours disponibles. Les simulations ns-3 utilisent donc des hypothèses et des utilisateurs synthétiques. L'import CSV est présent mais doit encore être durci pour un usage production complet. L'authentification locale est volontairement légère dans l'environnement de développement.
+
+\section{Perspectives}
+Les perspectives les plus pertinentes sont :
+\begin{itemize}
+    \item améliorer la calibration ns-3 par zone, bande et action ;
+    \item enrichir les profils busy-hour et les diagnostics de récurrence ;
+    \item ajouter des rapports PDF générés directement depuis l'application ;
+    \item renforcer les tests Playwright de parcours opérateur ;
+    \item industrialiser l'authentification, les logs d'audit et les limites de débit ;
+    \item exploiter des données antenne plus complètes pour rendre les simulations tilt et voisins plus réalistes.
+\end{itemize}
+
+\chapter{Conclusion générale}
+NetVision fournit un cockpit opérationnel pour comprendre l'état d'un réseau radio mobile, localiser les zones sensibles, analyser les KPI d'une cellule et évaluer des actions possibles. Sa contribution technique réside dans l'intégration d'un frontend cartographique, de données runtime locales, de routes API, d'un backend optionnel de recommandations, d'une file de jobs et d'un moteur ns-3 asynchrone.
+
+La contribution RAN est également claire : le projet ne réduit pas la congestion à un seul indicateur. Il combine PRB, débit, CQI, utilisateurs actifs, TA et récurrence temporelle pour produire une lecture plus utile à l'ingénieur radio. La solution actuelle est déjà exploitable pour l'exploration, la démonstration technique et l'aide à la décision locale. Elle doit toutefois poursuivre son travail de calibration, de validation terrain et de durcissement production avant d'être considérée comme un jumeau numérique radio complet.
+
+\appendix
+\chapter{Commandes de reproduction}
+\begin{lstlisting}
+npm install
+npm run dev
+npm run backend
+npm run worker
+npm run test:contracts
+npm run build
+npm run ns3:check
+\end{lstlisting}
+
+\chapter{Fichiers principaux inspectés}
+\begin{longtable}{p{5cm}p{9cm}}
+\toprule
+\textbf{Fichier ou dossier} & \textbf{Rôle} \\
+\midrule
+\texttt{pages/index.js} & Point d'entrée Next.js du dashboard. \\
+\texttt{src/main.js} & Composition principale du cockpit opérateur. \\
+\texttt{src/components/} & Composants UI : carte, panels, chronologie, KPI. \\
+\texttt{src/admin/} & Agrégations, recherche, import et logique administrative. \\
+\texttt{pages/api/} & Routes API Next.js pour données, jobs, santé et exports. \\
+\texttt{backend/} & Service FastAPI et règles de recommandations. \\
+\texttt{job-workers/} & Worker BullMQ et suivi SQLite des jobs. \\
+\texttt{simulation/ns3/} & Adaptateur, générateur de scénario et runner ns-3. \\
+\texttt{runtime\_data/} & Données runtime réelles locales. \\
+\texttt{runtime\_data\_mock/} & Données mock étendues pour QA et démonstration. \\
+\bottomrule
+\end{longtable}
+
+\end{document}

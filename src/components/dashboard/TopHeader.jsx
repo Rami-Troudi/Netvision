@@ -1,4 +1,4 @@
-export default function TopHeader({
+﻿export default function TopHeader({
   metricMode,
   metricModes,
   onMetricModeChange,

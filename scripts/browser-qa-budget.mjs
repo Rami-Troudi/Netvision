@@ -1,8 +1,9 @@
-import fs from 'fs/promises'
+﻿import fs from 'fs/promises'
 import path from 'path'
 import { chromium } from 'playwright'
 
 const BASE_URL = process.env.NEXT_BASE_URL || 'http://127.0.0.1:3000'
+const FALLBACK_BASE_URLS = process.env.NEXT_BASE_URL ? [] : ['http://127.0.0.1:3001']
 const OUT_DIR = path.resolve(process.cwd(), '.runtime', 'qa')
 const REPORT_PATH = path.resolve(OUT_DIR, 'browser-qa-budget.json')
 const CORE_429_PATHS = ['/api/data', '/api/peak-hours', '/api/recommend', '/api/jobs', '/api/jobs-health', '/api/forecast']
@@ -96,8 +97,8 @@ async function clickButtonContaining(page, fragments, timeoutMs = 30_000) {
 async function waitForDashboardData(page) {
   await page.waitForFunction(() => {
     const body = document.body.innerText || ''
-    const loading = body.includes('Chargement des donnees runtime') ||
-      body.includes('Chargement des données runtime')
+    const loading = body.includes('Chargement des données runtime') ||
+      body.includes('Chargement des donnees runtime')
     const hasTimeline = /\b[1-9]\d*\s+tranches\b/i.test(body)
     const hasDashboardShell = body.includes('Réseau mobile Tunisie') ||
       body.includes('Vue réseau') ||
@@ -113,6 +114,20 @@ async function failWithReport(browser, payload) {
   await browser.close()
   console.error(JSON.stringify(payload, null, 2))
   process.exit(1)
+}
+
+async function gotoRunningApp(page) {
+  const candidates = [BASE_URL, ...FALLBACK_BASE_URLS]
+  let lastError = null
+  for (const url of candidates) {
+    try {
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+      return url
+    } catch (err) {
+      lastError = err
+    }
+  }
+  throw lastError
 }
 
 async function main() {
@@ -132,7 +147,7 @@ async function main() {
   })
 
   const started = Date.now()
-  await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 90_000 })
+  const activeBaseUrl = await gotoRunningApp(page)
   await page.getByTestId('global-search-input').waitFor({ timeout: 60_000 })
   await waitForDashboardData(page)
   timings.initial_render_ms = Date.now() - started
@@ -142,17 +157,18 @@ async function main() {
   if (!searchResult.clicked) {
     await failWithReport(browser, {
       ok: false,
-      base_url: BASE_URL,
+      base_url: activeBaseUrl,
       error: searchResult.reason,
       debug_screenshot: searchResult.debug_screenshot,
       debug_text: searchResult.debug_text,
       checked_at: new Date().toISOString(),
     })
-  }  const prepareButton = await clickButtonContaining(page, ['simulation'])
+  }
+  const prepareButton = await clickButtonContaining(page, ['preparer simulation'])
   if (!prepareButton.clicked) {
     await failWithReport(browser, {
       ok: false,
-      base_url: BASE_URL,
+      base_url: activeBaseUrl,
       error: prepareButton.reason,
       debug_screenshot: prepareButton.debug_screenshot,
       debug_text: prepareButton.debug_text,
@@ -168,7 +184,7 @@ async function main() {
   if (!forecastTab.clicked) {
     await failWithReport(browser, {
       ok: false,
-      base_url: BASE_URL,
+      base_url: activeBaseUrl,
       error: forecastTab.reason,
       debug_screenshot: forecastTab.debug_screenshot,
       debug_text: forecastTab.debug_text,
@@ -180,10 +196,12 @@ async function main() {
     return body.includes('risque estime') ||
       body.includes('donnees temporelles insuffisantes') ||
       body.includes('prevision indicative') ||
+      body.includes('priorites reseau') ||
       body.includes('a traiter maintenant') ||
+      body.includes('signaux observes') ||
       body.includes('risque prochain horizon')
   }, null, { timeout: 30_000 })
-  if (await page.getByText(/Risque prochain horizon|Risque estim/i).isVisible().catch(() => false)) {
+  if (await page.getByText(/Risque indicatif prochain horizon|Risque estim/i).isVisible().catch(() => false)) {
     const firstForecastRow = page.locator('.site-table-card tbody tr').first()
     await firstForecastRow.click({ timeout: 30_000 })
     await page.getByRole('button', { name: /Ouvrir le dossier/i }).waitFor({ timeout: 30_000 })
@@ -212,7 +230,7 @@ async function main() {
     ok: blockingConsoleErrors.length === 0 &&
       blocking429.length === 0 &&
       (normalizedBody.includes('priorit') || normalizedBody.includes('dossier cellule') || normalizedBody.includes('simulation')) && normalizedBody.includes('tn1158_c01'),
-    base_url: BASE_URL,
+    base_url: activeBaseUrl,
     timings,
     console_errors: blockingConsoleErrors,
     tolerated_console_errors: tolerated429Errors,
@@ -234,3 +252,4 @@ main().catch((err) => {
   console.error(err)
   process.exit(1)
 })
+
