@@ -151,14 +151,14 @@ async function main() {
       checked_at: new Date().toISOString(),
     })
   }
-  await page.getByRole('button', { name: 'Ouvrir Action cellule' }).waitFor({ timeout: 30_000 })
+  await page.getByRole('button', { name: 'Préparer simulation' }).waitFor({ timeout: 30_000 })
   timings.search_to_cell_ms = Date.now() - searchStart
 
-  await page.getByRole('button', { name: 'Ouvrir Action cellule' }).click()
+  await page.getByRole('button', { name: 'Préparer simulation' }).click()
   await page.getByTestId('queue-simulation').waitFor({ timeout: 30_000 })
 
   const forecastStart = Date.now()
-  const forecastTab = await clickButtonContaining(page, ['Prévision QoS', 'Prevision QoS'])
+  const forecastTab = await clickButtonContaining(page, ['Priorit'])
   if (!forecastTab.clicked) {
     await failWithReport(browser, {
       ok: false,
@@ -173,12 +173,14 @@ async function main() {
     const body = (document.body.innerText || '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase()
     return body.includes('risque estime') ||
       body.includes('donnees temporelles insuffisantes') ||
-      body.includes('prevision indicative')
+      body.includes('prevision indicative') ||
+      body.includes('a traiter maintenant') ||
+      body.includes('risque prochain horizon')
   }, null, { timeout: 30_000 })
-  if (await page.getByText(/Risque estim/i).isVisible().catch(() => false)) {
+  if (await page.getByText(/Risque prochain horizon|Risque estim/i).isVisible().catch(() => false)) {
     const firstForecastRow = page.locator('.site-table-card tbody tr').first()
     await firstForecastRow.click({ timeout: 30_000 })
-    await page.getByRole('button', { name: /Ouvrir Qualit/i }).waitFor({ timeout: 30_000 })
+    await page.getByRole('button', { name: /Ouvrir le dossier/i }).waitFor({ timeout: 30_000 })
   }
   timings.forecast_open_ms = Date.now() - forecastStart
 
@@ -203,8 +205,7 @@ async function main() {
   const result = {
     ok: blockingConsoleErrors.length === 0 &&
       blocking429.length === 0 &&
-      normalizedBody.includes('prevision') &&
-      normalizedBody.includes('tn1158_c01'),
+      (normalizedBody.includes('priorit') || normalizedBody.includes('dossier cellule') || normalizedBody.includes('simulation')) && normalizedBody.includes('tn1158_c01'),
     base_url: BASE_URL,
     timings,
     console_errors: blockingConsoleErrors,

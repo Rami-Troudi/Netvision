@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react'
 import { fetchJson } from '../admin/adminData.js'
 
 export function buildSystemEndpointChecks({ adminToolsEnabled = false, activeTab = 'overview', hasActiveSimulationJob = false } = {}) {
-  const shouldCheckAdminHealth = Boolean(adminToolsEnabled || activeTab === 'system')
-  const shouldCheckJobsHealth = Boolean(adminToolsEnabled || activeTab === 'operations' || hasActiveSimulationJob)
+  const shouldCheckAdminHealth = Boolean(adminToolsEnabled || activeTab === 'services')
+  const shouldCheckJobsHealth = Boolean(adminToolsEnabled || activeTab === 'simulation' || hasActiveSimulationJob)
   const checks = []
   if (shouldCheckAdminHealth) {
     checks.push({ name: 'data', url: '/api/data/stats.json' })

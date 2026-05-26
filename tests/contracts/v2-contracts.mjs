@@ -183,7 +183,7 @@ test('deduplicates site search entries while keeping one result per cell', () =>
 
 test('limits system health polling to admin or simulation contexts', () => {
   assert.deepEqual(buildSystemEndpointChecks({ adminToolsEnabled: false, activeTab: 'overview', hasActiveSimulationJob: false }).map((item) => item.name), [])
-  assert.deepEqual(buildSystemEndpointChecks({ adminToolsEnabled: false, activeTab: 'operations', hasActiveSimulationJob: false }).map((item) => item.name), ['jobsHealth'])
+  assert.deepEqual(buildSystemEndpointChecks({ adminToolsEnabled: false, activeTab: 'simulation', hasActiveSimulationJob: false }).map((item) => item.name), ['jobsHealth'])
   assert.deepEqual(buildSystemEndpointChecks({ adminToolsEnabled: false, activeTab: 'overview', hasActiveSimulationJob: true }).map((item) => item.name), ['jobsHealth'])
-  assert.deepEqual(buildSystemEndpointChecks({ adminToolsEnabled: true, activeTab: 'system', hasActiveSimulationJob: false }).map((item) => item.name), ['data', 'backend', 'jobsHealth'])
+  assert.deepEqual(buildSystemEndpointChecks({ adminToolsEnabled: true, activeTab: 'services', hasActiveSimulationJob: false }).map((item) => item.name), ['data', 'backend', 'jobsHealth'])
 })

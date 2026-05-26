@@ -15,14 +15,57 @@ import { confidenceLabelFr } from '../../analytics/qosInsightNarratives.mjs'
 
 export default function CockpitPanel(props) {
   const { activeTab, adminToolsEnabled } = props
-  if (activeTab === 'peak-hours') return <PeakHoursPanel {...props} />
-  if (activeTab === 'forecast') return <ForecastPanel {...props} />
-  if (activeTab === 'qos') return <QosPanel {...props} />
-  if (activeTab === 'operations') return <OperationsPanel {...props} />
-  if (adminToolsEnabled && activeTab === 'analytics') return <AnalyticsPanel {...props} />
+  if (activeTab === 'priorities') return <PrioritiesPanel {...props} />
+  if (activeTab === 'cell-dossier') return <CellDossierPanel {...props} />
+  if (activeTab === 'simulation') return <SimulationPanel {...props} />
   if (adminToolsEnabled && activeTab === 'data') return <DataPanel {...props} />
-  if (adminToolsEnabled && activeTab === 'system') return <SystemPanel {...props} />
+  if (adminToolsEnabled && activeTab === 'services') return <SystemPanel {...props} />
+  if (adminToolsEnabled && activeTab === 'validation') return <ValidationPanel {...props} />
+  if (adminToolsEnabled && activeTab === 'configuration') return <ConfigurationPanel {...props} />
   return <OverviewPanel {...props} />
+}
+
+function PrioritiesPanel(props) {
+  const { alerts = [], peakRows = [], forecastState = {}, onSelectCell, onPeakRowSelect, onTabChange } = props
+  const forecastRows = Array.isArray(forecastState?.rows) ? forecastState.rows : []
+  return <section className="panel-shell cockpit-panel">
+    <div className="panel-heading"><div><p>Priorités</p><h1>Priorités réseau</h1></div><StatusBadge status="watch" /></div>
+    <div className="empty-state" role="note">Cellules et zones à surveiller selon les KPI, les heures critiques et le risque prochain horizon.</div>
+    <div className="kpi-grid compact">
+      <KpiCard label="Critiques maintenant" value={alerts.length} />
+      <KpiCard label="Risque prochain horizon" value={forecastRows.length} />
+      <KpiCard label="Heures critiques récurrentes" value={peakRows.length} />
+      <KpiCard label="Confiance" value={confidenceLabelFr(forecastState?.summary?.confidence)} />
+    </div>
+    <div className="site-table-card"><div className="section-title">À traiter maintenant</div><table><tbody>{alerts.slice(0, 8).map((cell) => <tr key={cell.cell_name} onClick={() => onSelectCell?.(cell.cell_name, { activeTab: 'cell-dossier' })}><td>{cell.cell_name}</td><td>{stateLabel(getCellState(cell))}</td><td>{formatMetric(cell.prb_load)}%</td></tr>)}</tbody></table></div>
+    <div className="site-table-card"><div className="section-title">Risque prochain horizon</div>{forecastRows.length ? <table><tbody>{forecastRows.slice(0, 8).map((row) => <tr key={row.cell_name} onClick={() => onSelectCell?.(row.cell_name, { activeTab: 'cell-dossier' })}><td>{row.cell_name}</td><td>{row.predicted_issue}</td><td>{row.risk_score}</td></tr>)}</tbody></table> : <div className="empty-state">Aucun risque forecast disponible dans ce périmètre.</div>}</div>
+    <div className="site-table-card"><div className="section-title">Heures critiques</div>{peakRows.length ? <table><tbody>{peakRows.slice(0, 8).map((row) => <tr key={`${row.group_by}:${row.id}`} onClick={() => onPeakRowSelect?.(row)}><td>{row.name}</td><td>{row.peak_hour || '-'}</td><td>{formatMetric(row.avg_prb_at_peak)}%</td></tr>)}</tbody></table> : <div className="empty-state">Aucune heure critique détectée pour ce périmètre.</div>}</div>
+    <div className="site-table-card">
+      <div className="section-title">Pourquoi c&apos;est prioritaire</div>
+      <ul className="compact-list">
+        <li>Signaux observés: pression PRB, débit, CQI et charge utilisateurs.</li>
+        <li>À vérifier maintenant: cellule touchée, voisinage, fenêtre horaire récurrente.</li>
+      </ul>
+      <button className="primary-cta" type="button" onClick={() => onTabChange?.('cell-dossier')}>Ouvrir le dossier</button>
+    </div>
+  </section>
+}
+
+function CellDossierPanel(props) {
+  const { selectedCell, alerts = [], onSelectCell, onTabChange } = props
+  if (!selectedCell) {
+    return <section className="panel-shell cockpit-panel">
+      <div className="panel-heading"><div><p>Dossier cellule</p><h1>Sélectionner une cellule</h1></div><StatusBadge status="watch" /></div>
+      <div className="empty-state" role="note">Sélectionnez une cellule depuis la carte, la recherche ou les priorités.</div>
+      {alerts.length ? <div className="site-table-card"><div className="section-title">À traiter maintenant</div><table><tbody>{alerts.slice(0, 8).map((cell) => <tr key={cell.cell_name} onClick={() => onSelectCell?.(cell.cell_name)}><td>{cell.cell_name}</td><td>{stateLabel(getCellState(cell))}</td><td>{formatMetric(cell.prb_load)}%</td></tr>)}</tbody></table></div> : null}
+      <button className="ghost-button" type="button" onClick={() => onTabChange?.('priorities')}>Voir les priorités</button>
+    </section>
+  }
+  return <QosPanel {...props} />
+}
+
+function SimulationPanel(props) {
+  return <OperationsPanel {...props} />
 }
 
 function ForecastPanel({ scope, selectedCell, onSelectCell, adminToolsEnabled, workerState, jobsHealth, onTabChange }) {
@@ -100,8 +143,8 @@ function ForecastPanel({ scope, selectedCell, onSelectCell, adminToolsEnabled, w
         <div className="diagnosis-evidence">{selectedRow.insight?.why_it_matters}</div>
       </div>
       <div className="export-actions">
-        <button className="primary-cta" type="button" onClick={() => onSelectCell?.(selectedRow.cell_name, { activeTab: 'qos' })}>Ouvrir Qualité radio</button>
-        {(selectedCell?.cell_name === selectedRow.cell_name && jobsHealth?.ready === true && workerState === 'ready') ? <button className="ghost-button" type="button" onClick={() => onTabChange?.('operations')}>Préparer Action cellule</button> : null}
+        <button className="primary-cta" type="button" onClick={() => onSelectCell?.(selectedRow.cell_name, { activeTab: 'cell-dossier' })}>Ouvrir le dossier</button>
+        {(selectedCell?.cell_name === selectedRow.cell_name && jobsHealth?.ready === true && workerState === 'ready') ? <button className="ghost-button" type="button" onClick={() => onTabChange?.('simulation')}>Préparer Action cellule</button> : null}
       </div>
       <div className="kpi-grid compact">
         <KpiCard label="PRB actuel" value={selectedRow.current_kpis?.prb_load || 0} unit="%" />
@@ -201,7 +244,7 @@ function QosPanel({ scope, summary, selectedCell, siteRows, scopedCells, filters
     return <ScopeQosPanel title={scope.governorateName} summary={summary} issue={issue} compliance={compliance} note="Sélectionnez une délégation pour afficher les sites et les cellules." sliceDelta={sliceDelta} />
   }
   if (selectedCell) {
-    return <CellQosPanel cell={selectedCell} currentTime={currentTime} workerState={workerState} sliceDelta={sliceDelta} onOpenOperations={() => onTabChange?.('operations')} />
+    return <CellQosPanel cell={selectedCell} currentTime={currentTime} workerState={workerState} sliceDelta={sliceDelta} onOpenOperations={() => onTabChange?.('simulation')} />
   }
   return <section className="panel-shell cockpit-panel"><div className="panel-heading"><div><p>Qualité radio</p><h1>{scope.delegationName || 'Délégation'}</h1></div><StatusBadge status={summary.status} /></div><SincePreviousCard delta={sliceDelta} compact /><ScopeKpis summary={summary} /><RanIssueBox issue={issue} /><ComplianceCards compliance={compliance} /><FilterBox filters={filters} onFilterChange={onFilterChange} bands={bands} /><div className="site-table-card"><div className="section-title">Sites de la délégation <span>{siteRows.length}</span></div>{siteRows.length ? <table><caption className="sr-only">État radio des sites</caption><thead><tr><th scope="col">État</th><th scope="col">Site</th><th scope="col">Cellule prioritaire</th><th scope="col">Cellules</th><th scope="col">PRB</th><th scope="col">Qualité</th></tr></thead><tbody>{siteRows.map((site) => <tr key={site.site_name} onClick={() => onSelectCell(site.worst_cell)}><td><span className="state-dot" style={{ background: site.state_color }} />{site.state_label}</td><td>{site.site_name}</td><td>{site.worst_cell}</td><td>{site.cells.length}</td><td>{formatMetric(site.avg_prb)}%</td><td>{formatMetric(site.avg_throughput)} Mbps / CQI {formatMetric(site.avg_cqi)}</td></tr>)}</tbody></table> : <div className="empty-state" role="note">Aucun actif radio rapproché dans cette délégation.</div>}</div></section>
 }
@@ -254,7 +297,7 @@ function CellQosPanel({ cell, currentTime, workerState, sliceDelta, onOpenOperat
   return <section className="panel-shell cockpit-panel">
     <div className="panel-heading">
       <div>
-        <p>Qualité radio</p>
+        <p>Dossier cellule</p>
         <h1>{cell.cell_name}</h1>
       </div>
       <StatusBadge status={state === 'critical' ? 'critical' : state === 'watch' ? 'watch' : 'stable'} />
@@ -274,10 +317,10 @@ function CellQosPanel({ cell, currentTime, workerState, sliceDelta, onOpenOperat
       <strong>Lecture KPI :</strong> {diagnoseCell(cell)}
     </div>
     <div className="next-action-card">
-      <strong>Action cellule prête</strong>
-      <p>Ouvrez Action cellule pour simuler une correction sur {cell.cell_name} a {currentTime?.timestamp || 'la tranche courante'}.</p>
+      <strong>Simulation prête</strong>
+      <p>Préparez une simulation sur {cell.cell_name} à {currentTime?.timestamp || 'la tranche courante'}.</p>
       <span className={workerState === 'ready' ? 'severity-low' : 'severity-medium'}>{workerState === 'ready' ? 'Simulation disponible' : 'Simulation indisponible'}</span>
-      <button type="button" className="primary-cta" onClick={onOpenOperations}>Ouvrir Action cellule</button>
+      <button type="button" className="primary-cta" onClick={onOpenOperations}>Préparer simulation</button>
     </div>
     <div className="site-table-card">
       <div className="section-title">Cell context</div>
@@ -294,7 +337,7 @@ function CellQosPanel({ cell, currentTime, workerState, sliceDelta, onOpenOperat
   </section>
 }
 
-function OperationsPanel({ selectedCell, currentTime, workerState, backendHealth, jobsHealth, onSelectCell, alerts, adminToolsEnabled }) {
+function OperationsPanel({ selectedCell, currentTime, workerState, backendHealth, jobsHealth, onSelectCell, alerts, adminToolsEnabled, onTabChange }) {
   const queueReady = workerState === 'ready'
   const simulationDetail = queueReady
     ? 'Simulation disponible'
@@ -302,7 +345,7 @@ function OperationsPanel({ selectedCell, currentTime, workerState, backendHealth
       ? (typeof workerState === 'string' && workerState !== 'unavailable' ? workerState : 'Simulation ns-3 indisponible: verifier WSL Ubuntu, ns-3 et Redis dans Admin.')
       : 'Simulation indisponible : verifier les services dans le mode Admin.'
   if (!selectedCell) {
-    return <section className="panel-shell cockpit-panel"><div className="panel-heading"><div><p>Action cellule</p><h1>Sélectionner une cellule</h1></div><StatusBadge status="watch" /></div><div className="empty-state" role="note">Recherchez une cellule ou cliquez un site dans Qualité radio pour ouvrir les propositions opérationnelles et les simulations.</div>{alerts?.length ? <div className="site-table-card"><div className="section-title">Cellules prioritaires</div><table><caption className="sr-only">Cellules à traiter</caption><tbody>{alerts.slice(0, 8).map((cell) => <tr key={cell.cell_name} onClick={() => onSelectCell?.(cell.cell_name)}><td>{cell.cell_name}</td><td>{stateLabel(getCellState(cell))}</td><td>{formatMetric(cell.prb_load)}%</td></tr>)}</tbody></table></div> : null}</section>
+    return <section className="panel-shell cockpit-panel"><div className="panel-heading"><div><p>Simulation</p><h1>Sélectionner une cellule</h1></div><StatusBadge status="watch" /></div><div className="empty-state" role="note">Sélectionnez une cellule avant de préparer une simulation.</div><button className="ghost-button" type="button" onClick={() => onTabChange?.('priorities')}>Voir les priorités</button>{alerts?.length ? <div className="site-table-card"><div className="section-title">Cellules prioritaires</div><table><caption className="sr-only">Cellules à traiter</caption><tbody>{alerts.slice(0, 8).map((cell) => <tr key={cell.cell_name} onClick={() => onSelectCell?.(cell.cell_name)}><td>{cell.cell_name}</td><td>{stateLabel(getCellState(cell))}</td><td>{formatMetric(cell.prb_load)}%</td></tr>)}</tbody></table></div> : null}</section>
   }
   return <CellOperationalPanel cell={selectedCell} currentTime={currentTime} queueReady={queueReady} queueDetail={simulationDetail} backendHealth={backendHealth} disabledActions={jobsHealth?.slo?.disabled_actions || []} />
 }
@@ -327,6 +370,34 @@ function SystemPanel({ backendHealth, workerState, data, endpointCoverage }) {
 }
 
 function Service({ name, ok, detail }) { return <div className="service-card"><span className={ok ? 'ok' : 'bad'} /> <strong>{name}</strong><em>{detail}</em></div> }
+
+function ValidationPanel() {
+  return <section className="panel-shell cockpit-panel">
+    <div className="panel-heading"><div><p>Validation</p><h1>Contrôles qualité</h1></div></div>
+    <div className="empty-state" role="note">Aucun rapport de validation chargé.</div>
+    <div className="site-table-card">
+      <div className="section-title">Commandes recommandées</div>
+      <ul className="compact-list">
+        <li><code>npm run test:contracts</code></li>
+        <li><code>npm run qa:browser</code></li>
+        <li><code>npm run ui:audit</code></li>
+        <li><code>npm run forecast:check</code></li>
+        <li><code>npm run ns3:check</code></li>
+      </ul>
+    </div>
+  </section>
+}
+
+function ConfigurationPanel({ dataMode, workerState }) {
+  return <section className="panel-shell cockpit-panel">
+    <div className="panel-heading"><div><p>Configuration</p><h1>Paramètres actifs</h1></div></div>
+    <div className="kpi-grid compact">
+      <KpiCard label="Mode données" value={dataMode || 'mock'} />
+      <KpiCard label="Simulation" value={workerState === 'ready' ? 'Disponible' : 'Indisponible'} />
+    </div>
+    <div className="empty-state" role="note">Les contrôles principaux restent disponibles dans l&apos;en-tête.</div>
+  </section>
+}
 
 function FilterBox({ filters, onFilterChange, bands }) {
   return <div className="filter-box"><div className="section-title">Filtres</div><div className="filter-pills">{['critical', 'watch', 'degraded', 'healthy', 'no_data', 'unmatched'].map((key) => <label key={key}><input type="checkbox" checked={Boolean(filters[key])} onChange={(e) => onFilterChange({ [key]: e.target.checked })} />{stateLabel(key)}</label>)}</div><div className="filter-ranges"><label>PRB min <input type="range" min="0" max="100" value={filters.minPrb} onChange={(e) => onFilterChange({ minPrb: Number(e.target.value) })} /> {filters.minPrb}%</label><label>PRB max <input type="range" min="0" max="100" value={filters.maxPrb} onChange={(e) => onFilterChange({ maxPrb: Number(e.target.value) })} /> {filters.maxPrb}%</label></div><div className="filter-pills band-pills">{bands.map((band) => <label key={band}><input type="checkbox" checked={Boolean(filters.bands?.[band])} onChange={(e) => onFilterChange({ bands: { ...filters.bands, [band]: e.target.checked } })} />Bande {band}</label>)}</div></div>

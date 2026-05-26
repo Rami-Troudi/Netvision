@@ -18,27 +18,27 @@ const CAMERA_SETTLE_MS = Number(process.env.UI_AUDIT_CAMERA_SETTLE_MS || 1800)
 const tasks = [
   { id: 'operator_01_home_network_view', mode: 'operator', tab: 'Vue réseau', scope: 'national', description: "Vue d'accueil opérateur." },
   { id: 'operator_02_search_cell_results', mode: 'operator', tab: 'Vue réseau', scope: 'recherche', description: 'Recherche cellule visible.' },
-  { id: 'operator_03_selected_cell_qos', mode: 'operator', tab: 'Qualité radio', scope: 'cellule', description: 'Cellule sélectionnée avec KPI QoS.' },
-  { id: 'operator_04_peak_hours', mode: 'operator', tab: 'Heures critiques', scope: 'national/cellule', description: 'Vue heures critiques.' },
-  { id: 'operator_05_forecast_qos', mode: 'operator', tab: 'Prévision QoS', scope: 'national/cellule', description: 'Vue prévision QoS.' },
-  { id: 'operator_06_forecast_detail', mode: 'operator', tab: 'Prévision QoS', scope: 'cellule', description: 'Détail analyse assistée.' },
-  { id: 'operator_07_action_cellule_ready', mode: 'operator', tab: 'Action cellule', scope: 'cellule', description: 'Actions simulables et état faisabilité.' },
-  { id: 'operator_08_simulation_result_or_state', mode: 'operator', tab: 'Action cellule', scope: 'cellule', description: 'État résultat simulation ou indisponibilité.' },
-  { id: 'operator_09_map_governorate_scope', mode: 'operator', tab: 'Vue réseau', scope: 'gouvernorat', description: 'Carte en scope gouvernorat.' },
-  { id: 'operator_10_map_delegation_scope', mode: 'operator', tab: 'Vue réseau', scope: 'délégation', description: 'Carte en scope délégation.' },
-  { id: 'admin_01_admin_mode_home', mode: 'admin', tab: 'Vue réseau', scope: 'national', description: 'Accueil mode admin.' },
-  { id: 'admin_02_data_panel', mode: 'admin', tab: 'Données', scope: 'admin', description: 'Panneau données et qualité.' },
-  { id: 'admin_03_import_dry_run', mode: 'admin', tab: 'Données', scope: 'admin', description: 'Zone import dry-run.' },
-  { id: 'admin_04_export_controls', mode: 'admin', tab: 'Données', scope: 'admin', description: 'Contrôles export.' },
-  { id: 'admin_05_system_status', mode: 'admin', tab: 'Système', scope: 'admin', description: 'Santé des services.' },
-  { id: 'admin_06_forecast_debug', mode: 'admin', tab: 'Prévision QoS', scope: 'admin', description: 'Prévision avec détails techniques admin.' },
-  { id: 'admin_07_jobs_health_or_simulation_admin', mode: 'admin', tab: 'Système/Action cellule', scope: 'admin', description: 'État jobs/simulation admin.' },
+  { id: 'operator_03_priorities', mode: 'operator', tab: 'Priorités', scope: 'national/cellule', description: 'Vue priorités.' },
+  { id: 'operator_04_cell_dossier', mode: 'operator', tab: 'Dossier cellule', scope: 'cellule', description: 'Dossier cellule avec KPI et diagnostic.' },
+  { id: 'operator_05_simulation', mode: 'operator', tab: 'Simulation', scope: 'cellule', description: 'Simulation prête ou bloquée selon le contexte.' },
+  { id: 'operator_06_forecast_detail', mode: 'operator', tab: 'Priorités', scope: 'cellule', description: 'Détail des signaux observés.' },
+  { id: 'operator_07_action_cellule_ready', mode: 'operator', tab: 'Simulation', scope: 'cellule', description: 'Actions simulables et état de faisabilité.' },
+  { id: 'operator_08_simulation_result_or_state', mode: 'operator', tab: 'Simulation', scope: 'cellule', description: 'État résultat simulation ou indisponibilité.' },
+  { id: 'operator_06_governorate_scope', mode: 'operator', tab: 'Vue réseau', scope: 'gouvernorat', description: 'Carte en scope gouvernorat.' },
+  { id: 'operator_07_delegation_scope', mode: 'operator', tab: 'Vue réseau', scope: 'délégation', description: 'Carte en scope délégation.' },
+  { id: 'admin_01_data', mode: 'admin', tab: 'Vue réseau', scope: 'national', description: 'Accueil mode admin.' },
+  { id: 'admin_02_services', mode: 'admin', tab: 'Données', scope: 'admin', description: 'Panneau données et qualité.' },
+  { id: 'admin_03_validation', mode: 'admin', tab: 'Données', scope: 'admin', description: 'Zone import dry-run.' },
+  { id: 'admin_04_configuration', mode: 'admin', tab: 'Données', scope: 'admin', description: 'Contrôles export.' },
+  { id: 'admin_05_system_status', mode: 'admin', tab: 'Services', scope: 'admin', description: 'Santé des services.' },
+  { id: 'admin_06_forecast_debug', mode: 'admin', tab: 'Validation', scope: 'admin', description: 'Validation et détails techniques.' },
+  { id: 'admin_07_jobs_health_or_simulation_admin', mode: 'admin', tab: 'Services/Simulation', scope: 'admin', description: 'État jobs/simulation admin.' },
   { id: 'admin_08_map_layers_controls', mode: 'admin', tab: 'Vue réseau', scope: 'map-controls', description: 'Contrôles couches/métriques carte.' },
   { id: 'responsive_operator_tablet', mode: 'operator', tab: 'Vue réseau', scope: 'responsive-tablette', description: 'Vue tablette.' },
   { id: 'responsive_operator_mobile_or_narrow', mode: 'operator', tab: 'Vue réseau', scope: 'responsive-mobile', description: 'Vue mobile.' },
-  { id: 'state_no_cell_selected', mode: 'operator', tab: 'Action cellule', scope: 'aucune cellule', description: 'État sans cellule sélectionnée.' },
-  { id: 'state_forecast_insufficient_data', mode: 'operator', tab: 'Prévision QoS', scope: 'insuffisant', description: 'État données insuffisantes prévision.' },
-  { id: 'state_simulation_unavailable', mode: 'operator', tab: 'Action cellule', scope: 'indisponible', description: 'État indisponibilité simulation.' },
+  { id: 'state_no_cell_selected', mode: 'operator', tab: 'Simulation', scope: 'aucune cellule', description: 'État sans cellule sélectionnée.' },
+  { id: 'state_forecast_insufficient_data', mode: 'operator', tab: 'Priorités', scope: 'insuffisant', description: 'État données insuffisantes prévision.' },
+  { id: 'state_simulation_unavailable', mode: 'operator', tab: 'Simulation', scope: 'indisponible', description: 'État indisponibilité simulation.' },
 ]
 
 function cleanText(text) {
@@ -277,8 +277,8 @@ ${renderSection(operator)}
 ${renderSection(admin)}
 
 ## 4) Cartographie navigation actuelle
-- Onglets opérateur: Vue réseau, Heures critiques, Qualité radio, Action cellule, Prévision QoS.
-- Mode admin: Données, Système, diagnostics de services, import/export et détails techniques.
+- Onglets opérateur: Vue réseau, Priorités, Dossier cellule, Simulation.
+- Mode admin: Données, Services, Validation, Configuration.
 - Recherche: champ global qui cible gouvernorat, délégation, site ou cellule.
 - Carte: scope national, gouvernorat, délégation et cellule avec couches administratives et sites radio.
 
@@ -360,19 +360,19 @@ async function main() {
 
   const cellSelected = await findAndSelectCell(page)
   if (cellSelected) {
-    await clickTabIfExists(page, ['Qualité radio', 'Qualite radio'])
-    await capture(page, manifest, 'operator_03_selected_cell_qos', 'Cellule sélectionnée avec panneau QoS.', { map: true })
+    await clickTabIfExists(page, ['Priorit?s'])
+    await capture(page, manifest, 'operator_03_priorities', 'Cellule sélectionnée avec panneau QoS.', { map: true })
   } else {
-    skip(manifest, 'operator_03_selected_cell_qos', 'Impossible de sélectionner TN1158_c01 via recherche.')
+    skip(manifest, 'operator_03_priorities', 'Impossible de sélectionner TN1158_c01 via recherche.')
   }
 
-  await clickTabIfExists(page, ['Heures critiques'])
-  await capture(page, manifest, 'operator_04_peak_hours', 'État onglet heures critiques.')
+  await clickTabIfExists(page, ['Dossier cellule'])
+  await capture(page, manifest, 'operator_04_cell_dossier', 'État onglet heures critiques.')
 
-  await clickTabIfExists(page, ['Prévision QoS', 'Prevision QoS'])
+  await clickTabIfExists(page, ['Simulation'])
   await page.waitForTimeout(900)
   const forecastEmpty = await page.getByText(/Données temporelles insuffisantes/i).isVisible().catch(() => false)
-  await capture(page, manifest, 'operator_05_forecast_qos', forecastEmpty ? 'État données insuffisantes.' : 'Table prévision visible.')
+  await capture(page, manifest, 'operator_05_simulation', forecastEmpty ? 'État données insuffisantes.' : 'Table prévision visible.')
   if (forecastEmpty) {
     await capture(page, manifest, 'state_forecast_insufficient_data', 'Capture spécifique état insuffisant.')
   } else {
@@ -386,7 +386,7 @@ async function main() {
   }
 
   if (cellSelected) {
-    await clickTabIfExists(page, ['Action cellule'])
+    await clickTabIfExists(page, ['Simulation'])
     await capture(page, manifest, 'operator_07_action_cellule_ready', 'Panneau actions cellule.')
     await page.waitForTimeout(700)
     await capture(page, manifest, 'operator_08_simulation_result_or_state', 'État simulation (résultat, file ou blocage).')
@@ -398,21 +398,21 @@ async function main() {
   await clickTabIfExists(page, ['Vue réseau', 'Vue reseau'], { waitMap: true })
   const govSelected = await clickSearchResult(page, 'Tunis', (text) => text.includes('gouvernorat') && text.includes('tunis'))
   if (govSelected) {
-    await capture(page, manifest, 'operator_09_map_governorate_scope', 'Gouvernorat sélectionné via recherche, carte stabilisée.', { map: true })
+    await capture(page, manifest, 'operator_06_governorate_scope', 'Gouvernorat sélectionné via recherche, carte stabilisée.', { map: true })
   } else {
-    skip(manifest, 'operator_09_map_governorate_scope', 'Gouvernorat non sélectionnable via recherche.')
+    skip(manifest, 'operator_06_governorate_scope', 'Gouvernorat non sélectionnable via recherche.')
   }
   const delegSelected = await clickSearchResult(page, 'El Menzah', (text) => text.includes('délégation') || text.includes('delegation') || text.includes('el menzah'))
   if (delegSelected) {
-    await capture(page, manifest, 'operator_10_map_delegation_scope', 'Délégation sélectionnée via recherche, sites/cellules visibles si disponibles.', { map: true })
+    await capture(page, manifest, 'operator_07_delegation_scope', 'Délégation sélectionnée via recherche, sites/cellules visibles si disponibles.', { map: true })
   } else {
-    skip(manifest, 'operator_10_map_delegation_scope', 'Délégation non sélectionnable via recherche.')
+    skip(manifest, 'operator_07_delegation_scope', 'Délégation non sélectionnable via recherche.')
   }
 
   await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' })
   await page.getByTestId('global-search-input').waitFor({ timeout: 30_000 })
-  await clickTabIfExists(page, ['Action cellule'])
-  await capture(page, manifest, 'state_no_cell_selected', 'État Action cellule sans sélection.')
+  await clickTabIfExists(page, ['Simulation'])
+  await capture(page, manifest, 'state_no_cell_selected', 'État Simulation sans sélection.')
   if (await page.getByText(/Simulation indisponible|indisponible/i).isVisible().catch(() => false)) {
     await capture(page, manifest, 'state_simulation_unavailable', 'État indisponibilité visible.')
   } else {
@@ -420,18 +420,18 @@ async function main() {
   }
 
   await setRole(page, 'admin')
-  await capture(page, manifest, 'admin_01_admin_mode_home', 'Accueil admin après carte chargée.', { map: true, requiredMap: true })
+  await capture(page, manifest, 'admin_01_data', 'Accueil admin après carte chargée.', { map: true, requiredMap: true })
 
   await clickTabIfExists(page, ['Données', 'Donnees'])
-  await capture(page, manifest, 'admin_02_data_panel', 'Panneau Données.')
-  await capture(page, manifest, 'admin_03_import_dry_run', 'Zone import/dry-run visible si présente.')
-  await capture(page, manifest, 'admin_04_export_controls', 'Zone export visible si présente.')
+  await capture(page, manifest, 'admin_02_services', 'Panneau Données.')
+  await capture(page, manifest, 'admin_03_validation', 'Zone import/dry-run visible si présente.')
+  await capture(page, manifest, 'admin_04_configuration', 'Zone export visible si présente.')
 
-  await clickTabIfExists(page, ['Système', 'System'])
+  await clickTabIfExists(page, ['Services'])
   await capture(page, manifest, 'admin_05_system_status', 'État système/services.')
   await capture(page, manifest, 'admin_07_jobs_health_or_simulation_admin', 'Détails jobs/simulation admin.')
 
-  await clickTabIfExists(page, ['Prévision QoS', 'Prevision QoS'])
+  await clickTabIfExists(page, ['Simulation'])
   await page.waitForTimeout(900)
   await capture(page, manifest, 'admin_06_forecast_debug', 'Prévision avec métadonnées admin.')
 

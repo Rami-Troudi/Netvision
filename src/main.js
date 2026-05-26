@@ -14,6 +14,7 @@ import { DEFAULT_FILTERS, applyCellFilters, buildSiteSummaries, summarizeAlerts,
 import { buildAutoMapping, callImportWorker } from './admin/importWorker'
 import { DEFAULT_MAP_CONTROLS } from './utils/v2Contracts.mjs'
 import { getNetvisionRole, isAdminToolsEnabled, setNetvisionRole } from './utils/uiPolicy.mjs'
+import { normalizeTabId } from './utils/tabAliases.mjs'
 import { getRestorationFlags } from './utils/restorationFlags.mjs'
 import { useSystemEndpoints, usePeakHours } from './hooks/useDashboardData'
 
@@ -56,7 +57,7 @@ export default function NetVisionDashboard() {
   const pendingSliceIndexRef = useRef(null)
   const sliceCacheRef = useRef(new Map())
   useEffect(() => {
-    if (!adminToolsEnabled && ['analytics', 'data', 'system'].includes(activeTab)) setActiveTab('overview')
+    if (!adminToolsEnabled && ['data', 'services', 'validation', 'configuration'].includes(activeTab)) setActiveTab('overview')
   }, [adminToolsEnabled, activeTab])
 
   useEffect(() => {
@@ -92,14 +93,14 @@ export default function NetVisionDashboard() {
   useEffect(() => { localStorage.setItem('netvision.savedViews', JSON.stringify(savedViews)) }, [savedViews])
 
   useEffect(() => {
-    if (!restorationFlags.forecast || !['forecast', 'system'].includes(activeTab)) {
+    if (!restorationFlags.forecast || !['priorities', 'services', 'validation'].includes(activeTab)) {
       setForecastState({ available: false, rows: [], assumptions: [], confidence: 'low' })
       return
     }
     fetchJson('/api/forecast?limit=10').then((p) => setForecastState(p)).catch(() => setForecastState({ available: false, rows: [], reason: 'API forecast indisponible' }))
   }, [restorationFlags.forecast, activeTab])
   useEffect(() => {
-    if (!adminToolsEnabled || !restorationFlags.drift || !['forecast', 'system'].includes(activeTab)) {
+    if (!adminToolsEnabled || !restorationFlags.drift || !['priorities', 'services', 'validation'].includes(activeTab)) {
       setDriftState({ available: false, rows: [], summary: {} })
       return
     }
@@ -282,7 +283,7 @@ export default function NetVisionDashboard() {
   function selectGovernorate(raw, options = {}) {
     const gov = raw.gov_id ? raw : data?.registry?.governorates?.find((item) => item.gov_id === raw.id || item.gov_name === raw.name || item.gov_name === raw.gov_name)
     if (!gov) return
-    if (options.activeTab) setActiveTab(options.activeTab)
+    if (options.activeTab) setActiveTab(normalizeTabId(options.activeTab))
     else setActiveTab('overview')
     setScope({ ...initialAdminScope, level: 'governorate', governorateId: gov.gov_id, governorateName: gov.gov_name, transitionState: 'focusing-governorate' })
     window.setTimeout(() => setScope((prev) => prev.governorateId === gov.gov_id ? { ...prev, transitionState: 'idle' } : prev), 900)
@@ -291,8 +292,8 @@ export default function NetVisionDashboard() {
   function selectDelegation(raw, options = {}) {
     const deleg = raw.deleg_id ? raw : data?.registry?.delegations?.find((item) => item.deleg_id === raw.id || item.deleg_name === raw.name || item.deleg_name === raw.deleg_name)
     if (!deleg) return
-    if (options.activeTab) setActiveTab(options.activeTab)
-    else setActiveTab('qos')
+    if (options.activeTab) setActiveTab(normalizeTabId(options.activeTab))
+    else setActiveTab('cell-dossier')
     setScope({ ...initialAdminScope, level: 'delegation', governorateId: deleg.gov_id, governorateName: deleg.gov_name, delegationId: deleg.deleg_id, delegationName: deleg.deleg_name, transitionState: 'focusing-delegation' })
     window.setTimeout(() => setScope((prev) => prev.delegationId === deleg.deleg_id ? { ...prev, transitionState: 'idle' } : prev), 900)
   }
@@ -301,8 +302,8 @@ export default function NetVisionDashboard() {
     const cell = cells.find((item) => item.cell_name === cellName)
     if (!cell) return
     const admin = cell.admin || {}
-    if (options.activeTab) setActiveTab(options.activeTab)
-    else setActiveTab('qos')
+    if (options.activeTab) setActiveTab(normalizeTabId(options.activeTab))
+    else setActiveTab('cell-dossier')
     setScope({
       ...initialAdminScope,
       level: 'cell',
@@ -323,7 +324,7 @@ export default function NetVisionDashboard() {
   function restoreView(id) {
     const v = savedViews.find((x) => x.id === id)
     if (!v) return
-    setScope(v.scope); setActiveTab(v.activeTab); setFilters(v.filters); loadTimeSlice(v.timeIndex || 0)
+    setScope(v.scope); setActiveTab(normalizeTabId(v.activeTab)); setFilters(v.filters); loadTimeSlice(v.timeIndex || 0)
   }
   function removeView(id) { setSavedViews((prev) => prev.filter((v) => v.id !== id)) }
   function pinSelectedCell() {
@@ -359,22 +360,22 @@ export default function NetVisionDashboard() {
     const next = role === 'admin' ? 'admin' : 'operator'
     setNetvisionRole(next)
     setInterfaceRole(next)
-    if (next !== 'admin' && ['analytics', 'data', 'system'].includes(activeTab)) setActiveTab('overview')
+    if (next !== 'admin' && ['data', 'services', 'validation', 'configuration'].includes(activeTab)) setActiveTab('overview')
   }
 
   function selectPeakRow(row) {
     if (!row) return
     if (row.group_by === 'governorate') {
       const gov = data?.registry?.governorates?.find((item) => item.gov_id === row.id)
-      if (gov) selectGovernorate(gov, { activeTab: 'peak-hours' })
+      if (gov) selectGovernorate(gov, { activeTab: 'priorities' })
     } else if (row.group_by === 'delegation') {
       const deleg = data?.registry?.delegations?.find((item) => item.deleg_id === row.id)
-      if (deleg) selectDelegation(deleg, { activeTab: 'peak-hours' })
+      if (deleg) selectDelegation(deleg, { activeTab: 'priorities' })
     } else if (row.group_by === 'site') {
       const cell = cells.find((item) => item.site_name === row.id && item.admin?.deleg_id === scope.delegationId)
-      if (cell) selectCell(cell.cell_name, { activeTab: 'peak-hours' })
+      if (cell) selectCell(cell.cell_name, { activeTab: 'priorities' })
     } else if (row.group_by === 'cell') {
-      selectCell(row.id, { activeTab: 'peak-hours' })
+      selectCell(row.id, { activeTab: 'priorities' })
     }
   }
 
@@ -543,7 +544,7 @@ export default function NetVisionDashboard() {
   let panel = null
   if (!data && !loadError) panel = <div className="panel-shell"><div className="loading-block">Chargement des donnees runtime NetVision et de la geographie administrative...</div></div>
   else if (loadError) panel = <div className="panel-shell"><div className="empty-state warning">{loadError}. Verifiez les fichiers de geographie administrative.</div></div>
-  else panel = <CockpitPanel activeTab={activeTab} onTabChange={setActiveTab} adminToolsEnabled={adminToolsEnabled} scope={scope} data={data} dataMode={dataMode} onDataModeChange={changeDataMode} nationalSummary={nationalSummary} governorateSummary={governorateSummary} delegationSummary={delegationSummary} summary={currentSummary} governorateRows={governorateRows} previousGovernorateRows={previousGovernorateRows} delegationRows={delegationRows} delegationVariationRows={delegationVariationRows} selectedGovernorate={selectedGovernorate} selectedDelegation={selectedDelegation} selectedCell={selectedCell} siteRows={siteRows} scopedCells={scopedCells} alerts={alerts} metric={metric} currentTime={data.currentTimeEntry} filters={filters} onFilterChange={updateFilters} bands={bands} onSelectGovernorate={selectGovernorate} onSelectDelegation={selectDelegation} onSelectCell={selectCell} reconciliation={data.reconciliation} peakRows={peakRows} peakPayload={peakPayload} busyMetric={busyMetric} onBusyMetricChange={setBusyMetric} onPeakRowSelect={selectPeakRow} backendHealth={backendHealth} workerState={workerState} jobsHealth={jobsHealth} importState={importState} endpointCoverage={endpointCoverage} onImportFile={handleImportFile} onImportTypeChange={(importType) => setImportState((prev) => ({ ...prev, importType }))} onImportProfileChange={(profileId) => setImportState((prev) => ({ ...prev, selectedProfileId: profileId }))} onRestoreRuntime={restoreRuntimeData} onExportJson={exportScopedJson} onExportReport={exportReport} whyCritical={whyCritical} dataQuality={dataQuality} sliceDelta={sliceDelta} forecastState={forecastState} driftState={driftState} watchlist={watchlist} savedViews={savedViews} onRestoreView={restoreView} onRemoveView={removeView} />
+  else panel = <CockpitPanel activeTab={normalizeTabId(activeTab)} onTabChange={(tab) => setActiveTab(normalizeTabId(tab))} adminToolsEnabled={adminToolsEnabled} scope={scope} data={data} dataMode={dataMode} onDataModeChange={changeDataMode} nationalSummary={nationalSummary} governorateSummary={governorateSummary} delegationSummary={delegationSummary} summary={currentSummary} governorateRows={governorateRows} previousGovernorateRows={previousGovernorateRows} delegationRows={delegationRows} delegationVariationRows={delegationVariationRows} selectedGovernorate={selectedGovernorate} selectedDelegation={selectedDelegation} selectedCell={selectedCell} siteRows={siteRows} scopedCells={scopedCells} alerts={alerts} metric={metric} currentTime={data.currentTimeEntry} filters={filters} onFilterChange={updateFilters} bands={bands} onSelectGovernorate={selectGovernorate} onSelectDelegation={selectDelegation} onSelectCell={selectCell} reconciliation={data.reconciliation} peakRows={peakRows} peakPayload={peakPayload} busyMetric={busyMetric} onBusyMetricChange={setBusyMetric} onPeakRowSelect={selectPeakRow} backendHealth={backendHealth} workerState={workerState} jobsHealth={jobsHealth} importState={importState} endpointCoverage={endpointCoverage} onImportFile={handleImportFile} onImportTypeChange={(importType) => setImportState((prev) => ({ ...prev, importType }))} onImportProfileChange={(profileId) => setImportState((prev) => ({ ...prev, selectedProfileId: profileId }))} onRestoreRuntime={restoreRuntimeData} onExportJson={exportScopedJson} onExportReport={exportReport} whyCritical={whyCritical} dataQuality={dataQuality} sliceDelta={sliceDelta} forecastState={forecastState} driftState={driftState} watchlist={watchlist} savedViews={savedViews} onRestoreView={restoreView} onRemoveView={removeView} />
 
   return (
     <div className={`app-shell ${focusMode ? 'focus-mode' : ''} ${theme === 'dark' ? 'theme-dark' : ''}`}>
@@ -551,9 +552,9 @@ export default function NetVisionDashboard() {
       <TopHeader metricMode={metricMode} metricModes={METRIC_MODES} onMetricModeChange={setMetricMode} query={query} onQueryChange={setQuery} searchResults={searchResults} onSearchSelect={selectSearchResult} dataMode={dataMode} onSecondaryPanel={setActiveTab} adminToolsEnabled={adminToolsEnabled} theme={theme} onToggleTheme={() => setTheme((t) => t === 'dark' ? 'light' : 'dark')} focusMode={focusMode} onToggleFocus={() => setFocusMode((v) => !v)} onRunDemo={() => setDemoStep(0)} role={interfaceRole} onRoleChange={changeInterfaceRole} showRoleSwitch={showRoleSwitch} />
       <div className="sr-only" aria-live="polite">{`Perimetre courant ${scope.level}${scope.governorateName ? `, ${scope.governorateName}` : ''}${scope.delegationName ? `, ${scope.delegationName}` : ''}${scope.selectedCellName ? `, ${scope.selectedCellName}` : ''}`}</div>
       <main id="main-content" className="command-layout cockpit-layout">
-        <CockpitRail activeTab={activeTab} onTabChange={setActiveTab} alertCount={alerts.length} tabs={visibleTabs} />
+        <CockpitRail activeTab={normalizeTabId(activeTab)} onTabChange={(tab) => setActiveTab(normalizeTabId(tab))} alertCount={alerts.length} tabs={visibleTabs} />
         <section className="map-column">
-          <Breadcrumb scope={scope} onNational={() => { setActiveTab('overview'); setScope(backToNational()) }} onGovernorate={() => { setActiveTab('overview'); setScope(backToGovernorate(scope)) }} onDelegation={() => { setActiveTab('qos'); setScope(backToDelegation(scope)) }} />
+          <Breadcrumb scope={scope} onNational={() => { setActiveTab('overview'); setScope(backToNational()) }} onGovernorate={() => { setActiveTab('overview'); setScope(backToGovernorate(scope)) }} onDelegation={() => { setActiveTab('cell-dossier'); setScope(backToDelegation(scope)) }} />
           <TimelineBar
             timeIndex={data?.timeIndex || []}
             currentIndex={timeIndex}

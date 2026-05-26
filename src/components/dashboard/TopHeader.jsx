@@ -46,7 +46,7 @@ export default function TopHeader({
         {adminToolsEnabled ? <button className="ghost-button" onClick={onToggleFocus}>{focusMode ? 'Sortir focus' : 'Mode focus'}</button> : null}
         {adminToolsEnabled ? <button className="ghost-button" onClick={onRunDemo}>Démo guidée</button> : null}
         {adminToolsEnabled ? <button data-testid="open-data-quality" className="ghost-button" onClick={() => onSecondaryPanel?.('data')}>Données</button> : null}
-        {adminToolsEnabled ? <button data-testid="open-system-status" className="ghost-button" onClick={() => onSecondaryPanel?.('system')}>Admin</button> : null}
+        {adminToolsEnabled ? <button data-testid="open-system-status" className="ghost-button" onClick={() => onSecondaryPanel?.('services')}>Admin</button> : null}
         {showRoleSwitch ? (
           <label className="role-switch">
             <span>Mode</span>
