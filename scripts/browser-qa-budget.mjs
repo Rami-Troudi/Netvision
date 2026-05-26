@@ -97,11 +97,9 @@ async function waitForDashboardData(page) {
   await page.waitForFunction(() => {
     const body = document.body.innerText || ''
     const loading = body.includes('Chargement des donnees runtime') ||
-      body.includes('Chargement des données runtime') ||
-      body.includes('Chargement des donnÃ©es runtime')
+      body.includes('Chargement des données runtime')
     const hasTimeline = /\b[1-9]\d*\s+tranches\b/i.test(body)
     const hasDashboardShell = body.includes('Réseau mobile Tunisie') ||
-      body.includes('RÃ©seau mobile Tunisie') ||
       body.includes('Vue réseau') ||
       body.includes('Vue reseau')
     return !loading && hasTimeline && hasDashboardShell

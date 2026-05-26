@@ -1,4 +1,4 @@
-export function isAdminToolsEnabled() {
+﻿export function isAdminToolsEnabled() {
   if (typeof window === 'undefined') return process.env.NEXT_PUBLIC_NETVISION_ADMIN_TOOLS === 'true'
   const params = new URLSearchParams(window.location.search)
   const role = window.localStorage?.getItem('netvision_role')
@@ -19,14 +19,14 @@ export function setNetvisionRole(role) {
 }
 
 export const OPERATOR_TABS = Object.freeze([
-  { id: 'overview', label: 'Vue r?seau', short: 'VR' },
-  { id: 'priorities', label: 'Priorit?s', short: 'PR' },
+  { id: 'overview', label: 'Vue réseau', short: 'VR' },
+  { id: 'priorities', label: 'Priorités', short: 'PR' },
   { id: 'cell-dossier', label: 'Dossier cellule', short: 'DC' },
   { id: 'simulation', label: 'Simulation', short: 'SM' },
 ])
 
 export const ADMIN_TABS = Object.freeze([
-  { id: 'data', label: 'Donn?es', short: 'DN' },
+  { id: 'data', label: 'Données', short: 'DN' },
   { id: 'services', label: 'Services', short: 'SV' },
   { id: 'validation', label: 'Validation', short: 'VL' },
   { id: 'configuration', label: 'Configuration', short: 'CF' },

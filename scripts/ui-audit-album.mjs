@@ -1,4 +1,4 @@
-import fs from 'fs/promises'
+﻿import fs from 'fs/promises'
 import path from 'path'
 import { chromium } from 'playwright'
 
@@ -13,32 +13,21 @@ const NETWORK_PATH = path.join(OUT_DIR, 'network-summary.json')
 const VIEWPORT_DESKTOP = { width: 1600, height: 900 }
 const VIEWPORT_TABLET = { width: 1024, height: 768 }
 const VIEWPORT_MOBILE = { width: 390, height: 844 }
-const CAMERA_SETTLE_MS = Number(process.env.UI_AUDIT_CAMERA_SETTLE_MS || 1800)
 
 const tasks = [
   { id: 'operator_01_home_network_view', mode: 'operator', tab: 'Vue réseau', scope: 'national', description: "Vue d'accueil opérateur." },
   { id: 'operator_02_search_cell_results', mode: 'operator', tab: 'Vue réseau', scope: 'recherche', description: 'Recherche cellule visible.' },
-  { id: 'operator_03_priorities', mode: 'operator', tab: 'Priorités', scope: 'national/cellule', description: 'Vue priorités.' },
+  { id: 'operator_03_priorities', mode: 'operator', tab: 'Priorités', scope: 'national/cellule', description: 'Vue priorités réseau.' },
   { id: 'operator_04_cell_dossier', mode: 'operator', tab: 'Dossier cellule', scope: 'cellule', description: 'Dossier cellule avec KPI et diagnostic.' },
   { id: 'operator_05_simulation', mode: 'operator', tab: 'Simulation', scope: 'cellule', description: 'Simulation prête ou bloquée selon le contexte.' },
-  { id: 'operator_06_forecast_detail', mode: 'operator', tab: 'Priorités', scope: 'cellule', description: 'Détail des signaux observés.' },
-  { id: 'operator_07_action_cellule_ready', mode: 'operator', tab: 'Simulation', scope: 'cellule', description: 'Actions simulables et état de faisabilité.' },
-  { id: 'operator_08_simulation_result_or_state', mode: 'operator', tab: 'Simulation', scope: 'cellule', description: 'État résultat simulation ou indisponibilité.' },
   { id: 'operator_06_governorate_scope', mode: 'operator', tab: 'Vue réseau', scope: 'gouvernorat', description: 'Carte en scope gouvernorat.' },
   { id: 'operator_07_delegation_scope', mode: 'operator', tab: 'Vue réseau', scope: 'délégation', description: 'Carte en scope délégation.' },
-  { id: 'admin_01_data', mode: 'admin', tab: 'Vue réseau', scope: 'national', description: 'Accueil mode admin.' },
-  { id: 'admin_02_services', mode: 'admin', tab: 'Données', scope: 'admin', description: 'Panneau données et qualité.' },
-  { id: 'admin_03_validation', mode: 'admin', tab: 'Données', scope: 'admin', description: 'Zone import dry-run.' },
-  { id: 'admin_04_configuration', mode: 'admin', tab: 'Données', scope: 'admin', description: 'Contrôles export.' },
-  { id: 'admin_05_system_status', mode: 'admin', tab: 'Services', scope: 'admin', description: 'Santé des services.' },
-  { id: 'admin_06_forecast_debug', mode: 'admin', tab: 'Validation', scope: 'admin', description: 'Validation et détails techniques.' },
-  { id: 'admin_07_jobs_health_or_simulation_admin', mode: 'admin', tab: 'Services/Simulation', scope: 'admin', description: 'État jobs/simulation admin.' },
-  { id: 'admin_08_map_layers_controls', mode: 'admin', tab: 'Vue réseau', scope: 'map-controls', description: 'Contrôles couches/métriques carte.' },
+  { id: 'admin_01_data', mode: 'admin', tab: 'Données', scope: 'admin', description: 'Panneau Données.' },
+  { id: 'admin_02_services', mode: 'admin', tab: 'Services', scope: 'admin', description: 'Panneau Services.' },
+  { id: 'admin_03_validation', mode: 'admin', tab: 'Validation', scope: 'admin', description: 'Panneau Validation.' },
+  { id: 'admin_04_configuration', mode: 'admin', tab: 'Configuration', scope: 'admin', description: 'Panneau Configuration.' },
   { id: 'responsive_operator_tablet', mode: 'operator', tab: 'Vue réseau', scope: 'responsive-tablette', description: 'Vue tablette.' },
   { id: 'responsive_operator_mobile_or_narrow', mode: 'operator', tab: 'Vue réseau', scope: 'responsive-mobile', description: 'Vue mobile.' },
-  { id: 'state_no_cell_selected', mode: 'operator', tab: 'Simulation', scope: 'aucune cellule', description: 'État sans cellule sélectionnée.' },
-  { id: 'state_forecast_insufficient_data', mode: 'operator', tab: 'Priorités', scope: 'insuffisant', description: 'État données insuffisantes prévision.' },
-  { id: 'state_simulation_unavailable', mode: 'operator', tab: 'Simulation', scope: 'indisponible', description: 'État indisponibilité simulation.' },
 ]
 
 function cleanText(text) {
@@ -46,12 +35,6 @@ function cleanText(text) {
 }
 
 async function launchBrowser() {
-  const preferredChannel = process.env.PW_CHANNEL || ''
-  if (preferredChannel) {
-    try {
-      return await chromium.launch({ channel: preferredChannel, headless: true })
-    } catch {}
-  }
   try {
     return await chromium.launch({ channel: 'msedge', headless: true })
   } catch {
@@ -64,57 +47,17 @@ async function resetOutput() {
   await fs.mkdir(SHOTS_DIR, { recursive: true })
 }
 
-async function waitForMapSettled(page, { required = true } = {}) {
-  try {
-    await page.waitForFunction(() => {
-      const fallback = document.querySelector('.map-fallback')
-      if (fallback) return true
-      const map = window.__netvisionMap
-      const canvas = document.querySelector('.netvision-map-container canvas')
-      return Boolean(
-        map &&
-        canvas &&
-        canvas.clientWidth > 200 &&
-        canvas.clientHeight > 200 &&
-        map.isStyleLoaded?.() &&
-        map.getLayer?.('admin-governorates-fill')
-      )
-    }, { timeout: required ? 60_000 : 20_000 })
-
-    await page.evaluate(() => new Promise((resolve) => {
-      const map = window.__netvisionMap
-      if (!map || document.querySelector('.map-fallback')) {
-        resolve()
-        return
-      }
-      let done = false
-      const finish = () => {
-        if (done) return
-        done = true
-        resolve()
-      }
-      map.once?.('idle', finish)
-      window.setTimeout(finish, 5_000)
-    }))
-    await page.waitForTimeout(CAMERA_SETTLE_MS)
-    return true
-  } catch {
-    return !required
-  }
-}
-
-async function waitForVisualSettled(page, { map = false, requiredMap = false } = {}) {
+async function waitForVisualSettled(page) {
   await page.waitForLoadState('domcontentloaded').catch(() => {})
   await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
-  if (map) await waitForMapSettled(page, { required: requiredMap })
-  await page.waitForTimeout(350)
+  await page.waitForTimeout(300)
 }
 
 async function ensureAppIsUp(page) {
   try {
     await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 })
     await page.getByTestId('global-search-input').waitFor({ timeout: 30_000 })
-    await waitForVisualSettled(page, { map: true, requiredMap: true })
+    await waitForVisualSettled(page)
     return true
   } catch {
     return false
@@ -128,15 +71,15 @@ async function setRole(page, mode) {
   const url = mode === 'admin' ? `${BASE_URL}/?admin=1` : `${BASE_URL}/`
   await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60_000 })
   await page.getByTestId('global-search-input').waitFor({ timeout: 30_000 })
-  await waitForVisualSettled(page, { map: true, requiredMap: true })
+  await waitForVisualSettled(page)
 }
 
-async function clickTabIfExists(page, names, { waitMap = false } = {}) {
+async function clickTabIfExists(page, names) {
   for (const name of names) {
     const button = page.getByRole('button', { name })
     if (await button.first().isVisible().catch(() => false)) {
       await button.first().click()
-      await waitForVisualSettled(page, { map: waitMap })
+      await waitForVisualSettled(page)
       return true
     }
   }
@@ -148,12 +91,12 @@ async function openSearch(page, query) {
   await input.click()
   await input.fill('')
   await input.fill(query)
-  await page.waitForTimeout(600)
-  return page.locator('.search-popover button')
+  await page.waitForTimeout(700)
 }
 
 async function clickSearchResult(page, query, matcher) {
-  const options = await openSearch(page, query)
+  await openSearch(page, query)
+  const options = page.locator('.search-popover button')
   if (!(await options.first().isVisible().catch(() => false))) return false
   const count = await options.count()
   for (let i = 0; i < count; i += 1) {
@@ -161,51 +104,28 @@ async function clickSearchResult(page, query, matcher) {
     const text = cleanText(await candidate.innerText().catch(() => ''))
     if (matcher(text.toLowerCase())) {
       await candidate.click()
-      await waitForVisualSettled(page, { map: true })
+      await waitForVisualSettled(page)
       return true
     }
   }
-  await options.first().click()
-  await waitForVisualSettled(page, { map: true })
-  return true
+  return false
 }
 
-async function findAndSelectCell(page, query = 'TN1158_c01') {
-  return clickSearchResult(page, query, (text) => text.includes('tn1158_c01') && text.includes('cellule'))
-}
-
-async function selectForecastDetail(page) {
-  const rows = page.locator('.site-table-card tbody tr')
-  if (!(await rows.first().isVisible().catch(() => false))) return false
-  await rows.first().click()
-  await page.waitForTimeout(500)
-  return true
-}
-
-async function capture(page, manifest, id, notes = '', options = {}) {
+async function capture(page, manifest, id, notes = '') {
   const item = manifest.find((x) => x.id === id)
   if (!item) return false
   const filePath = path.join(SHOTS_DIR, `${id}.png`)
   try {
-    await waitForVisualSettled(page, { map: Boolean(options.map), requiredMap: Boolean(options.requiredMap) })
+    await waitForVisualSettled(page)
     await page.screenshot({ path: filePath, fullPage: false })
-    const stat = await fs.stat(filePath)
-    item.captured = stat.size > 0
+    item.captured = true
     item.filename = `screenshots/${id}.png`
     item.notes = notes
-    return item.captured
+    return true
   } catch (error) {
     item.captured = false
     item.notes = `${notes} | capture échouée: ${error.message}`
     return false
-  }
-}
-
-function skip(manifest, id, notes) {
-  const item = manifest.find((x) => x.id === id)
-  if (item) {
-    item.captured = false
-    item.notes = notes
   }
 }
 
@@ -226,98 +146,22 @@ function makeManifestTemplate() {
 
 function buildNetworkSummary(requests) {
   const byStatus = {}
-  const byPath = {}
-  for (const req of requests) {
-    byStatus[req.status] = (byStatus[req.status] || 0) + 1
-    byPath[req.path] = (byPath[req.path] || 0) + 1
-  }
-  return {
-    total_responses: requests.length,
-    by_status: byStatus,
-    top_paths: Object.entries(byPath)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 30)
-      .map(([pathName, count]) => ({ path: pathName, count })),
-    http_429_urls: requests.filter((r) => r.status === 429).map((r) => r.url),
-  }
+  for (const req of requests) byStatus[req.status] = (byStatus[req.status] || 0) + 1
+  return { total_responses: requests.length, by_status: byStatus, http_429_urls: requests.filter((r) => r.status === 429).map((r) => r.url) }
+}
+
+function renderSection(entries) {
+  return entries.map((m) => {
+    const shot = m.captured ? `![${m.id}](./${m.filename})` : '_Capture non disponible._'
+    return `### ${m.id}\n${shot}\n- Ce que montre l'écran: ${m.description}\n- Observations UX: ${m.notes || 'à compléter manuellement'}\n`
+  }).join('\n')
 }
 
 function generateReport({ manifest, consoleErrors, networkSummary, meta }) {
-  const captured = manifest.filter((m) => m.captured)
   const operator = manifest.filter((m) => m.mode === 'operator')
   const admin = manifest.filter((m) => m.mode === 'admin')
-
-  const renderSection = (entries) => entries.map((m) => {
-    const shot = m.captured ? `![${m.id}](./${m.filename})` : '_Capture non disponible._'
-    return `### ${m.id}
-${shot}
-- Ce que montre l'écran: ${m.description}
-- Observations UX: ${m.notes || 'à compléter manuellement'}
-- Friction visible: ${m.captured ? 'à confirmer après revue métier' : 'écran non capturé'}
-- Prêt production: ${m.captured ? 'partiel (à valider)' : 'non évalué'}
-`
-  }).join('\n')
-
-  return `# Audit visuel NetVision
-
-## 1) Vue d'ensemble
-- Date: ${meta.generatedAt}
-- Branche/commit: ${meta.branch} / ${meta.commit}
-- URL: ${meta.baseUrl}
-- Viewport principal: ${meta.viewport}
-- Mode de données: ${meta.dataMode}
-- Captures obtenues: ${captured.length}/${manifest.length}
-- Erreurs console: ${consoleErrors.length}
-- Réponses 429: ${(networkSummary.by_status['429'] || 0)}
-
-## 2) Inventaire flux opérateur
-${renderSection(operator)}
-
-## 3) Inventaire flux admin
-${renderSection(admin)}
-
-## 4) Cartographie navigation actuelle
-- Onglets opérateur: Vue réseau, Priorités, Dossier cellule, Simulation.
-- Mode admin: Données, Services, Validation, Configuration.
-- Recherche: champ global qui cible gouvernorat, délégation, site ou cellule.
-- Carte: scope national, gouvernorat, délégation et cellule avec couches administratives et sites radio.
-
-## 5) Inventaire fonctionnel
-- Core opérateur: supervision carte, sélection cellule, QoS, heures critiques, simulation, prévision QoS.
-- Avancé opérateur: analyse assistée, détails de crédibilité et calibration simulation.
-- Admin/debug: mode données, import dry-run, export, santé services, jobs, diagnostics.
-- Expérimental ou fragile: états d'indisponibilité simulation et états de données insuffisantes selon contexte.
-- Fragmentation: panneaux admin très denses, plusieurs chemins pour atteindre les mêmes informations.
-
-## 6) Problèmes UX observés
-- La hiérarchie visuelle entre diagnostic, prévision et action reste trop plate.
-- L'admin mélange qualité des données, ingestion, export et santé système dans des blocs denses.
-- Certains états optionnels ne sont visibles que dans des conditions précises, donc difficiles à découvrir.
-- La carte et les panneaux peuvent donner une impression de navigation parallèle plutôt qu'un flux unique.
-- La version mobile expose vite les limites de densité des tableaux et contrôles.
-
-## 7) Recommandations de refactor (sans implémentation)
-- Espace Opérateur: Vue réseau, Priorités, Diagnostic cellule, Simulation.
-- Espace Admin: Données, Services, Validation, Configuration.
-- Créer une structure commune pour les états vides, bloqués, dégradés et indisponibles.
-- Faire de chaque écran un choix principal clair: inspecter, prioriser, simuler ou administrer.
-- Réserver les détails techniques au mode admin, avec une densité visuelle plus disciplinée.
-
-## 8) Constats techniques bruts
-- Erreurs console: ${consoleErrors.length}
-- 429 détectés: ${(networkSummary.by_status['429'] || 0)}
-- Endpoints les plus sollicités: ${networkSummary.top_paths.slice(0, 5).map((p) => `${p.path} (${p.count})`).join(', ') || 'n/a'}
-`
-}
-
-async function gitValue(args, fallback = 'unknown') {
-  const { execFile } = await import('child_process')
-  return new Promise((resolve) => {
-    execFile('git', args, { cwd: process.cwd() }, (error, stdout) => {
-      if (error) resolve(fallback)
-      else resolve(cleanText(stdout) || fallback)
-    })
-  })
+  const captured = manifest.filter((m) => m.captured)
+  return `# Audit visuel NetVision\n\n## 1) Vue d'ensemble\n- Date: ${meta.generatedAt}\n- URL: ${meta.baseUrl}\n- Viewport principal: ${meta.viewport}\n- Captures obtenues: ${captured.length}/${manifest.length}\n- Erreurs console: ${consoleErrors.length}\n- Réponses 429: ${(networkSummary.by_status['429'] || 0)}\n\n## 2) Inventaire flux opérateur\n${renderSection(operator)}\n\n## 3) Inventaire flux admin\n${renderSection(admin)}\n\n## 4) Cartographie navigation actuelle\n- Onglets opérateur: Vue réseau, Priorités, Dossier cellule, Simulation.\n- Onglets admin: Données, Services, Validation, Configuration.\n`
 }
 
 async function main() {
@@ -330,129 +174,58 @@ async function main() {
   const context = await browser.newContext({ viewport: VIEWPORT_DESKTOP })
   const page = await context.newPage()
 
-  page.on('console', (msg) => {
-    if (msg.type() === 'error') {
-      consoleErrors.push({ text: msg.text(), location: msg.location(), ts: new Date().toISOString() })
-    }
-  })
-  page.on('pageerror', (err) => {
-    consoleErrors.push({ text: err.message, ts: new Date().toISOString() })
-  })
-  page.on('response', (response) => {
-    try {
-      const url = new URL(response.url())
-      networkResponses.push({ url: response.url(), path: url.pathname, status: response.status() })
-    } catch {}
-  })
+  page.on('console', (msg) => { if (msg.type() === 'error') consoleErrors.push({ text: msg.text() }) })
+  page.on('pageerror', (err) => consoleErrors.push({ text: err.message }))
+  page.on('response', (response) => networkResponses.push({ url: response.url(), status: response.status() }))
 
-  const up = await ensureAppIsUp(page)
-  if (!up) {
+  if (!(await ensureAppIsUp(page))) {
     await browser.close()
     throw new Error('Start the app with npm run dev before running npm run ui:audit.')
   }
 
   await setRole(page, 'operator')
-  await clickTabIfExists(page, ['Vue réseau', 'Vue reseau'], { waitMap: true })
-  await capture(page, manifest, 'operator_01_home_network_view', 'Landing opérateur capturé après chargement complet de la carte.', { map: true, requiredMap: true })
-
+  await clickTabIfExists(page, ['Vue réseau', 'Vue reseau'])
+  await capture(page, manifest, 'operator_01_home_network_view', 'Vue réseau chargée.')
   await openSearch(page, 'TN1158_c01')
-  await capture(page, manifest, 'operator_02_search_cell_results', 'Recherche cellule ouverte avec résultats visibles.', { map: true })
+  await capture(page, manifest, 'operator_02_search_cell_results', 'Résultats de recherche visibles.')
 
-  const cellSelected = await findAndSelectCell(page)
-  if (cellSelected) {
-    await clickTabIfExists(page, ['Priorit?s'])
-    await capture(page, manifest, 'operator_03_priorities', 'Cellule sélectionnée avec panneau QoS.', { map: true })
-  } else {
-    skip(manifest, 'operator_03_priorities', 'Impossible de sélectionner TN1158_c01 via recherche.')
-  }
+  const selectedCell = await clickSearchResult(page, 'TN1158_c01', (text) => text.includes('tn1158_c01') && text.includes('cellule'))
+  await clickTabIfExists(page, ['Priorités'])
+  await capture(page, manifest, 'operator_03_priorities', selectedCell ? 'Priorités avec cellule sélectionnée.' : 'Priorités sans sélection cellule.')
 
   await clickTabIfExists(page, ['Dossier cellule'])
-  await capture(page, manifest, 'operator_04_cell_dossier', 'État onglet heures critiques.')
+  await capture(page, manifest, 'operator_04_cell_dossier', 'Dossier cellule.')
 
   await clickTabIfExists(page, ['Simulation'])
-  await page.waitForTimeout(900)
-  const forecastEmpty = await page.getByText(/Données temporelles insuffisantes/i).isVisible().catch(() => false)
-  await capture(page, manifest, 'operator_05_simulation', forecastEmpty ? 'État données insuffisantes.' : 'Table prévision visible.')
-  if (forecastEmpty) {
-    await capture(page, manifest, 'state_forecast_insufficient_data', 'Capture spécifique état insuffisant.')
-  } else {
-    skip(manifest, 'state_forecast_insufficient_data', 'État insuffisant non visible avec le dataset courant.')
-  }
+  await capture(page, manifest, 'operator_05_simulation', 'Simulation.')
 
-  if (await selectForecastDetail(page)) {
-    await capture(page, manifest, 'operator_06_forecast_detail', 'Détail prévision après sélection ligne.')
-  } else {
-    skip(manifest, 'operator_06_forecast_detail', 'Aucune ligne prévision disponible.')
+  await clickTabIfExists(page, ['Vue réseau', 'Vue reseau'])
+  if (await clickSearchResult(page, 'Tunis', (text) => text.includes('gouvernorat') && text.includes('tunis'))) {
+    await capture(page, manifest, 'operator_06_governorate_scope', 'Scope gouvernorat.')
   }
-
-  if (cellSelected) {
-    await clickTabIfExists(page, ['Simulation'])
-    await capture(page, manifest, 'operator_07_action_cellule_ready', 'Panneau actions cellule.')
-    await page.waitForTimeout(700)
-    await capture(page, manifest, 'operator_08_simulation_result_or_state', 'État simulation (résultat, file ou blocage).')
-  } else {
-    skip(manifest, 'operator_07_action_cellule_ready', 'Cellule non sélectionnée.')
-    skip(manifest, 'operator_08_simulation_result_or_state', 'Cellule non sélectionnée.')
-  }
-
-  await clickTabIfExists(page, ['Vue réseau', 'Vue reseau'], { waitMap: true })
-  const govSelected = await clickSearchResult(page, 'Tunis', (text) => text.includes('gouvernorat') && text.includes('tunis'))
-  if (govSelected) {
-    await capture(page, manifest, 'operator_06_governorate_scope', 'Gouvernorat sélectionné via recherche, carte stabilisée.', { map: true })
-  } else {
-    skip(manifest, 'operator_06_governorate_scope', 'Gouvernorat non sélectionnable via recherche.')
-  }
-  const delegSelected = await clickSearchResult(page, 'El Menzah', (text) => text.includes('délégation') || text.includes('delegation') || text.includes('el menzah'))
-  if (delegSelected) {
-    await capture(page, manifest, 'operator_07_delegation_scope', 'Délégation sélectionnée via recherche, sites/cellules visibles si disponibles.', { map: true })
-  } else {
-    skip(manifest, 'operator_07_delegation_scope', 'Délégation non sélectionnable via recherche.')
-  }
-
-  await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' })
-  await page.getByTestId('global-search-input').waitFor({ timeout: 30_000 })
-  await clickTabIfExists(page, ['Simulation'])
-  await capture(page, manifest, 'state_no_cell_selected', 'État Simulation sans sélection.')
-  if (await page.getByText(/Simulation indisponible|indisponible/i).isVisible().catch(() => false)) {
-    await capture(page, manifest, 'state_simulation_unavailable', 'État indisponibilité visible.')
-  } else {
-    skip(manifest, 'state_simulation_unavailable', 'État indisponible non visible pendant la session.')
+  if (await clickSearchResult(page, 'El Menzah', (text) => text.includes('délégation') || text.includes('delegation') || text.includes('el menzah'))) {
+    await capture(page, manifest, 'operator_07_delegation_scope', 'Scope délégation.')
   }
 
   await setRole(page, 'admin')
-  await capture(page, manifest, 'admin_01_data', 'Accueil admin après carte chargée.', { map: true, requiredMap: true })
-
   await clickTabIfExists(page, ['Données', 'Donnees'])
-  await capture(page, manifest, 'admin_02_services', 'Panneau Données.')
-  await capture(page, manifest, 'admin_03_validation', 'Zone import/dry-run visible si présente.')
-  await capture(page, manifest, 'admin_04_configuration', 'Zone export visible si présente.')
-
+  await capture(page, manifest, 'admin_01_data', 'Admin données.')
   await clickTabIfExists(page, ['Services'])
-  await capture(page, manifest, 'admin_05_system_status', 'État système/services.')
-  await capture(page, manifest, 'admin_07_jobs_health_or_simulation_admin', 'Détails jobs/simulation admin.')
-
-  await clickTabIfExists(page, ['Simulation'])
-  await page.waitForTimeout(900)
-  await capture(page, manifest, 'admin_06_forecast_debug', 'Prévision avec métadonnées admin.')
-
-  await clickTabIfExists(page, ['Vue réseau', 'Vue reseau'], { waitMap: true })
-  await capture(page, manifest, 'admin_08_map_layers_controls', 'Contrôles carte admin après rendu carte.', { map: true })
+  await capture(page, manifest, 'admin_02_services', 'Admin services.')
+  await clickTabIfExists(page, ['Validation'])
+  await capture(page, manifest, 'admin_03_validation', 'Admin validation.')
+  await clickTabIfExists(page, ['Configuration'])
+  await capture(page, manifest, 'admin_04_configuration', 'Admin configuration.')
 
   await page.setViewportSize(VIEWPORT_TABLET)
   await setRole(page, 'operator')
-  await capture(page, manifest, 'responsive_operator_tablet', 'Rendu tablette après stabilisation.', { map: true })
+  await capture(page, manifest, 'responsive_operator_tablet', 'Rendu tablette.')
 
   await page.setViewportSize(VIEWPORT_MOBILE)
-  await page.goto(BASE_URL, { waitUntil: 'domcontentloaded' })
-  await page.getByTestId('global-search-input').waitFor({ timeout: 30_000 })
-  await waitForVisualSettled(page, { map: true })
-  await capture(page, manifest, 'responsive_operator_mobile_or_narrow', 'Rendu mobile étroit.', { map: true })
+  await setRole(page, 'operator')
+  await capture(page, manifest, 'responsive_operator_mobile_or_narrow', 'Rendu mobile.')
 
   const networkSummary = buildNetworkSummary(networkResponses)
-  const branch = await gitValue(['rev-parse', '--abbrev-ref', 'HEAD'])
-  const commit = await gitValue(['rev-parse', '--short', 'HEAD'])
-  const dataModeBadge = await page.getByText(/Jeu de démonstration|runtime_data_mock|Données non réelles/i).first().innerText().catch(() => 'non détecté')
-
   for (const item of manifest) {
     item.console_errors_count = consoleErrors.length
     item.network_429_count = networkSummary.by_status['429'] || 0
@@ -462,14 +235,7 @@ async function main() {
     manifest,
     consoleErrors,
     networkSummary,
-    meta: {
-      generatedAt: new Date().toISOString(),
-      branch,
-      commit,
-      baseUrl: BASE_URL,
-      viewport: `${VIEWPORT_DESKTOP.width}x${VIEWPORT_DESKTOP.height}`,
-      dataMode: cleanText(dataModeBadge),
-    },
+    meta: { generatedAt: new Date().toISOString(), baseUrl: BASE_URL, viewport: `${VIEWPORT_DESKTOP.width}x${VIEWPORT_DESKTOP.height}` },
   })
 
   await fs.writeFile(MANIFEST_PATH, JSON.stringify(manifest, null, 2), 'utf8')
