@@ -707,3 +707,16 @@ tbody tr:hover { background: var(--orange-soft); }
   .spatial-preview-row { grid-template-columns: 1fr auto; }
   .spatial-preview-row span { grid-column: 1 / -1; }
 }
+
+/* Contextual map policy (desktop/tablette large) */
+.cockpit-layout.no-map-context { grid-template-columns: 132px minmax(0, 1fr); }
+.cockpit-layout.no-map-context .insight-column { grid-column: 2 / 3; }
+.map-density-compact .map-card { min-height: 430px; }
+.map-density-compact .map-legend,
+.map-density-compact .site-state-legend { transform: scale(.92); transform-origin: bottom left; }
+.detail-toggle summary { cursor: pointer; font-weight: 850; color: var(--ink); margin-bottom: 8px; }
+.detail-toggle[open] summary { color: var(--orange-strong); }
+
+@media (max-width: 1180px) {
+  .cockpit-layout.no-map-context { grid-template-columns: 1fr; }
+}

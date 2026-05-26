@@ -178,6 +178,15 @@ async function main() {
   timings.search_to_cell_ms = Date.now() - searchStart
 
   await page.getByTestId('queue-simulation').waitFor({ timeout: 30_000 })
+  const simMapCount = await page.locator('.map-card').count()
+  if (simMapCount !== 0) {
+    await failWithReport(browser, {
+      ok: false,
+      base_url: activeBaseUrl,
+      error: 'Map should be hidden in Simulation tab',
+      checked_at: new Date().toISOString(),
+    })
+  }
 
   const forecastStart = Date.now()
   const forecastTab = await clickButtonContaining(page, ['Priorit'])
@@ -201,6 +210,15 @@ async function main() {
       body.includes('signaux observes') ||
       body.includes('risque prochain horizon')
   }, null, { timeout: 30_000 })
+  const prioritiesMapCount = await page.locator('.map-card').count()
+  if (prioritiesMapCount < 1) {
+    await failWithReport(browser, {
+      ok: false,
+      base_url: activeBaseUrl,
+      error: 'Map should be visible in Priorités tab',
+      checked_at: new Date().toISOString(),
+    })
+  }
   if (await page.getByText(/Risque indicatif prochain horizon|Risque estim/i).isVisible().catch(() => false)) {
     const firstForecastRow = page.locator('.site-table-card tbody tr').first()
     await firstForecastRow.click({ timeout: 30_000 })

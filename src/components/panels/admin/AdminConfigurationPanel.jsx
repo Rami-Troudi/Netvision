@@ -12,6 +12,14 @@ export default function AdminConfigurationPanel({ dataMode, workerState, metric 
         <div className="section-card"><div className="section-title">Simulation</div><p>Actions exécutables limitées aux scénarios ns-3 supportés. Les actions site planning restent non exécutables.</p></div>
         <div className="section-card"><div className="section-title">Contrôles</div><p>Les contrôles principaux restent disponibles dans l&apos;en-tête: rôle, mode opérateur/admin, thème et mode données.</p></div>
       </div>
+      <details className="section-card detail-toggle">
+        <summary>Voir détails techniques</summary>
+        <ul className="compact-list">
+          <li>Mode données actif: <strong>{dataMode || 'mock'}</strong></li>
+          <li>Métrique courante: <strong>{metricLabel}</strong></li>
+          <li>État simulation: <strong>{workerState === 'ready' ? 'prête' : 'indisponible'}</strong></li>
+        </ul>
+      </details>
     </section>
   )
 }

@@ -57,7 +57,10 @@ async function resetOutput() {
 async function waitForVisualSettled(page) {
   await page.waitForLoadState('domcontentloaded').catch(() => {})
   await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
-  await page.locator('.netvision-map-container canvas').first().waitFor({ timeout: 45_000 }).catch(() => {})
+  const mapCount = await page.locator('.map-card').count().catch(() => 0)
+  if (mapCount > 0) {
+    await page.locator('.netvision-map-container canvas').first().waitFor({ timeout: 45_000 }).catch(() => {})
+  }
   await page.waitForTimeout(1_200)
 }
 

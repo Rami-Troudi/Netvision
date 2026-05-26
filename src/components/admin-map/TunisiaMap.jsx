@@ -94,7 +94,7 @@ function safeSetLayout(map, id, prop, value) {
   if (hasLayer(map, id)) map.setLayoutProperty(id, prop, value)
 }
 
-export default function TunisiaMap({ governoratesGeo, delegationsGeo, governorateRows, delegationRows, filteredCells, scope, metricMode, metric, mapControls = DEFAULT_MAP_CONTROLS, onGovernorateClick, onDelegationClick, onCellClick }) {
+export default function TunisiaMap({ governoratesGeo, delegationsGeo, governorateRows, delegationRows, filteredCells, scope, metricMode, metric, mapControls = DEFAULT_MAP_CONTROLS, onGovernorateClick, onDelegationClick, onCellClick, densityMode = 'full' }) {
   const mapNode = useRef(null)
   const mapRef = useRef(null)
   const transitionRef = useRef([])
@@ -168,9 +168,9 @@ export default function TunisiaMap({ governoratesGeo, delegationsGeo, governorat
       map.addLayer({ id: 'admin-delegations-fill', type: 'fill', source: 'admin-delegations', paint: { 'fill-color': ['get', 'fill_color'], 'fill-opacity': 0.0, 'fill-color-transition': { duration: 520, delay: 0 }, 'fill-opacity-transition': { duration: 420, delay: 0 } } })
       map.addLayer({ id: 'admin-delegations-line', type: 'line', source: 'admin-delegations', paint: { 'line-color': '#cc6c18', 'line-width': 1.0, 'line-opacity': 0.0 } })
       map.addLayer({ id: 'admin-delegations-selected', type: 'line', source: 'admin-delegations', filter: ['==', ['get', 'deleg_id'], ''], paint: { 'line-color': '#b13f00', 'line-width': 3, 'line-opacity': 0.0 } })
-      map.addLayer({ id: 'radio-sites', type: 'circle', source: 'radio-sites', paint: { 'circle-radius': ['interpolate', ['linear'], ['get', 'active_users'], 0, 7, 20, 14], 'circle-color': ['get', 'state_color'], 'circle-stroke-color': '#ffffff', 'circle-stroke-width': 2.5, 'circle-opacity': 0.0, 'circle-color-transition': { duration: 520, delay: 0 }, 'circle-radius-transition': { duration: 520, delay: 0 }, 'circle-opacity-transition': { duration: 420, delay: 0 } } })
+      map.addLayer({ id: 'radio-sites', type: 'circle', source: 'radio-sites', paint: { 'circle-radius': ['interpolate', ['linear'], ['get', 'active_users'], 0, 4, 20, 8], 'circle-color': ['get', 'state_color'], 'circle-stroke-color': '#ffffff', 'circle-stroke-width': 1.2, 'circle-opacity': 0.0, 'circle-color-transition': { duration: 520, delay: 0 }, 'circle-radius-transition': { duration: 520, delay: 0 }, 'circle-opacity-transition': { duration: 420, delay: 0 } } })
       map.addLayer({ id: 'radio-sites-heatmap', type: 'heatmap', source: 'radio-sites', paint: { 'heatmap-weight': ['interpolate', ['linear'], ['get', 'avg_prb'], 0, 0, 100, 1], 'heatmap-intensity': 0.85, 'heatmap-radius': 34, 'heatmap-opacity': 0.0, 'heatmap-color': ['interpolate', ['linear'], ['heatmap-density'], 0, 'rgba(255,255,255,0)', 0.35, '#ffd08a', 0.7, '#ff7900', 1, '#b13f00'] } })
-      map.addLayer({ id: 'radio-site-labels', type: 'symbol', source: 'radio-sites', layout: { 'text-field': ['get', 'site_name'], 'text-size': 11, 'text-offset': [0, 1.25], 'text-anchor': 'top', 'visibility': 'none' }, paint: { 'text-color': '#18222c', 'text-halo-color': '#ffffff', 'text-halo-width': 1.25 } })
+      map.addLayer({ id: 'radio-site-labels', type: 'symbol', source: 'radio-sites', layout: { 'text-field': ['get', 'site_name'], 'text-size': 10, 'text-offset': [0, 1.35], 'text-anchor': 'top', 'text-allow-overlap': false, 'text-ignore-placement': false, 'visibility': 'none' }, paint: { 'text-color': '#18222c', 'text-halo-color': '#ffffff', 'text-halo-width': 1.25 } })
       map.addLayer({ id: 'selected-cell', type: 'circle', source: 'radio-sites', filter: ['==', ['get', 'worst_cell'], ''], paint: { 'circle-radius': 17, 'circle-color': '#ff7900', 'circle-stroke-color': '#ffffff', 'circle-stroke-width': 4, 'circle-opacity': 0.95 } })
       map.on('click', 'admin-governorates-fill', (e) => e.features?.[0] && clickHandlersRef.current.onGovernorateClick(e.features[0].properties))
       map.on('click', 'admin-delegations-fill', (e) => e.features?.[0] && clickHandlersRef.current.onDelegationClick(e.features[0].properties))
@@ -245,16 +245,18 @@ export default function TunisiaMap({ governoratesGeo, delegationsGeo, governorat
       safeSetPaint(map, 'admin-delegations-fill', 'fill-opacity', next.visibility.delegations ? 0.62 : 0)
       safeSetPaint(map, 'admin-delegations-line', 'line-opacity', next.visibility.delegations ? 0.78 : 0)
       safeSetPaint(map, 'admin-delegations-selected', 'line-opacity', next.visibility.delegations ? 1 : 0)
-      safeSetPaint(map, 'radio-sites', 'circle-opacity', next.visibility.sites && !next.visibility.heatmap ? 0.95 : 0.28)
+      const compact = densityMode === 'compact'
+      safeSetPaint(map, 'radio-sites', 'circle-opacity', next.visibility.sites && !next.visibility.heatmap ? (compact ? 0.78 : 0.92) : 0.24)
+      safeSetPaint(map, 'radio-sites', 'circle-stroke-width', compact ? 0.9 : 1.2)
       safeSetPaint(map, 'radio-sites-heatmap', 'heatmap-opacity', next.visibility.heatmap ? 0.8 : 0)
       safeSetPaint(map, 'selected-cell', 'circle-opacity', next.visibility.selectedCell ? 0.95 : 0)
       safeSetLayout(map, 'radio-sites', 'visibility', next.visibility.sites ? 'visible' : 'none')
       safeSetLayout(map, 'radio-sites-heatmap', 'visibility', next.visibility.heatmap ? 'visible' : 'none')
-      safeSetLayout(map, 'radio-site-labels', 'visibility', next.visibility.labels ? 'visible' : 'none')
+      safeSetLayout(map, 'radio-site-labels', 'visibility', next.visibility.labels && !compact ? 'visible' : 'none')
       safeSetLayout(map, 'selected-cell', 'visibility', next.visibility.selectedCell ? 'visible' : 'none')
     })
     applyScopeRendering()
-  }, [scope, mapControls, mapReady])
+  }, [scope, mapControls, mapReady, densityMode])
 
   useEffect(() => {
     const map = mapRef.current

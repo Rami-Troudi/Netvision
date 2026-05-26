@@ -58,6 +58,7 @@ export default function PrioritiesPanel(props) {
   const items = [...currentItems, ...forecastItems, ...peakItems]
   const [selectedKey, setSelectedKey] = useState('')
   const lead = items.find((item) => item.key === selectedKey) || items[0]
+  const forecastSummary = forecastState?.summary || {}
 
   return (
     <section className="panel-shell cockpit-panel workflow-panel priorities-workspace">
@@ -85,9 +86,25 @@ export default function PrioritiesPanel(props) {
           <SectionCard title="À vérifier maintenant" className="priority-detail-card">
             <strong>{lead?.title || 'Aucune cellule'}</strong>
             <p>{lead?.reason || 'Aucun signal prioritaire.'}</p>
+            <div className="section-title">Pourquoi c’est prioritaire</div>
+            <ul className="compact-list">
+              <li>Type: <strong>{lead?.type || 'Signal opérationnel'}</strong></li>
+              <li>Risque indicatif prochain horizon: <strong>{forecastSummary.high_risk_cells || 0}</strong> cellules à surveiller</li>
+              <li>Fiabilité des signaux: <strong>{confidenceLabelFr(forecastSummary.confidence || forecastState?.confidence)}</strong></li>
+            </ul>
             <div className="section-title">Signaux observés</div>
             <ul className="evidence-list">
               {(lead?.evidence || ['Comparer PRB, débit, CQI et utilisateurs.', 'Ouvrir le dossier avant toute simulation.']).slice(0, 4).map((item) => <li key={item}>{item}</li>)}
+            </ul>
+            <div className="section-title">Hypothèses</div>
+            <ul className="compact-list">
+              <li>Prévision indicative basée sur les tranches récentes disponibles.</li>
+              <li>Corrélation multi-KPI utilisée: charge, débit, CQI, utilisateurs.</li>
+            </ul>
+            <div className="section-title">Limites</div>
+            <ul className="compact-list">
+              <li>Confiance réduite si KPI manquants ou séries trop courtes.</li>
+              <li>Le score de risque n’est pas une certitude terrain.</li>
             </ul>
             {lead?.onOpen ? <button className="primary-cta" type="button" onClick={lead.onOpen}>Ouvrir le dossier</button> : null}
           </SectionCard>

@@ -13,7 +13,7 @@ import { transitionLabel } from './admin/adminTransitions'
 import { DEFAULT_FILTERS, applyCellFilters, buildSiteSummaries, summarizeAlerts, COCKPIT_TABS, ADMIN_COCKPIT_TABS } from './admin/adminOps'
 import { buildAutoMapping, callImportWorker } from './admin/importWorker'
 import { DEFAULT_MAP_CONTROLS } from './utils/v2Contracts.mjs'
-import { getNetvisionRole, isAdminToolsEnabled, setNetvisionRole } from './utils/uiPolicy.mjs'
+import { getNetvisionRole, isAdminToolsEnabled, setNetvisionRole, getMapPolicy } from './utils/uiPolicy.mjs'
 import { normalizeTabId } from './utils/tabAliases.mjs'
 import { getRestorationFlags } from './utils/restorationFlags.mjs'
 import { useSystemEndpoints, usePeakHours } from './hooks/useDashboardData'
@@ -41,6 +41,9 @@ export default function NetVisionDashboard() {
   const [watchlist, setWatchlist] = useState([])
   const [savedViews, setSavedViews] = useState([])
   const adminToolsEnabled = interfaceRole === 'admin' || isAdminToolsEnabled()
+  const normalizedActiveTab = normalizeTabId(activeTab)
+  const mapPolicy = useMemo(() => getMapPolicy(interfaceRole, normalizedActiveTab), [interfaceRole, normalizedActiveTab])
+  const showMapColumn = mapPolicy.visible
   const showRoleSwitch = typeof window !== 'undefined' && (process.env.NODE_ENV !== 'production' || adminToolsEnabled)
   const visibleTabs = useMemo(() => adminToolsEnabled ? ADMIN_COCKPIT_TABS : COCKPIT_TABS, [adminToolsEnabled])
   const { endpointStatus, workerState, jobsHealth } = useSystemEndpoints({ adminToolsEnabled, activeTab })
@@ -545,16 +548,16 @@ export default function NetVisionDashboard() {
   let panel = null
   if (!data && !loadError) panel = <div className="panel-shell"><div className="loading-block">Chargement des donnees runtime NetVision et de la geographie administrative...</div></div>
   else if (loadError) panel = <div className="panel-shell"><div className="empty-state warning">{loadError}. Verifiez les fichiers de geographie administrative.</div></div>
-  else panel = <CockpitPanel activeTab={normalizeTabId(activeTab)} onTabChange={(tab) => setActiveTab(normalizeTabId(tab))} adminToolsEnabled={adminToolsEnabled} scope={scope} data={data} dataMode={dataMode} onDataModeChange={changeDataMode} nationalSummary={nationalSummary} governorateSummary={governorateSummary} delegationSummary={delegationSummary} summary={currentSummary} governorateRows={governorateRows} previousGovernorateRows={previousGovernorateRows} delegationRows={delegationRows} delegationVariationRows={delegationVariationRows} selectedGovernorate={selectedGovernorate} selectedDelegation={selectedDelegation} selectedCell={selectedCell} siteRows={siteRows} scopedCells={scopedCells} alerts={alerts} metric={metric} currentTime={data.currentTimeEntry} filters={filters} onFilterChange={updateFilters} bands={bands} onSelectGovernorate={selectGovernorate} onSelectDelegation={selectDelegation} onSelectCell={selectCell} reconciliation={data.reconciliation} peakRows={peakRows} peakPayload={peakPayload} busyMetric={busyMetric} onBusyMetricChange={setBusyMetric} onPeakRowSelect={selectPeakRow} backendHealth={backendHealth} workerState={workerState} jobsHealth={jobsHealth} importState={importState} endpointCoverage={endpointCoverage} onImportFile={handleImportFile} onImportTypeChange={(importType) => setImportState((prev) => ({ ...prev, importType }))} onImportProfileChange={(profileId) => setImportState((prev) => ({ ...prev, selectedProfileId: profileId }))} onRestoreRuntime={restoreRuntimeData} onExportJson={exportScopedJson} onExportReport={exportReport} whyCritical={whyCritical} dataQuality={dataQuality} sliceDelta={sliceDelta} forecastState={forecastState} driftState={driftState} watchlist={watchlist} savedViews={savedViews} onRestoreView={restoreView} onRemoveView={removeView} />
+  else panel = <CockpitPanel activeTab={normalizedActiveTab} onTabChange={(tab) => setActiveTab(normalizeTabId(tab))} adminToolsEnabled={adminToolsEnabled} scope={scope} data={data} dataMode={dataMode} onDataModeChange={changeDataMode} nationalSummary={nationalSummary} governorateSummary={governorateSummary} delegationSummary={delegationSummary} summary={currentSummary} governorateRows={governorateRows} previousGovernorateRows={previousGovernorateRows} delegationRows={delegationRows} delegationVariationRows={delegationVariationRows} selectedGovernorate={selectedGovernorate} selectedDelegation={selectedDelegation} selectedCell={selectedCell} siteRows={siteRows} scopedCells={scopedCells} alerts={alerts} metric={metric} currentTime={data.currentTimeEntry} filters={filters} onFilterChange={updateFilters} bands={bands} onSelectGovernorate={selectGovernorate} onSelectDelegation={selectDelegation} onSelectCell={selectCell} reconciliation={data.reconciliation} peakRows={peakRows} peakPayload={peakPayload} busyMetric={busyMetric} onBusyMetricChange={setBusyMetric} onPeakRowSelect={selectPeakRow} backendHealth={backendHealth} workerState={workerState} jobsHealth={jobsHealth} importState={importState} endpointCoverage={endpointCoverage} onImportFile={handleImportFile} onImportTypeChange={(importType) => setImportState((prev) => ({ ...prev, importType }))} onImportProfileChange={(profileId) => setImportState((prev) => ({ ...prev, selectedProfileId: profileId }))} onRestoreRuntime={restoreRuntimeData} onExportJson={exportScopedJson} onExportReport={exportReport} whyCritical={whyCritical} dataQuality={dataQuality} sliceDelta={sliceDelta} forecastState={forecastState} driftState={driftState} watchlist={watchlist} savedViews={savedViews} onRestoreView={restoreView} onRemoveView={removeView} />
 
   return (
     <div className={`app-shell ${focusMode ? 'focus-mode' : ''} ${theme === 'dark' ? 'theme-dark' : ''}`}>
       <a href="#main-content" className="skip-link">Aller au contenu principal</a>
       <TopHeader metricMode={metricMode} metricModes={METRIC_MODES} onMetricModeChange={setMetricMode} query={query} onQueryChange={setQuery} searchResults={searchResults} onSearchSelect={selectSearchResult} dataMode={dataMode} onSecondaryPanel={setActiveTab} adminToolsEnabled={adminToolsEnabled} theme={theme} onToggleTheme={() => setTheme((t) => t === 'dark' ? 'light' : 'dark')} focusMode={focusMode} onToggleFocus={() => setFocusMode((v) => !v)} onRunDemo={() => setDemoStep(0)} role={interfaceRole} onRoleChange={changeInterfaceRole} showRoleSwitch={showRoleSwitch} />
       <div className="sr-only" aria-live="polite">{`Périmètre courant ${scope.level}${scope.governorateName ? `, ${scope.governorateName}` : ''}${scope.delegationName ? `, ${scope.delegationName}` : ''}${scope.selectedCellName ? `, ${scope.selectedCellName}` : ''}`}</div>
-      <main id="main-content" className="command-layout cockpit-layout">
-        <CockpitRail activeTab={normalizeTabId(activeTab)} onTabChange={(tab) => setActiveTab(normalizeTabId(tab))} alertCount={alerts.length} tabs={visibleTabs} />
-        <section className="map-column">
+      <main id="main-content" className={`command-layout cockpit-layout ${showMapColumn ? '' : 'no-map-context'}`.trim()}>
+        <CockpitRail activeTab={normalizedActiveTab} onTabChange={(tab) => setActiveTab(normalizeTabId(tab))} alertCount={alerts.length} tabs={visibleTabs} />
+        {showMapColumn ? <section className={`map-column map-density-${mapPolicy.density}`}>
           <Breadcrumb scope={scope} onNational={() => { setActiveTab('overview'); setScope(backToNational()) }} onGovernorate={() => { setActiveTab('overview'); setScope(backToGovernorate(scope)) }} onDelegation={() => { setActiveTab('cell-dossier'); setScope(backToDelegation(scope)) }} />
           <TimelineBar
             timeIndex={data?.timeIndex || []}
@@ -568,9 +571,9 @@ export default function NetVisionDashboard() {
             onSpeedChange={changeTimelineSpeed}
             onStartFrom={startTimelineFrom}
           />
-          {data ? <TunisiaMap governoratesGeo={data.governorates} delegationsGeo={data.delegations} governorateRows={governorateRows} delegationRows={allDelegationRows} cells={cells} filteredCells={filteredCells} scope={scope} metricMode={metricMode} metric={metric} mapControls={mapControls} onGovernorateClick={selectGovernorate} onDelegationClick={selectDelegation} onCellClick={selectCell} /> : <div className="map-card skeleton-map" />}
+          {data ? <TunisiaMap governoratesGeo={data.governorates} delegationsGeo={data.delegations} governorateRows={governorateRows} delegationRows={allDelegationRows} cells={cells} filteredCells={filteredCells} scope={scope} metricMode={metricMode} metric={metric} mapControls={mapControls} onGovernorateClick={selectGovernorate} onDelegationClick={selectDelegation} onCellClick={selectCell} densityMode={mapPolicy.density} /> : <div className="map-card skeleton-map" />}
           <div className="scope-footer map-control-strip"><span>{currentSummary.observed_cells || 0} cellules</span><span>{data?.currentTimeEntry?.timestamp || 'Aucune tranche'}</span>{(scope.level === 'delegation' || scope.level === 'cell') ? <button data-testid="toggle-heatmap" onClick={() => setMapControls((v) => ({ ...v, heatmap: !v.heatmap }))}>{mapControls.heatmap ? 'Voir les sites' : 'Voir la chaleur'}</button> : null}{(scope.level === 'delegation' || scope.level === 'cell') ? <button data-testid="toggle-labels" onClick={() => setMapControls((v) => ({ ...v, labels: !v.labels }))}>{mapControls.labels ? 'Masquer libelles' : 'Afficher libelles'}</button> : null}{selectedCell ? <button className="ghost-button" onClick={pinSelectedCell}>Epingler cellule</button> : null}<button className="ghost-button" onClick={saveCurrentView}>Sauvegarder vue</button></div>
-        </section>
+        </section> : null}
         <aside className="insight-column">{panel}</aside>
       </main>
       {demoStep !== null ? <div className="transition-overlay">Parcours de demonstration</div> : transitionLabel(scope) ? <div className="transition-overlay">{transitionLabel(scope)}</div> : null}

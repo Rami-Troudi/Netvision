@@ -18,6 +18,13 @@
       <div className="admin-readiness-band"><strong>{readyCount}/{services.length} services prêts</strong><span>Les services cœur portent l’affichage; Redis, worker et ns-3 conditionnent les simulations asynchrones.</span></div>
       <div className="section-card"><div className="section-title">Services cœur</div><div className="system-grid">{services.filter((service) => service.group === 'core').map((service) => <Service key={service.name} {...service} />)}</div></div>
       <div className="section-card"><div className="section-title">Services optionnels</div><div className="system-grid">{services.filter((service) => service.group === 'optional').map((service) => <Service key={service.name} {...service} />)}</div></div>
+      <details className="section-card detail-toggle">
+        <summary>Voir détails techniques</summary>
+        <p className="micro-copy">Ces détails restent réservés au mode Admin.</p>
+        <ul className="compact-list">
+          {services.map((service) => <li key={`${service.name}:${service.group}`}><strong>{service.name}</strong> - {service.ok ? 'prêt' : 'dégradé'} - {service.detail}</li>)}
+        </ul>
+      </details>
     </section>
   )
 }

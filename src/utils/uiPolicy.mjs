@@ -32,6 +32,29 @@ export const ADMIN_TABS = Object.freeze([
   { id: 'configuration', label: 'Configuration', short: 'Config.' },
 ])
 
+const MAP_POLICY = Object.freeze({
+  operator: {
+    overview: { visible: true, density: 'full' },
+    priorities: { visible: true, density: 'compact' },
+    'cell-dossier': { visible: true, density: 'compact' },
+    simulation: { visible: false, density: 'hidden' },
+  },
+  admin: {
+    data: { visible: false, density: 'hidden' },
+    services: { visible: false, density: 'hidden' },
+    validation: { visible: false, density: 'hidden' },
+    configuration: { visible: false, density: 'hidden' },
+  },
+})
+
+export function getMapPolicy(role, tabId) {
+  const mode = role === 'admin' ? 'admin' : 'operator'
+  const fallback = mode === 'admin'
+    ? { visible: false, density: 'hidden' }
+    : { visible: true, density: 'full' }
+  return MAP_POLICY[mode]?.[tabId] || fallback
+}
+
 export const ACTION_LABELS_FR = Object.freeze({
   tilt: 'Ajuster inclinaison / puissance',
   redistribute: 'Rééquilibrer la charge',

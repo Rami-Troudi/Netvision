@@ -68,6 +68,11 @@ export default function AdminDataPanel({ data, reconciliation, importState, onIm
         <button data-testid="export-recommendations-csv" className="ghost-button" onClick={() => downloadRecommendationsCsv(currentTime?.timestamp)}>Propositions CSV complètes</button>
         <button data-testid="export-congested-csv" className="ghost-button" onClick={() => downloadRecommendationsCsv(currentTime?.timestamp)}>Propositions CSV congestion</button>
       </div>
+      <div className="section-card ingestion-card">
+        <div className="section-title">Restore</div>
+        <p className="micro-copy">Utiliser la restauration pour revenir au runtime local de référence après un import de test.</p>
+        <button data-testid="restore-runtime-secondary" className="primary-cta" onClick={onRestoreRuntime}>Restaurer le runtime de référence</button>
+      </div>
     </section>
   )
 }

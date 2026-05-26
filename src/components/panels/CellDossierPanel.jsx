@@ -130,7 +130,19 @@ export default function CellDossierPanel(props) {
             <>
               <strong>{forecastRow.predicted_issue || 'Prévision indicative'}</strong>
               <p>Risque estimé : {forecastRow.risk_score}/100 · Confiance {confidenceLabelFr(forecastRow.confidence)}</p>
+              <div className="delta-grid">
+                <span>Horizon <strong>H+{forecastRow.horizon || 1}</strong></span>
+                <span>Niveau <strong>{forecastRow.risk_level || 'inconnu'}</strong></span>
+                <span>Confiance <strong>{forecastRow.confidence_score ?? 'N/A'}</strong></span>
+              </div>
               <ul className="evidence-list">{(forecastRow.evidence || []).slice(0, 3).map((item) => <li key={item}>{item}</li>)}</ul>
+              <details className="detail-toggle">
+                <summary>Hypothèses et limites</summary>
+                <ul className="compact-list">
+                  <li>Prévision indicative construite à partir des KPI observés.</li>
+                  <li>La confiance baisse si les tranches ou KPI sont incomplets.</li>
+                </ul>
+              </details>
             </>
           ) : <div className="empty-state compact-state">Aucun risque indicatif disponible pour cette cellule.</div>}
         </div>
