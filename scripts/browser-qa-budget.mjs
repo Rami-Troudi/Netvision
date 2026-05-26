@@ -148,11 +148,19 @@ async function main() {
       debug_text: searchResult.debug_text,
       checked_at: new Date().toISOString(),
     })
+  }  const prepareButton = await clickButtonContaining(page, ['simulation'])
+  if (!prepareButton.clicked) {
+    await failWithReport(browser, {
+      ok: false,
+      base_url: BASE_URL,
+      error: prepareButton.reason,
+      debug_screenshot: prepareButton.debug_screenshot,
+      debug_text: prepareButton.debug_text,
+      checked_at: new Date().toISOString(),
+    })
   }
-  await page.getByRole('button', { name: 'Préparer simulation' }).waitFor({ timeout: 30_000 })
   timings.search_to_cell_ms = Date.now() - searchStart
 
-  await page.getByRole('button', { name: 'Préparer simulation' }).click()
   await page.getByTestId('queue-simulation').waitFor({ timeout: 30_000 })
 
   const forecastStart = Date.now()
