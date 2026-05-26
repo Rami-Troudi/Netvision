@@ -6,10 +6,10 @@ import { normalizeAdminNames, normalizeDelegationName, normalizeGovernorateName 
 export const METRIC_MODES = [
   { id: 'congestion_rate', label: 'Taux de congestion', unit: '%' },
   { id: 'avg_prb', label: 'Charge PRB moyenne', unit: '%' },
-  { id: 'avg_throughput', label: 'Debit moyen', unit: 'Mbps' },
+  { id: 'avg_throughput', label: 'Débit moyen', unit: 'Mbps' },
   { id: 'avg_cqi', label: 'CQI moyen', unit: '' },
   { id: 'lost_traffic', label: 'Trafic perdu', unit: 'GB' },
-  { id: 'recoverable_traffic', label: 'Trafic recuperable', unit: 'GB' },
+  { id: 'recoverable_traffic', label: 'Trafic récupérable', unit: 'GB' },
 ]
 
 function num(value, fallback = 0) {
@@ -159,19 +159,19 @@ export function formatMetric(value, digits = 1) {
 }
 
 export function diagnoseCell(cell) {
-  if (!cell) return 'Selectionnez une cellule pour calculer le diagnostic multi-KPI.'
+  if (!cell) return 'Sélectionnez une cellule pour calculer le diagnostic multi-KPI.'
   const highPrb = cell.prb_load >= 80
   const lowThroughput = cell.throughput > 0 && cell.throughput < 15
   const lowCqi = cell.cqi > 0 && cell.cqi < 8
   const goodThroughput = cell.throughput >= 15
   const goodCqi = cell.cqi >= 9
   const highTa = cell.ta >= 2.5
-  if (highPrb && lowThroughput && lowCqi && highTa) return 'PRB eleve, debit faible, CQI faible et TA eleve : verifier couverture de bord de cellule ou interference.'
-  if (highPrb && lowThroughput && !lowCqi) return 'PRB eleve avec debit faible et CQI acceptable : pression capacitaire probable.'
-  if (highPrb && goodThroughput && goodCqi) return 'Cellule chargee, mais debit et CQI restent acceptables sur cette tranche.'
-  if (highPrb) return 'PRB eleve : comparer avec les heures critiques recurrentes avant de conclure a une congestion structurelle.'
-  if (lowThroughput && lowCqi) return 'Debit et CQI degraderes : revue qualite radio ou interference recommandee.'
-  return 'Aucun defaut multi-KPI severe detecte sur cette tranche.'
+  if (highPrb && lowThroughput && lowCqi && highTa) return 'PRB élevée, débit faible, CQI faible et TA élevée : vérifier couverture de bord de cellule ou interférence.'
+  if (highPrb && lowThroughput && !lowCqi) return 'PRB élevée avec débit faible et CQI acceptable : pression capacitaire probable.'
+  if (highPrb && goodThroughput && goodCqi) return 'Cellule chargée, mais débit et CQI restent acceptables sur cette tranche.'
+  if (highPrb) return 'PRB élevée : comparer avec les heures critiques récurrentes avant de conclure à une congestion structurelle.'
+  if (lowThroughput && lowCqi) return 'Débit et CQI dégradés : revue qualité radio ou interférence recommandée.'
+  return 'Aucun défaut multi-KPI sévère détecté sur cette tranche.'
 }
 
 export function classifyRanIssue(cellOrScope) {
@@ -193,39 +193,39 @@ export function classifyRanIssue(cellOrScope) {
   if (!prb && !throughput && !cqi && !activeUsers) {
     issue = 'Telemetry/Data Gap'
     severity = 'unknown'
-    evidence.push('Missing PRB, throughput, CQI or user samples')
+    evidence.push('KPI PRB, débit, CQI ou utilisateurs manquants')
   } else if (prb >= 80 && (!throughput || !cqi)) {
     issue = 'Telemetry/Data Gap'
     severity = 'unknown'
-    evidence.push('PRB is high but throughput or CQI evidence is missing')
+    evidence.push('PRB élevée avec débit ou CQI incomplet')
   } else if (congestedByRules && throughput < 15 && cqi < 8 && ta >= 2.5) {
     issue = 'Edge/Interference Pressure'
     severity = 'critical'
-    evidence.push('High PRB', 'Low throughput', 'Low CQI', 'Elevated TA')
+    evidence.push('PRB élevée', 'Débit faible', 'CQI faible', 'TA élevée')
   } else if (recurrence > 0.6 && prb >= 70) {
     issue = 'Structural Busy-Hour Pattern'
     severity = 'high'
-    evidence.push(`Recurrent ${Math.round(recurrence * 100)}% of observations`, 'Busy-hour pressure repeats')
+    evidence.push(`Récurrent sur ${Math.round(recurrence * 100)}% des observations`, 'Pression répétée en heure critique')
   } else if (congestedByRules && throughput < 15 && cqi >= 8) {
     issue = 'Capacity Pressure'
     severity = 'high'
-    evidence.push('High PRB', 'Low throughput', 'CQI acceptable')
+    evidence.push('PRB élevée', 'Débit faible', 'CQI acceptable')
   } else if (congestedByRules && throughput >= 15 && cqi >= 8) {
     issue = 'Loaded but Acceptable'
     severity = 'medium'
-    evidence.push('High PRB', 'Throughput acceptable', 'CQI acceptable')
+    evidence.push('PRB élevée', 'Débit acceptable', 'CQI acceptable')
   } else if (recurrence < 0.2 && prb >= 80) {
     issue = 'Temporary Spike / Anomaly'
     severity = 'medium'
-    evidence.push(`Low recurrence ${Math.round(recurrence * 100)}%`, 'High load is not persistent')
+    evidence.push(`Récurrence faible ${Math.round(recurrence * 100)}%`, 'Charge élevée non persistante')
   } else if (prb > 60 && throughput < 15 && cqi < 8) {
     issue = 'QoS Degradation Trend'
     severity = 'medium'
-    evidence.push('Moderate PRB elevation', 'Low throughput', 'Low CQI')
+    evidence.push('PRB modérément élevée', 'Débit faible', 'CQI faible')
   } else if (prb > 60 && throughput >= 15 && cqi >= 8) {
     issue = 'Loaded but Acceptable'
     severity = 'low'
-    evidence.push('Moderate PRB elevation', 'Throughput acceptable', 'CQI acceptable')
+    evidence.push('PRB modérément élevée', 'Débit acceptable', 'CQI acceptable')
   }
   
   return { issue, severity, evidence }
@@ -250,17 +250,17 @@ export function buildWhyCritical({ summary = {}, peakPayload = {}, peakRows = []
   const peak = peakPayload?.summary || peakRows?.[0] || null
   const recurrence = peakRows?.length ? computeRecurrenceMetrics(peakRows).recurrence_ratio : num(peak?.recurrence_ratio)
 
-  if (congestionRate > 0) rows.push(`${formatMetric(congestionRate)}% congested cells`)
-  if (prb >= 70) rows.push(`PRB pressure at ${formatMetric(prb)}%`)
-  if (throughput > 0 && throughput < 15) rows.push(`Low throughput at ${formatMetric(throughput)} Mbps`)
-  if (cqi > 0 && cqi < 8) rows.push(`CQI degradation at ${formatMetric(cqi)}`)
-  if (peak?.peak_hour) rows.push(`Peak at ${peak.peak_hour}`)
-  if (recurrence > 0) rows.push(`${formatMetric(recurrence * 100, 0)}% busy-hour recurrence`)
-  if (summary.congested_cells || summary.delegations) rows.push(`${summary.congested_cells || 0} affected cells across ${summary.delegations || 0} zones`)
-  if (issue?.issue && issue.issue !== 'Normal') rows.push(`Likely cause: ${issue.issue}`)
-  for (const warning of warnings.slice(0, 2)) rows.push(`Data warning: ${warning}`)
+  if (congestionRate > 0) rows.push(`${formatMetric(congestionRate)}% cellules congestionnées`)
+  if (prb >= 70) rows.push(`Pression PRB à ${formatMetric(prb)}%`)
+  if (throughput > 0 && throughput < 15) rows.push(`Débit faible ? ${formatMetric(throughput)} Mbps`)
+  if (cqi > 0 && cqi < 8) rows.push(`CQI dégradé à ${formatMetric(cqi)}`)
+  if (peak?.peak_hour) rows.push(`Pic à ${peak.peak_hour}`)
+  if (recurrence > 0) rows.push(`${formatMetric(recurrence * 100, 0)}% récurrence heure critique`)
+  if (summary.congested_cells || summary.delegations) rows.push(`${summary.congested_cells || 0} cellules touchées sur ${summary.delegations || 0} zones`)
+  if (issue?.issue && issue.issue !== 'Normal') rows.push(`Cause probable : ${issue.issue}`)
+  for (const warning of warnings.slice(0, 2)) rows.push(`Alerte données : ${warning}`)
 
-  return rows.length ? rows : ['No critical pattern detected for the current scope.']
+  return rows.length ? rows : ['Aucun signal critique détecté pour le périmètre courant.']
 }
 
 export function computeConfidence({ cells = [], summary = {}, peakRows = [], dataMode = 'real', timeIndex = [], reconciliation = {} } = {}) {
@@ -281,14 +281,14 @@ export function computeConfidence({ cells = [], summary = {}, peakRows = [], dat
   score = Math.max(0, Math.min(100, score))
 
   const reasons = []
-  reasons.push(`${formatMetric(total, 0)} scoped cells`)
-  if (missingKpi) reasons.push(`${formatMetric((missingKpi / total) * 100, 0)}% missing KPI fields`)
-  if (unmatched) reasons.push(`${unmatched} cells need spatial review`)
-  if (dataMode === 'mock') reasons.push('Mock demo mode reduces operational confidence')
-  if (Array.isArray(timeIndex)) reasons.push(`${timeIndex.length} time slices available`)
-  if (peakRows.length) reasons.push(`${formatMetric(recurrence * 100, 0)}% recurrence consistency`)
+  reasons.push(`${formatMetric(total, 0)} cellules du périmètre`)
+  if (missingKpi) reasons.push(`${formatMetric((missingKpi / total) * 100, 0)}% KPI manquants`)
+  if (unmatched) reasons.push(`${unmatched} cellules à revoir spatialement`)
+  if (dataMode === 'mock') reasons.push('Jeu de démonstration : confiance opérationnelle réduite')
+  if (Array.isArray(timeIndex)) reasons.push(`${timeIndex.length} tranches horaires disponibles`)
+  if (peakRows.length) reasons.push(`${formatMetric(recurrence * 100, 0)}% cohérence de récurrence`)
 
-  return { score, label: score >= 75 ? 'High' : score >= 50 ? 'Medium' : 'Low', reasons }
+  return { score, label: score >= 75 ? 'élevée' : score >= 50 ? 'Moyenne' : 'Faible', reasons }
 }
 
 export function computeDataQuality({ data = {}, cells = [], timeIndex = [], peakPayload = {}, dataMode = 'real' } = {}) {
@@ -318,11 +318,11 @@ export function computeDataQuality({ data = {}, cells = [], timeIndex = [], peak
 
 export function computeSliceDelta(currentCells = [], previousCells = []) {
   if (!previousCells.length) {
-    return { available: false, reason: 'No previous time slice available for comparison.' }
+    return { available: false, reason: 'Aucune tranche précédente disponible pour comparaison.' }
   }
   const prevByName = new Map(previousCells.map((cell) => [cell.cell_name, cell]))
   const comparable = currentCells.map((cell) => ({ current: cell, previous: prevByName.get(cell.cell_name) })).filter((pair) => pair.previous)
-  if (!comparable.length) return { available: false, reason: 'Previous slice has no comparable cells for this scope.' }
+  if (!comparable.length) return { available: false, reason: 'La tranche précédente ne contient pas de cellules comparables sur ce périmètre.' }
   const becameCongested = comparable.filter(({ current, previous }) => current.congested && !previous.congested)
   const recovered = comparable.filter(({ current, previous }) => !current.congested && previous.congested)
   const worsened = comparable.filter(({ current, previous }) => num(current.prb_load) - num(previous.prb_load) >= 10 || num(previous.throughput) - num(current.throughput) >= 5)

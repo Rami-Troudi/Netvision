@@ -19,17 +19,17 @@ export function setNetvisionRole(role) {
 }
 
 export const OPERATOR_TABS = Object.freeze([
-  { id: 'overview', label: 'Vue réseau', short: 'VR' },
-  { id: 'priorities', label: 'Priorités', short: 'PR' },
-  { id: 'cell-dossier', label: 'Dossier cellule', short: 'DC' },
-  { id: 'simulation', label: 'Simulation', short: 'SM' },
+  { id: 'overview', label: 'Vue réseau', short: 'État' },
+  { id: 'priorities', label: 'Priorités', short: 'File' },
+  { id: 'cell-dossier', label: 'Dossier cellule', short: 'Dossier' },
+  { id: 'simulation', label: 'Simulation', short: 'Test' },
 ])
 
 export const ADMIN_TABS = Object.freeze([
-  { id: 'data', label: 'Données', short: 'DN' },
-  { id: 'services', label: 'Services', short: 'SV' },
-  { id: 'validation', label: 'Validation', short: 'VL' },
-  { id: 'configuration', label: 'Configuration', short: 'CF' },
+  { id: 'data', label: 'Données', short: 'Données' },
+  { id: 'services', label: 'Services', short: 'Services' },
+  { id: 'validation', label: 'Validation', short: 'Validation' },
+  { id: 'configuration', label: 'Configuration', short: 'Config.' },
 ])
 
 export const ACTION_LABELS_FR = Object.freeze({

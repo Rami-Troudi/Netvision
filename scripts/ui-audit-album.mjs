@@ -2,7 +2,10 @@
 import path from 'path'
 import { chromium } from 'playwright'
 
-const BASE_URL = process.env.NEXT_BASE_URL || 'http://127.0.0.1:3000'
+const BASE_URLS = process.env.NEXT_BASE_URL
+  ? [process.env.NEXT_BASE_URL]
+  : ['http://127.0.0.1:3000', 'http://127.0.0.1:3001']
+let activeBaseUrl = BASE_URLS[0]
 const OUT_DIR = path.resolve(process.cwd(), '.runtime', 'ui-audit')
 const SHOTS_DIR = path.join(OUT_DIR, 'screenshots')
 const MANIFEST_PATH = path.join(OUT_DIR, 'ui-audit-manifest.json')
@@ -12,22 +15,20 @@ const NETWORK_PATH = path.join(OUT_DIR, 'network-summary.json')
 
 const VIEWPORT_DESKTOP = { width: 1600, height: 900 }
 const VIEWPORT_TABLET = { width: 1024, height: 768 }
-const VIEWPORT_MOBILE = { width: 390, height: 844 }
 
 const tasks = [
   { id: 'operator_01_home_network_view', mode: 'operator', tab: 'Vue réseau', scope: 'national', description: "Vue d'accueil opérateur." },
-  { id: 'operator_02_search_cell_results', mode: 'operator', tab: 'Vue réseau', scope: 'recherche', description: 'Recherche cellule visible.' },
-  { id: 'operator_03_priorities', mode: 'operator', tab: 'Priorités', scope: 'national/cellule', description: 'Vue priorités réseau.' },
-  { id: 'operator_04_cell_dossier', mode: 'operator', tab: 'Dossier cellule', scope: 'cellule', description: 'Dossier cellule avec KPI et diagnostic.' },
-  { id: 'operator_05_simulation', mode: 'operator', tab: 'Simulation', scope: 'cellule', description: 'Simulation prête ou bloquée selon le contexte.' },
+  { id: 'operator_02_priorities', mode: 'operator', tab: 'Priorités', scope: 'national/cellule', description: 'Vue priorités réseau.' },
+  { id: 'operator_03_cell_dossier', mode: 'operator', tab: 'Dossier cellule', scope: 'cellule', description: 'Dossier cellule avec KPI et diagnostic.' },
+  { id: 'operator_04_simulation', mode: 'operator', tab: 'Simulation', scope: 'cellule', description: 'Simulation prête ou bloquée selon le contexte.' },
+  { id: 'operator_05_search', mode: 'operator', tab: 'Vue réseau', scope: 'recherche', description: 'Recherche cellule visible.' },
   { id: 'operator_06_governorate_scope', mode: 'operator', tab: 'Vue réseau', scope: 'gouvernorat', description: 'Carte en scope gouvernorat.' },
   { id: 'operator_07_delegation_scope', mode: 'operator', tab: 'Vue réseau', scope: 'délégation', description: 'Carte en scope délégation.' },
   { id: 'admin_01_data', mode: 'admin', tab: 'Données', scope: 'admin', description: 'Panneau Données.' },
   { id: 'admin_02_services', mode: 'admin', tab: 'Services', scope: 'admin', description: 'Panneau Services.' },
   { id: 'admin_03_validation', mode: 'admin', tab: 'Validation', scope: 'admin', description: 'Panneau Validation.' },
   { id: 'admin_04_configuration', mode: 'admin', tab: 'Configuration', scope: 'admin', description: 'Panneau Configuration.' },
-  { id: 'responsive_operator_tablet', mode: 'operator', tab: 'Vue réseau', scope: 'responsive-tablette', description: 'Vue tablette.' },
-  { id: 'responsive_operator_mobile_or_narrow', mode: 'operator', tab: 'Vue réseau', scope: 'responsive-mobile', description: 'Vue mobile.' },
+  { id: 'responsive_operator_tablet', mode: 'operator', tab: 'Vue réseau', scope: 'responsive-tablette-large', description: 'Vue tablette large.' },
 ]
 
 function cleanText(text) {
@@ -35,6 +36,12 @@ function cleanText(text) {
 }
 
 async function launchBrowser() {
+  const preferredChannel = process.env.PW_CHANNEL || ''
+  if (preferredChannel) {
+    try {
+      return await chromium.launch({ channel: preferredChannel, headless: true })
+    } catch {}
+  }
   try {
     return await chromium.launch({ channel: 'msedge', headless: true })
   } catch {
@@ -50,25 +57,28 @@ async function resetOutput() {
 async function waitForVisualSettled(page) {
   await page.waitForLoadState('domcontentloaded').catch(() => {})
   await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
-  await page.waitForTimeout(300)
+  await page.locator('.netvision-map-container canvas').first().waitFor({ timeout: 45_000 }).catch(() => {})
+  await page.waitForTimeout(1_200)
 }
 
 async function ensureAppIsUp(page) {
-  try {
-    await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 })
-    await page.getByTestId('global-search-input').waitFor({ timeout: 30_000 })
-    await waitForVisualSettled(page)
-    return true
-  } catch {
-    return false
+  for (const url of BASE_URLS) {
+    try {
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+      await page.getByTestId('global-search-input').waitFor({ timeout: 30_000 })
+      await waitForVisualSettled(page)
+      activeBaseUrl = url
+      return true
+    } catch {}
   }
+  return false
 }
 
 async function setRole(page, mode) {
   await page.addInitScript((role) => {
     window.localStorage.setItem('netvision_role', role)
   }, mode === 'admin' ? 'admin' : 'operator')
-  const url = mode === 'admin' ? `${BASE_URL}/?admin=1` : `${BASE_URL}/`
+  const url = mode === 'admin' ? `${activeBaseUrl}/?admin=1` : `${activeBaseUrl}/`
   await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60_000 })
   await page.getByTestId('global-search-input').waitFor({ timeout: 30_000 })
   await waitForVisualSettled(page)
@@ -161,7 +171,7 @@ function generateReport({ manifest, consoleErrors, networkSummary, meta }) {
   const operator = manifest.filter((m) => m.mode === 'operator')
   const admin = manifest.filter((m) => m.mode === 'admin')
   const captured = manifest.filter((m) => m.captured)
-  return `# Audit visuel NetVision\n\n## 1) Vue d'ensemble\n- Date: ${meta.generatedAt}\n- URL: ${meta.baseUrl}\n- Viewport principal: ${meta.viewport}\n- Captures obtenues: ${captured.length}/${manifest.length}\n- Erreurs console: ${consoleErrors.length}\n- Réponses 429: ${(networkSummary.by_status['429'] || 0)}\n\n## 2) Inventaire flux opérateur\n${renderSection(operator)}\n\n## 3) Inventaire flux admin\n${renderSection(admin)}\n\n## 4) Cartographie navigation actuelle\n- Onglets opérateur: Vue réseau, Priorités, Dossier cellule, Simulation.\n- Onglets admin: Données, Services, Validation, Configuration.\n`
+  return `# Audit visuel NetVision\n\n## 1) Vue d'ensemble\n- Date: ${meta.generatedAt}\n- URL: ${meta.baseUrl}\n- Viewport principal: ${meta.viewport}\n- Périmètre responsive: desktop et tablette large uniquement.\n- Captures obtenues: ${captured.length}/${manifest.length}\n- Erreurs console: ${consoleErrors.length}\n- Réponses 429: ${(networkSummary.by_status['429'] || 0)}\n\n## 2) Inventaire flux opérateur\n${renderSection(operator)}\n\n## 3) Inventaire flux admin\n${renderSection(admin)}\n\n## 4) Cartographie navigation actuelle\n- Onglets opérateur: Vue réseau, Priorités, Dossier cellule, Simulation.\n- Onglets admin: Données, Services, Validation, Configuration.\n\n## 5) Points UX encore à surveiller\n- La colonne de travail reste dense en tablette large: certaines sections doivent être priorisées encore plus fortement.\n- Les tableaux longs restent plutôt techniques; une vue carte dédiée pourrait aider les opérateurs.\n- Le panneau Simulation conserve volontairement le composant métier existant, donc la séparation étape/action/résultat peut encore être affinée.\n- Les fonctions admin sont mieux regroupées, mais certaines actions d'import/export restent compactes.\n- Le mobile est hors scope pour cette passe; aucune conclusion produit n'est tirée sur les écrans étroits.\n\n## 6) Recommandations pour la suite\n- Extraire une vraie liste de priorités unifiée côté données lorsque les contrats seront stabilisés.\n- Transformer le dossier cellule en fiche composable avec sections repliables.\n- Isoler visuellement sélection d'action, préconditions et résultat dans Simulation.\n- Ajouter un mode carte/table pour les listes critiques sur tablette large.\n- Enrichir le rapport Validation admin avec les derniers statuts de scripts quand les artefacts existent.\n\n## 7) Findings techniques bruts\n- Erreurs console: ${consoleErrors.length}.\n- Réponses HTTP 429: ${(networkSummary.by_status['429'] || 0)}.\n- Captures manquantes: ${manifest.filter((m) => !m.captured).map((m) => m.id).join(', ') || 'aucune'}.\n`
 }
 
 async function main() {
@@ -187,17 +197,17 @@ async function main() {
   await clickTabIfExists(page, ['Vue réseau', 'Vue reseau'])
   await capture(page, manifest, 'operator_01_home_network_view', 'Vue réseau chargée.')
   await openSearch(page, 'TN1158_c01')
-  await capture(page, manifest, 'operator_02_search_cell_results', 'Résultats de recherche visibles.')
+  await capture(page, manifest, 'operator_05_search', 'Résultats de recherche visibles.')
 
   const selectedCell = await clickSearchResult(page, 'TN1158_c01', (text) => text.includes('tn1158_c01') && text.includes('cellule'))
   await clickTabIfExists(page, ['Priorités'])
-  await capture(page, manifest, 'operator_03_priorities', selectedCell ? 'Priorités avec cellule sélectionnée.' : 'Priorités sans sélection cellule.')
+  await capture(page, manifest, 'operator_02_priorities', selectedCell ? 'Priorités avec cellule sélectionnée.' : 'Priorités sans sélection cellule.')
 
   await clickTabIfExists(page, ['Dossier cellule'])
-  await capture(page, manifest, 'operator_04_cell_dossier', 'Dossier cellule.')
+  await capture(page, manifest, 'operator_03_cell_dossier', 'Dossier cellule.')
 
   await clickTabIfExists(page, ['Simulation'])
-  await capture(page, manifest, 'operator_05_simulation', 'Simulation.')
+  await capture(page, manifest, 'operator_04_simulation', 'Simulation.')
 
   await clickTabIfExists(page, ['Vue réseau', 'Vue reseau'])
   if (await clickSearchResult(page, 'Tunis', (text) => text.includes('gouvernorat') && text.includes('tunis'))) {
@@ -219,11 +229,7 @@ async function main() {
 
   await page.setViewportSize(VIEWPORT_TABLET)
   await setRole(page, 'operator')
-  await capture(page, manifest, 'responsive_operator_tablet', 'Rendu tablette.')
-
-  await page.setViewportSize(VIEWPORT_MOBILE)
-  await setRole(page, 'operator')
-  await capture(page, manifest, 'responsive_operator_mobile_or_narrow', 'Rendu mobile.')
+  await capture(page, manifest, 'responsive_operator_tablet', 'Rendu tablette large.')
 
   const networkSummary = buildNetworkSummary(networkResponses)
   for (const item of manifest) {
@@ -235,7 +241,7 @@ async function main() {
     manifest,
     consoleErrors,
     networkSummary,
-    meta: { generatedAt: new Date().toISOString(), baseUrl: BASE_URL, viewport: `${VIEWPORT_DESKTOP.width}x${VIEWPORT_DESKTOP.height}` },
+    meta: { generatedAt: new Date().toISOString(), baseUrl: activeBaseUrl, viewport: `${VIEWPORT_DESKTOP.width}x${VIEWPORT_DESKTOP.height}` },
   })
 
   await fs.writeFile(MANIFEST_PATH, JSON.stringify(manifest, null, 2), 'utf8')

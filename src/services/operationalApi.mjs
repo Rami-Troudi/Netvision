@@ -10,7 +10,7 @@ const NON_SIM_ACTION_LABELS_FR = Object.freeze({
 })
 
 export function normalizeRecommendation(raw = {}) {
-  const title = String(raw.action_name || raw.action || raw.title || 'Action proposée').trim()
+  const title = String(raw.action_name || raw.action || raw.title || 'Action à tester').trim()
   const simAction = mapRecommendationToSimulatorAction(title)
   const displayTitle = ACTION_LABELS_FR[simAction] || NON_SIM_ACTION_LABELS_FR[title] || title
   return {

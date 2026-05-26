@@ -7,8 +7,8 @@ export default function Home() {
   return (
     <>
       <Head>
-        <title>NetVision Digital Twin | Tunisia RAN Command Center</title>
-        <meta name="description" content="Premium Tunisia regional RAN command center for NetVision Digital Twin." />
+        <title>NetVision Supervision RAN</title>
+        <meta name="description" content="Poste de supervision RAN pour les équipes NOC et radio." />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
       <NetVisionDashboard />

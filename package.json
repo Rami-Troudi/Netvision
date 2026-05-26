@@ -17,6 +17,7 @@
     "smoke:v2:sim": "node scripts/v2-api-smoke-sim.mjs",
     "qa:ns3:rationality": "node scripts/ns3-rationality-batch.mjs",
     "pw:doctor": "node scripts/playwright-doctor.mjs",
+    "check:mojibake": "node scripts/check-mojibake.mjs",
     "qa:browser": "node scripts/browser-qa-budget.mjs",
     "ui:audit": "node scripts/ui-audit-album.mjs",
     "forecast:generate": "node scripts/forecast-generate.mjs",

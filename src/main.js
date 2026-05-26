@@ -42,7 +42,7 @@ export default function NetVisionDashboard() {
   const [savedViews, setSavedViews] = useState([])
   const adminToolsEnabled = interfaceRole === 'admin' || isAdminToolsEnabled()
   const showRoleSwitch = typeof window !== 'undefined' && (process.env.NODE_ENV !== 'production' || adminToolsEnabled)
-  const visibleTabs = useMemo(() => adminToolsEnabled ? [...COCKPIT_TABS, ...ADMIN_COCKPIT_TABS] : COCKPIT_TABS, [adminToolsEnabled])
+  const visibleTabs = useMemo(() => adminToolsEnabled ? ADMIN_COCKPIT_TABS : COCKPIT_TABS, [adminToolsEnabled])
   const { endpointStatus, workerState, jobsHealth } = useSystemEndpoints({ adminToolsEnabled, activeTab })
   const { peakRows, peakPayload } = usePeakHours({ data, scope, busyMetric, dataMode })
 
@@ -58,6 +58,7 @@ export default function NetVisionDashboard() {
   const sliceCacheRef = useRef(new Map())
   useEffect(() => {
     if (!adminToolsEnabled && ['data', 'services', 'validation', 'configuration'].includes(activeTab)) setActiveTab('overview')
+    if (adminToolsEnabled && !['data', 'services', 'validation', 'configuration'].includes(activeTab)) setActiveTab('data')
   }, [adminToolsEnabled, activeTab])
 
   useEffect(() => {
@@ -550,7 +551,7 @@ export default function NetVisionDashboard() {
     <div className={`app-shell ${focusMode ? 'focus-mode' : ''} ${theme === 'dark' ? 'theme-dark' : ''}`}>
       <a href="#main-content" className="skip-link">Aller au contenu principal</a>
       <TopHeader metricMode={metricMode} metricModes={METRIC_MODES} onMetricModeChange={setMetricMode} query={query} onQueryChange={setQuery} searchResults={searchResults} onSearchSelect={selectSearchResult} dataMode={dataMode} onSecondaryPanel={setActiveTab} adminToolsEnabled={adminToolsEnabled} theme={theme} onToggleTheme={() => setTheme((t) => t === 'dark' ? 'light' : 'dark')} focusMode={focusMode} onToggleFocus={() => setFocusMode((v) => !v)} onRunDemo={() => setDemoStep(0)} role={interfaceRole} onRoleChange={changeInterfaceRole} showRoleSwitch={showRoleSwitch} />
-      <div className="sr-only" aria-live="polite">{`Perimetre courant ${scope.level}${scope.governorateName ? `, ${scope.governorateName}` : ''}${scope.delegationName ? `, ${scope.delegationName}` : ''}${scope.selectedCellName ? `, ${scope.selectedCellName}` : ''}`}</div>
+      <div className="sr-only" aria-live="polite">{`Périmètre courant ${scope.level}${scope.governorateName ? `, ${scope.governorateName}` : ''}${scope.delegationName ? `, ${scope.delegationName}` : ''}${scope.selectedCellName ? `, ${scope.selectedCellName}` : ''}`}</div>
       <main id="main-content" className="command-layout cockpit-layout">
         <CockpitRail activeTab={normalizeTabId(activeTab)} onTabChange={(tab) => setActiveTab(normalizeTabId(tab))} alertCount={alerts.length} tabs={visibleTabs} />
         <section className="map-column">

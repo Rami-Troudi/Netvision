@@ -44,7 +44,7 @@ export default async function handler(req, res) {
       queue: JOB_QUEUE_NAME,
       redis_url: REDIS_URL,
       ns3,
-      detail: `Simulation indisponible: Redis/worker ou ns-3 n est pas pret.`,
+      detail: `Simulation indisponible : Redis, worker ou ns-3 n’est pas prêt.`,
       reason: err instanceof Error ? err.message : String(err),
       slo: computeSlo(),
     })

@@ -12,7 +12,7 @@ export const DEFAULT_SIMULATION_ENGINE = 'ns3'
 export const DEFAULT_FIDELITY_LEVEL = 'operations_v1'
 export const SIMULATION_FIDELITY_LEVELS = Object.freeze([
   { id: 'operations_v1', label: 'Standard' },
-  { id: 'operations_v2_calibrated', label: 'Calibre' },
+  { id: 'operations_v2_calibrated', label: 'Calibré' },
 ])
 
 export const DEFAULT_MAP_CONTROLS = Object.freeze({
